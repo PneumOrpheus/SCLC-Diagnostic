@@ -1,6 +1,6 @@
-numpy==2.3.3
-pydicom==3.0.1
-dicom2nifti==2.6.6
-scipy==1.16.2
-matplotlib==3.10.7
-Pillow==11.3.0
+numpy==1.26.4
+pydicom==2.4.4
+dicom2nifti==2.4.9
+scipy==1.13.1
+matplotlib==3.9.0
+Pillow==10.3.0

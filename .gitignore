@@ -1,2 +1,2 @@
 venv/*
-!.venv/bin/activate
+NIFTI_data/*
