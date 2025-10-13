@@ -1,16 +1,8 @@
-# This is a sample Python script.
+import pydicom
 
-# Press ⌃F5 to execute it or replace it with your code.
-# Press Double ⇧ to search everywhere for classes, files, tool windows, actions, and settings.
-
-
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press F9 to toggle the breakpoint.
-
-
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+dicom_file_path = '../work/BIG_LUNGE/CT_images/1/DICOM/000066EC/AAC37262/AA143FD3/00007DE1/EE000524'
+try:
+    ds = pydicom.filereader.dcmread(dicom_file_path)
+    print(ds)
+except Exception as error:
+    print("Error reading DICOM file:", error)
