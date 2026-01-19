@@ -117,3 +117,30 @@ def apply_windowing(image: np.ndarray, window_center: float, window_width: float
     windowed_image = (windowed_image - img_min) / (img_max - img_min)
     
     return windowed_image
+
+def preprocess_sample(dicom_dir: str, output_file: str):
+    """
+    Main pipeline function for a single patient scan, which generates a multi-channel 2.5D tensor representation.
+    """
+    # Load and convert
+    slices = load_dicom_series(dicom_dir)
+    volume_hu = convert_to_hounsfield_units(slices)
+    
+    # Resample to Isotropic 1mm
+    volume_resampled = resample_volume(volume_hu, slices, new_spacing=[1.0, 1.0, 1.0])
+    
+    # Multi-Channel Windowing (Best for nodules/parenchyma)
+    lung_channel = apply_windowing(volume_resampled, center=-600, width=1500)
+    
+    # Mediastinal Window (W:350, L:50) (Best for Lymph Nodes/Soft Tissue)
+    mediastinal_channel = apply_windowing(volume_resampled, center=50, width=350)
+    
+    # Bone/Wide Window (W:2000, L:300) (Context for chest wall/spine)
+    context_channel = apply_windowing(volume_resampled, center=300, width=2000)
+    
+    # Stack Channels, allowing direct input to RadImageNet-pretrained backbones
+    final_tensor = np.stack([lung_channel, mediastinal_channel, context_channel], axis=-1)
+    
+    # Save as compressed NumPy array for efficient dataloading
+    np.save(output_file, final_tensor)
+    print(f"Processed {dicom_dir} -> {output_file} with shape {final_tensor.shape}")
