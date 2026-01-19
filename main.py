@@ -17,17 +17,3 @@ try:
     )
 except Exception as error:
     print("Error reading DICOM file:", error)
-
-
-
-
-var = "Test for Rafaelo"
-
-
-NyTest = "Test 2"
-
-def my_function():
-    return "Hello, World!"
-print(my_function())
-
-var = "Modified variable"
