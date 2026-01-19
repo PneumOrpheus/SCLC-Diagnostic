@@ -12,7 +12,7 @@ def load_dicom_series(dicom_dir: str) -> List[Tuple[np.ndarray, Dict]]:
     
     Args:
         directory (str): Path to folder containing DICOM files.
-        
+    
     Returns:
         List: Sorted list of DICOM slice objects.
     """
@@ -64,3 +64,56 @@ def convert_to_hounsfield_units(slices: List[pydicom.dataset.FileDataset]) -> np
     image[image > 3071] = 3071
     
     return np.array(image, dtype=np.int16)
+
+def resample_volume(image: np.ndarray, scan: List, new_spacing: List[float] = [1.0, 1.0, 1.0]) -> np.ndarray:
+    """
+    Resamples the 3D volume to an isotropic spacing of 1x1x1 mm.
+    This ensures that 3D features are spatially consistent across different patients/scanners.
+    
+    Args:
+        image (np.ndarray): The 3D volume in HU.
+        scan (List): The list of DICOM metadata objects.
+        new_spacing (List): Target spacing [z, y, x] in mm.
+        
+    Returns:
+        np.ndarray: Resampled 3D volume.
+    """
+    try:
+        slice_thickness = np.abs(scan[0].ImagePositionPatient[2] - scan[1].ImagePositionPatient[2])
+    except AttributeError:
+        slice_thickness = scan[0].SliceThickness
+        
+    current_spacing = np.array([slice_thickness, scan[0].PixelSpacing[0], scan[0].PixelSpacing[1]], dtype=np.float32)
+    
+    resize_factor = current_spacing / np.array(new_spacing, dtype=np.float32)
+    new_real_shape = np.round(image.shape * resize_factor)
+    new_shape = new_real_shape.astype(np.int32)
+    real_resize_factor = new_shape / image.shape
+    
+    # Linear interpolation is used for speed and safety against ringing artifacts in high-contrast CTs
+    image_resampled = scipy.ndimage.zoom(image, real_resize_factor, order=1)
+    
+    return image_resampled
+
+def apply_windowing(image: np.ndarray, window_center: float, window_width: float) -> np.ndarray:
+    """
+    Apply windowing to the image to enhance contrast for specific tissues.
+    Formula: output = (input - (center - width/2)) / width.
+    
+    Args:
+        image (np.ndarray): The 3D volume in HU.
+        window_center (int): Center of the window.
+        window_width (int): Width of the window.
+        
+    Returns:
+        np.ndarray: Windowed image.
+    """
+    img_min = window_center - (window_width // 2)
+    img_max = window_center + (window_width // 2)
+    
+    windowed_image = np.clip(image, img_min, img_max)
+    
+    # Min-Max normalization
+    windowed_image = (windowed_image - img_min) / (img_max - img_min)
+    
+    return windowed_image
