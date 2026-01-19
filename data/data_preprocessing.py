@@ -33,3 +33,34 @@ def load_dicom_series(dicom_dir: str) -> List[Tuple[np.ndarray, Dict]]:
         slices.sort(key=lambda x: float(x.SliceLocation))
         
     return slices
+
+def convert_to_hounsfield_units(slices: List[pydicom.dataset.FileDataset]) -> np.ndarray:
+    """Convert pixel values to Hounsfield Units (HU). Handles the 'padding' values used by 
+    scanners for pixels outside the circular field of view.
+
+    Args:
+        slices (List[pydicom.dataset.FileDataset]): List of DICOM slice objects.
+        
+    Returns:
+        np.ndarray: 3D numpy array of image data in Hounsfield Units.
+    """
+    
+    # Stack the 2D slices into a 3D volume
+    image = np.stack([s.pixel_array for s in slices])
+    image = image.astype(np.int16)
+
+    # Handle padding values
+    intercept = slices[0].RescaleIntercept
+    slope = slices[0].RescaleSlope
+    
+    if slope!= 1:
+        image = slope * image.astype(np.float64)
+        image = image.astype(np.int16)
+        
+    image += np.int16(intercept)
+    
+    # Clip typical scanner bounds to clean up artifacts, as per standard 12-bit CT depth 
+    image[image < -1024] = -1024
+    image[image > 3071] = 3071
+    
+    return np.array(image, dtype=np.int16)
