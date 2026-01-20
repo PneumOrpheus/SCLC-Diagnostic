@@ -126,8 +126,8 @@ def apply_windowing(image: np.ndarray, window_center: float, window_width: float
     Returns:
         np.ndarray: Windowed image.
     """
-    img_min = window_center - (window_width // 2)
-    img_max = window_center + (window_width // 2)
+    img_min = window_center - (window_width / 2)
+    img_max = window_center + (window_width / 2)
     
     windowed_image = np.clip(image, img_min, img_max)
     
@@ -136,9 +136,17 @@ def apply_windowing(image: np.ndarray, window_center: float, window_width: float
     
     return windowed_image
 
-def preprocess_sample(dicom_dir: str, output_file: str):
+def preprocess_sample(dicom_dir: str, output_file: str) -> None:
     """
     Main pipeline function for a single patient scan, which generates a multi-channel 2.5D tensor representation.
+
+    Args:
+        dicom_dir (str): Path to the directory containing the DICOM series for a single patient.
+        output_file (str): Path to the output file where the processed multi-channel tensor will be saved
+            as a compressed NumPy array (e.g., ``.npy``).
+
+    Returns:
+        None: The function saves the processed tensor to ``output_file`` and prints a summary message.
     """
     # Load and convert
     slices = load_dicom_series(dicom_dir)
@@ -148,13 +156,13 @@ def preprocess_sample(dicom_dir: str, output_file: str):
     volume_resampled = resample_volume(volume_hu, slices, new_spacing=[1.0, 1.0, 1.0])
     
     # Multi-Channel Windowing (Best for nodules/parenchyma)
-    lung_channel = apply_windowing(volume_resampled, center=-600, width=1500)
+    lung_channel = apply_windowing(volume_resampled, window_center=-600, window_width=1500)
     
     # Mediastinal Window (W:350, L:50) (Best for Lymph Nodes/Soft Tissue)
-    mediastinal_channel = apply_windowing(volume_resampled, center=50, width=350)
+    mediastinal_channel = apply_windowing(volume_resampled, window_center=50, window_width=350)
     
     # Bone/Wide Window (W:2000, L:300) (Context for chest wall/spine)
-    context_channel = apply_windowing(volume_resampled, center=300, width=2000)
+    context_channel = apply_windowing(volume_resampled, window_center=300, window_width=2000)
     
     # Stack Channels, allowing direct input to RadImageNet-pretrained backbones
     final_tensor = np.stack([lung_channel, mediastinal_channel, context_channel], axis=-1)
