@@ -45,20 +45,23 @@ def convert_to_hounsfield_units(slices: List[pydicom.dataset.FileDataset]) -> np
         np.ndarray: 3D numpy array of image data in Hounsfield Units.
     """
     
-    # Stack the 2D slices into a 3D volume
-    image = np.stack([s.pixel_array for s in slices])
-    image = image.astype(np.int16)
+    # Convert each 2D slice to HU individually, then stack into a 3D volume
+    hu_slices = []
+    for s in slices:
+        slice_image = s.pixel_array.astype(np.int16)
 
-    # Handle padding values
-    intercept = slices[0].RescaleIntercept
-    slope = slices[0].RescaleSlope
-    
-    if slope!= 1:
-        image = slope * image.astype(np.float64)
-        image = image.astype(np.int16)
-        
-    image += np.int16(intercept)
-    
+        # Handle rescale parameters on a per-slice basis
+        intercept = getattr(s, "RescaleIntercept", 0)
+        slope = getattr(s, "RescaleSlope", 1)
+
+        if slope != 1:
+            slice_image = slope * slice_image.astype(np.float64)
+            slice_image = slice_image.astype(np.int16)
+
+        slice_image += np.int16(intercept)
+        hu_slices.append(slice_image)
+
+    image = np.stack(hu_slices).astype(np.int16)
     # Clip typical scanner bounds to clean up artifacts, as per standard 12-bit CT depth 
     image[image < -1024] = -1024
     image[image > 3071] = 3071
@@ -78,10 +81,25 @@ def resample_volume(image: np.ndarray, scan: List, new_spacing: List[float] = [1
     Returns:
         np.ndarray: Resampled 3D volume.
     """
-    try:
-        slice_thickness = np.abs(scan[0].ImagePositionPatient[2] - scan[1].ImagePositionPatient[2])
-    except AttributeError:
-        slice_thickness = scan[0].SliceThickness
+    if not scan:
+        raise ValueError("resample_volume received an empty 'scan' list; cannot determine slice thickness.")
+
+    if len(scan) >= 2:
+        try:
+            slice_thickness = np.abs(
+                scan[0].ImagePositionPatient[2] - scan[1].ImagePositionPatient[2]
+            )
+        except AttributeError:
+            slice_thickness = scan[0].SliceThickness
+    else:
+        # Single-slice scan: fall back to SliceThickness if available
+        try:
+            slice_thickness = scan[0].SliceThickness
+        except AttributeError:
+            raise ValueError(
+                "Unable to determine slice thickness for single-slice scan: "
+                "SliceThickness attribute is missing."
+            )
         
     current_spacing = np.array([slice_thickness, scan[0].PixelSpacing[0], scan[0].PixelSpacing[1]], dtype=np.float32)
     
@@ -102,8 +120,8 @@ def apply_windowing(image: np.ndarray, window_center: float, window_width: float
     
     Args:
         image (np.ndarray): The 3D volume in HU.
-        window_center (int): Center of the window.
-        window_width (int): Width of the window.
+        window_center (float): Center of the window.
+        window_width (float): Width of the window.
         
     Returns:
         np.ndarray: Windowed image.
