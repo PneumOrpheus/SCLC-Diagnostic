@@ -1,3 +1,4 @@
+import argparse
 import pydicom
 import dicom2nifti
 import os
@@ -17,3 +18,7 @@ try:
     )
 except Exception as error:
     print("Error reading DICOM file:", error)
+
+
+def parse_option():
+    args = argparse.ArgumentParser()
