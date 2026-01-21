@@ -1,9 +1,9 @@
-numpy==1.26.4
-pydicom==2.4.4
+numpy==2.4.1
+pydicom==3.0.1
 dicom2nifti==2.4.9
-scipy==1.13.1
-matplotlib==3.9.0
+scipy==1.17.0
+matplotlib==3.10.0
 Pillow==10.3.0
-torch>=2.2.0
-torchvision>=0.17.0
+pytorch>=2.9.1
+torchvision>=0.24.1
 timm>=0.9.10
