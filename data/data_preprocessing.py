@@ -17,12 +17,12 @@ def load_dicom_series(dicom_dir: str) -> List[Tuple[np.ndarray, Dict]]:
         List: Sorted list of DICOM slice objects.
     """
     
-    if not os.path.exists(directory):
-        raise FileNotFoundError(f"Directory {directory} does not exist.")
+    if not os.path.exists(dicom_dir):
+        raise FileNotFoundError(f"Directory {dicom_dir} does not exist.")
         
-    files = [os.path.join(directory, f) for f in os.listdir(directory) if f.endswith('.dcm')]
+    files = [os.path.join(dicom_dir, f) for f in os.listdir(dicom_dir) if f.endswith('.dcm')]
     if not files:
-        raise ValueError(f"No DICOM files found in {directory}")
+        raise ValueError(f"No DICOM files found in {dicom_dir}")
         
     slices = [pydicom.dcmread(f) for f in files]
     
