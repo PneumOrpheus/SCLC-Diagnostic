@@ -14,3 +14,4 @@ dependencies:
     - pytorch>=2.2.0
     - torchvision>=0.17.0
     - timm>=0.9.10
+    - yacs >= 0.1.8
