@@ -31,20 +31,20 @@ def parse_option():
 
 def main(config):
     model = build_model(config)
-
     # model.cuda()
     if config.MODEL.PRETRAINED: 
         load_pretrained(config, model, None)
+        print("Nå gooder vi")
 
 
-    pass
+    print("Er vi good nå?")
 
 if __name__ == '__main__':
     args, config = parse_option()
     # the config file is in /home/hansstem/work/sclc-pretrained/RadImageNet_swin/rin_config.yaml and we are in /home/hansstem/work/sclc-hansstem/SCLC-Classification
     # get the file 
 
-    config_file_path = '../../sclc-pretrained/RadImageNet_swin/rin_config.yaml'
+    config_file_path = '../RadImageNet_swin/rin_config.yaml'
     config.merge_from_file(config_file_path)
 
     # print("Config:", config)

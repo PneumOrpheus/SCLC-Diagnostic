@@ -174,7 +174,7 @@ at::Tensor roll_and_window_partition_forward_cuda(
         output = torch::empty({B*nH*nW, window_size, window_size, C}, torch::dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(true));
     }
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.type(), "roll_and_window_partition_forward_cuda_kernel", ([&] {
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(), "roll_and_window_partition_forward_cuda_kernel", ([&] {
         roll_and_window_partition_forward_cuda_kernel<scalar_t><<<grid, block, 0>>>(
             input.data<scalar_t>(),
             output.data<scalar_t>(),
@@ -218,7 +218,7 @@ at::Tensor roll_and_window_partition_backward_cuda(
         grad_out = torch::empty({B, H, W, C}, torch::dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(false));
     }
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(grad_in.type(), "roll_and_window_partition_backward_cuda_kernel", ([&] {
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(grad_in.scalar_type(), "roll_and_window_partition_backward_cuda_kernel", ([&] {
         roll_and_window_partition_backward_cuda_kernel<scalar_t><<<grid, block, 0>>>(
             grad_in.data<scalar_t>(),
             grad_out.data<scalar_t>(),
@@ -264,7 +264,7 @@ at::Tensor window_merge_and_roll_forward_cuda(
         output = torch::empty({B, H, W, C}, torch::dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(true));
     }
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.type(), "window_merge_and_roll_forward_cuda_kernel", ([&] {
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(input.scalar_type(), "window_merge_and_roll_forward_cuda_kernel", ([&] {
         window_merge_and_roll_forward_cuda_kernel<scalar_t><<<grid, block, 0>>>(
             input.data<scalar_t>(),
             output.data<scalar_t>(),
@@ -306,7 +306,7 @@ at::Tensor window_merge_and_roll_backward_cuda(
         grad_out = torch::empty({B*nH*nW, window_size, window_size, C}, torch::dtype(torch::kFloat32).device(torch::kCUDA).requires_grad(false));
     }
 
-    AT_DISPATCH_FLOATING_TYPES_AND_HALF(grad_in.type(), "window_merge_and_roll_backward_cuda_kernel", ([&] {
+    AT_DISPATCH_FLOATING_TYPES_AND_HALF(grad_in.scalar_type(), "window_merge_and_roll_backward_cuda_kernel", ([&] {
         window_merge_and_roll_backward_cuda_kernel<scalar_t><<<grid, block, 0>>>(
             grad_in.data<scalar_t>(),
             grad_out.data<scalar_t>(),
