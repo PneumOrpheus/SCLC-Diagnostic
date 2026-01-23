@@ -1,4 +1,5 @@
 import os
+from typing import Dict
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -27,30 +28,29 @@ class FlexibleBackbone(nn.Module):
     Wraps timm models to be compatible with torchvision's detection models.
     Supports loading local checkpoints for fine-tuning.
     """
-    def __init__(self, model_name: str, checkpoint_path: str = None, out_channels: int = 256):
+    def __init__(self, model_name: str, checkpoint_path: str = "", out_channels: int = 256):
         super(FlexibleBackbone, self).__init__()
         
-        print(f"Initializing Backbone: {model_name}...")
+        print(f"Initializing Backbone: {model_name}")
         
-        # 1. Create Backbone using timm
-        # features_only=True extracts the feature maps (P2, P3, P4, P5)
+        # Create backbone using timm, features_only=True extracts the feature maps
         self.body = timm.create_model(
             model_name,
-            pretrained=(checkpoint_path is None), # Only download if no local path provided
+            pretrained=(checkpoint_path == ""),
             features_only=True,
             out_indices=(0, 1, 2, 3) # Select features from 4 stages
         )
         
-        # 2. Load Local Checkpoint (If provided)
+        # Load local checkpoint
         if checkpoint_path:
             if os.path.exists(checkpoint_path):
                 print(f"Loading local weights from {checkpoint_path}")
                 state_dict = torch.load(checkpoint_path, map_location='cpu')
                 
-                # Handle potential key mismatches (e.g. if checkpoint was saved with 'module.' prefix)
+                # Handle potential key mismatches
                 new_state_dict = OrderedDict()
                 for k, v in state_dict.items():
-                    name = k.replace("module.", "").replace("backbone.body.", "") # Clean keys
+                    name = k.replace("module.", "").replace("backbone.body.", "")
                     new_state_dict[name] = v
                 
                 # Use strict=False to ignore heads if they exist in checkpoint but not in features_only model
@@ -59,14 +59,13 @@ class FlexibleBackbone(nn.Module):
             else:
                 raise FileNotFoundError(f"Checkpoint not found at {checkpoint_path}")
 
-        # 3. Dynamic FPN Configuration
-        # Get channel counts from the backbone automatically
+        # Dynamic FPN Configuration, get channel counts from the backbone automatically
         feature_info = self.body.feature_info
-        in_channels_list = feature_info.channels()
+        self.in_channels_list = list(feature_info.channels())  # type: ignore[union-attr]
         
         # Create FPN
         self.fpn = FeaturePyramidNetwork(
-            in_channels_list=in_channels_list,
+            in_channels_list=self.in_channels_list,
             out_channels=out_channels
         )
         
@@ -80,8 +79,8 @@ class FlexibleBackbone(nn.Module):
         # Prepare dictionary for FPN
         x_dict = OrderedDict()
         for i, feature in enumerate(xs):
-            # Ensure NCHW format (Swin sometimes outputs NHWC in older timm versions)
-            if feature.ndim == 4 and feature.shape[1] != self.body.feature_info.channels()[i]:
+            # Ensure NCHW format
+            if feature.ndim == 4 and feature.shape[1] != self.in_channels_list[i]:
                  feature = feature.permute(0, 3, 1, 2)
             x_dict[f"{i}"] = feature
             
