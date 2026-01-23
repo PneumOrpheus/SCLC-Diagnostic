@@ -74,3 +74,22 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
                   f"Total loss: {total_loss.item():.4f}, "
                   f"Detection loss: {loss_detection.item():.4f}, "
                   f"Global loss: {global_loss.item():.4f}")
+            
+def main(args):
+    parser = argparse.ArgumentParser(description="SCLC Diagnostic System Training")
+    parser.add_argument("--backbone", type=str, default="swinv2", choices=["swinv2", "resnet50", "densenet121"], help="Which backbone model to use")
+    parser.add_argument("--data-path", type=str, required=True, help="Path to the SCLC training data")
+    parser.add_argument("--checkpoint", type=str, default=None, help="Path to .pth model file from which to resume checkpoint")
+    parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
+    parser.add_argument("--batch-size", type=int, default=8, help="Batch size for training")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate for the optimizer")
+    
+    args = parser.parse_args(args)
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print (f"Device: {device} | Backbone: {args.backbone}")
+    
+    train_dataset = SCLCTrainDataset(args.data_path)
+    data_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, collate_fn=batch_fn)
+    
+    
