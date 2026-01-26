@@ -50,15 +50,31 @@ class SCLCTrainDataset(torch.utils.data.Dataset):
     
     def __getitem__(self, idx):
         path = os.path.join(self.data_path, self.samples[idx])
-        data_dict = np.load(path, allow_pickle=True).item()
-        
-        scan = torch.tensor(data_dict['scan'], dtype=torch.float32)
-        targets = {
-            'boxes': torch.tensor(data_dict['boxes'], dtype=torch.float32),
-            'labels': torch.tensor(data_dict['labels'], dtype=torch.int64),
-            'scan_label': torch.tensor(data_dict['scan_label'], dtype=torch.int64),
+        try:
+            data = np.load(path, allow_pickle=True)
+        except Exception as e:
+            raise RuntimeError(f"Error loading data file '{path}': {e}") from e
 
-        }
+        try:
+            if hasattr(data, "item"):
+                data_dict = data.item()
+            else:
+                raise TypeError("Loaded object does not support .item() and is not a pickled dict.")
+        except Exception as e:
+            raise RuntimeError(f"Error extracting data dictionary from file '{path}': {e}") from e
+
+        try:
+            scan = torch.tensor(data_dict['scan'], dtype=torch.float32)
+            targets = {
+                'boxes': torch.tensor(data_dict['boxes'], dtype=torch.float32),
+                'labels': torch.tensor(data_dict['labels'], dtype=torch.int64),
+                'scan_label': torch.tensor(data_dict['scan_label'], dtype=torch.int64),
+                'scan_id': torch.tensor(data_dict['scan_id'], dtype=torch.int64),
+            }
+        except KeyError as e:
+            raise KeyError(f"Missing key {e!r} in data file '{path}'.") from e
+        except Exception as e:
+            raise RuntimeError(f"Error processing data from file '{path}': {e}") from e
         return scan, targets       
 
 
