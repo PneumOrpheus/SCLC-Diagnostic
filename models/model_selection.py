@@ -97,7 +97,7 @@ class GlobalClassificationHead(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Sequential(
             nn.Linear(in_channels, 512),
-            nn.BatchNorm1d(512),
+            nn.LayerNorm(512),
             nn.ReLU(),
             nn.Dropout(0.5),
             nn.Linear(512, num_classes)
@@ -135,13 +135,24 @@ class DualHeadSCLCModel(nn.Module):
         self.backbone = FlexibleBackbone(model_name, checkpoint_path, out_channels=fpn_out_channels)
         
         # RPN Anchor Generator
+        num_feature_levels = len(self.backbone.in_channels_list)
+        base_anchor_sizes = (32, 64, 128, 256, 512)
+        # Use one scale per feature level, slicing from the predefined base sizes
+        anchor_sizes = tuple((base_anchor_sizes[i],) for i in range(min(num_feature_levels, len(base_anchor_sizes))))
+        anchor_aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
         anchor_generator = AnchorGenerator(
-            sizes=((32, 64, 128, 256, 512),),
-            aspect_ratios=((0.5, 1.0, 2.0),) * 5
+            sizes=anchor_sizes,
+            aspect_ratios=anchor_aspect_ratios
         )
         
+        # Determine the feature map names for ROI pooling based on the backbone's
+        # actual output feature indices when available. Fallback to using the
+        # length of in_channels_list to preserve previous behavior if the
+        # backbone does not expose out_indices.
+        featmap_names = [str(i) for i in getattr(self.backbone, "out_indices", range(len(self.backbone.in_channels_list)))]
+        
         roi_pooler = MultiScaleRoIAlign(
-            featmap_names=[f"{i}" for i in range(len(self.backbone.in_channels_list))],
+            featmap_names=featmap_names,
             output_size=7,
             sampling_ratio=2
         )
@@ -160,12 +171,12 @@ class DualHeadSCLCModel(nn.Module):
             num_classes=num_global_classes
         )
         
-    def forward(self, scans: torch.Tensor, targets: Optional[List[Dict]] = None) -> Union[Dict[str, torch.Tensor], Tuple[List[Dict], torch.Tensor]]:
+    def forward(self, scans: List[torch.Tensor], targets: Optional[List[Dict]] = None) -> Union[Dict[str, torch.Tensor], Tuple[List[Dict], torch.Tensor]]:
         # Internal transform for normalization
-        original_scan_sizes = [scan.shape[-2:] for scan in scans]
+
         scans_transformed, targets_transformed = self.detector.transform(scans, targets)
         
-        # Bacbone forward pass
+        # Backbone forward pass
         features = self.backbone(scans_transformed.tensors)
         
         # Detection head
@@ -182,25 +193,37 @@ class DualHeadSCLCModel(nn.Module):
             losses.update(detector_losses)
         else:
             proposals, _ = self.detector.rpn(
-                scans_transformed, features, targets_transformed
+                scans_transformed, features, None
             )
             detections, _ = self.detector.roi_heads(
-                features, proposals, scans_transformed.image_sizes, targets_transformed
+                features, proposals, scans_transformed.image_sizes, None
             )
             losses = {}
         
         # Global classification head
-        global_features = features[f"{len(self.backbone.in_channels_list) - 1}"]
+        global_features = list(features.values())[-1]
         global_logits = self.global_classifier(global_features)
         
         if self.training:
+            if targets_transformed is None:
+                raise ValueError(
+                    "DualHeadSCLCModel.forward expected 'targets' with 'scan_label' "
+                    "for each sample during training, but got None."
+                )
+            missing_labels = [idx for idx, t in enumerate(targets_transformed) if "scan_label" not in t]
+            if missing_labels:
+                raise ValueError(
+                    "DualHeadSCLCModel.forward expected each target to contain a "
+                    "'scan_label' key during training, but it is missing for indices: "
+                    f"{missing_labels}"
+                )
             gt_labels = torch.stack([t["scan_label"] for t in targets_transformed])
             global_loss = F.cross_entropy(global_logits, gt_labels)
             losses['global_classification_loss'] = global_loss
             return losses
         else:
-            global_probabilites = F.softmax(global_logits, dim=1)
-            return detections, global_probabilites
+            global_probabilities = F.softmax(global_logits, dim=1)
+            return detections, global_probabilities
         
 def get_sclc_model(backbone_type="swinv2", checkpoint_path="", 
                    num_detection_classes=2, num_global_classes=2) -> DualHeadSCLCModel:
