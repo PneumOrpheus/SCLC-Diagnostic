@@ -1,6 +1,17 @@
+# --------------------------------------------------------
+# Swin Transformer
+# Copyright (c) 2021 Microsoft
+# Licensed under The MIT License [see LICENSE for details]
+# Written by Ze Liu
+# --------------------------------------------------------'
+
 import os
+import torch
 import yaml
 from yacs.config import CfgNode as CN
+
+# pytorch major version (1.x or 2.x)
+PYTORCH_MAJOR_VERSION = int(torch.__version__.split('.')[0])
 
 _C = CN()
 
@@ -9,7 +20,6 @@ _C.BASE = ['']
 
 # -----------------------------------------------------------------------------
 # Data settings
-# This is from Microsoft's Swin Transformer training codebase
 # -----------------------------------------------------------------------------
 _C.DATA = CN()
 # Batch size for a single GPU, could be overwritten by command line argument
@@ -17,14 +27,15 @@ _C.DATA.BATCH_SIZE = 128
 # Path to dataset, could be overwritten by command line argument
 _C.DATA.DATA_PATH = ''
 # Dataset name
-_C.DATA.DATASET = ''
+_C.DATA.DATASET = 'imagenet'
 # Input image size
 _C.DATA.IMG_SIZE = 224
 # Interpolation to resize image (random, bilinear, bicubic)
 _C.DATA.INTERPOLATION = 'bicubic'
 # Use zipped dataset instead of folder dataset
+# could be overwritten by command line argument
 _C.DATA.ZIP_MODE = False
-# Cache Data in Memory
+# Cache Data in Memory, could be overwritten by command line argument
 _C.DATA.CACHE_MODE = 'part'
 # Pin CPU memory in DataLoader for more efficient (sometimes) transfer to GPU.
 _C.DATA.PIN_MEMORY = True
@@ -45,7 +56,8 @@ _C.MODEL.TYPE = 'swin'
 # Model name
 _C.MODEL.NAME = 'swin_tiny_patch4_window7_224'
 # Pretrained weight from checkpoint, could be imagenet22k pretrained weight
-_C.MODEL.PRETRAINED = 'imagenet22k'
+# could be overwritten by command line argument
+_C.MODEL.PRETRAINED = ''
 # Checkpoint to resume, could be overwritten by command line argument
 _C.MODEL.RESUME = ''
 # Number of classes, overwritten in data preparation
@@ -149,8 +161,10 @@ _C.TRAIN.CLIP_GRAD = 5.0
 # Auto resume from latest checkpoint
 _C.TRAIN.AUTO_RESUME = True
 # Gradient accumulation steps
+# could be overwritten by command line argument
 _C.TRAIN.ACCUMULATION_STEPS = 1
 # Whether to use gradient checkpointing to save memory
+# could be overwritten by command line argument
 _C.TRAIN.USE_CHECKPOINT = False
 
 # LR scheduler
@@ -183,7 +197,6 @@ _C.TRAIN.LAYER_DECAY = 1.0
 _C.TRAIN.MOE = CN()
 # Only save model on master device
 _C.TRAIN.MOE.SAVE_MASTER = False
-
 # -----------------------------------------------------------------------------
 # Augmentation settings
 # -----------------------------------------------------------------------------
@@ -224,16 +237,16 @@ _C.TEST.SHUFFLE = False
 # -----------------------------------------------------------------------------
 # Misc
 # -----------------------------------------------------------------------------
-# [SimMIM] Whether to enable pytorch amp
+# [SimMIM] Whether to enable pytorch amp, overwritten by command line argument
 _C.ENABLE_AMP = False
 
 # Enable Pytorch automatic mixed precision (amp).
 _C.AMP_ENABLE = True
-# [Deprecated] Mixed precision opt level of apex
+# [Deprecated] Mixed precision opt level of apex, if O0, no apex amp is used ('O0', 'O1', 'O2')
 _C.AMP_OPT_LEVEL = ''
-# Path to output folder
+# Path to output folder, overwritten by command line argument
 _C.OUTPUT = ''
-# Tag of experiment
+# Tag of experiment, overwritten by command line argument
 _C.TAG = 'default'
 # Frequency to save checkpoint
 _C.SAVE_FREQ = 1
@@ -241,11 +254,11 @@ _C.SAVE_FREQ = 1
 _C.PRINT_FREQ = 10
 # Fixed random seed
 _C.SEED = 0
-# Perform evaluation only
+# Perform evaluation only, overwritten by command line argument
 _C.EVAL_MODE = False
-# Test throughput only
+# Test throughput only, overwritten by command line argument
 _C.THROUGHPUT_MODE = False
-# local rank for DistributedDataParallel
+# local rank for DistributedDataParallel, given by command line argument
 _C.LOCAL_RANK = 0
 # for acceleration
 _C.FUSED_WINDOW_PROCESS = False
@@ -268,42 +281,79 @@ def _update_config_from_file(config, cfg_file):
 
 
 def update_config(config, args):
-    if hasattr(args, 'cfg') and args.cfg:
-        _update_config_from_file(config, args.cfg)
+    _update_config_from_file(config, args.cfg)
 
     config.defrost()
-    if hasattr(args, 'opts') and args.opts:
+    if args.opts:
         config.merge_from_list(args.opts)
 
-    # Allow custom args to overwrite config attributes
-    if hasattr(args, 'batch_size') and args.batch_size:
-        config.DATA.BATCH_SIZE = args.batch_size
-    if hasattr(args, 'data_path') and args.data_path:
-        config.DATA.DATA_PATH = args.data_path
-    if hasattr(args, 'pretrained') and args.pretrained:
-        config.MODEL.PRETRAINED = args.pretrained
-    if hasattr(args, 'resume') and args.resume:
-        config.MODEL.RESUME = args.resume
-    if hasattr(args, 'output') and args.output:
-        config.OUTPUT = args.output
-    if hasattr(args, 'tag') and args.tag:
-        config.TAG = args.tag
-    if hasattr(args, 'enable_amp') and args.enable_amp: # SimMIM
-        config.ENABLE_AMP = args.enable_amp
-    if hasattr(args, 'disable_amp') and args.disable_amp:
-        config.AMP_ENABLE = False
+    def _check_args(name):
+        if hasattr(args, name) and eval(f'args.{name}'):
+            return True
+        return False
 
-    # output folder setup
-    if config.OUTPUT:
-        config.OUTPUT = os.path.join(config.OUTPUT, config.MODEL.NAME, config.TAG)
+    # merge from specific arguments
+    if _check_args('batch_size'):
+        config.DATA.BATCH_SIZE = args.batch_size
+    if _check_args('data_path'):
+        config.DATA.DATA_PATH = args.data_path
+    if _check_args('zip'):
+        config.DATA.ZIP_MODE = True
+    if _check_args('cache_mode'):
+        config.DATA.CACHE_MODE = args.cache_mode
+    if _check_args('pretrained'):
+        config.MODEL.PRETRAINED = args.pretrained
+    if _check_args('resume'):
+        config.MODEL.RESUME = args.resume
+    if _check_args('accumulation_steps'):
+        config.TRAIN.ACCUMULATION_STEPS = args.accumulation_steps
+    if _check_args('use_checkpoint'):
+        config.TRAIN.USE_CHECKPOINT = True
+    if _check_args('amp_opt_level'):
+        print("[warning] Apex amp has been deprecated, please use pytorch amp instead!")
+        if args.amp_opt_level == 'O0':
+            config.AMP_ENABLE = False
+    if _check_args('disable_amp'):
+        config.AMP_ENABLE = False
+    if _check_args('output'):
+        config.OUTPUT = args.output
+    if _check_args('tag'):
+        config.TAG = args.tag
+    if _check_args('eval'):
+        config.EVAL_MODE = True
+    if _check_args('throughput'):
+        config.THROUGHPUT_MODE = True
+
+    # [SimMIM]
+    if _check_args('enable_amp'):
+        config.ENABLE_AMP = args.enable_amp
+
+    # for acceleration
+    if _check_args('fused_window_process'):
+        config.FUSED_WINDOW_PROCESS = True
+    if _check_args('fused_layernorm'):
+        config.FUSED_LAYERNORM = True
+    ## Overwrite optimizer if not None, currently we use it for [fused_adam, fused_lamb]
+    if _check_args('optim'):
+        config.TRAIN.OPTIMIZER.NAME = args.optim
+
+    # set local rank for distributed training
+    if PYTORCH_MAJOR_VERSION == 1:
+        config.LOCAL_RANK = args.local_rank
+    else:
+        config.LOCAL_RANK = int(os.environ.get('LOCAL_RANK', '0'))
+
+    # output folder
+    config.OUTPUT = os.path.join(config.OUTPUT, config.MODEL.NAME, config.TAG)
 
     config.freeze()
 
 
-def get_config(args=None):
+def get_config(args):
     """Get a yacs CfgNode object with default values."""
+    # Return a clone so that the defaults will not be altered
+    # This is for the "local variable" use pattern
     config = _C.clone()
-    if args is not None:
-        update_config(config, args)
+    update_config(config, args)
 
     return config
