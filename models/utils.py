@@ -44,7 +44,7 @@ def load_checkpoint(config, model, optimizer, lr_scheduler, loss_scaler, logger)
 
 def load_pretrained(config, model, logger):
     logger.info(f"==============> Loading weight {config.MODEL.PRETRAINED} for fine-tuning......")
-    checkpoint = torch.load(config.MODEL.PRETRAINED, map_location='cpu')
+    checkpoint = torch.load(config.MODEL.PRETRAINED, map_location='cpu', weights_only=False)
     state_dict = checkpoint['model']
 
     # delete relative_position_index since we always re-init it
