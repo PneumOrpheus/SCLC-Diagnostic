@@ -1,10 +1,11 @@
+import sys
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
 import numpy as np
 import os
 import argparse
-# from model_selection import get_model
+from models.model_selection import get_sclc_model
 
 """
 SCLC Diagnostic System Training
@@ -92,4 +93,25 @@ def main(args):
     train_dataset = SCLCTrainDataset(args.data_path)
     data_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, collate_fn=batch_fn)
     
+    # Model initialization
+    model = get_sclc_model(backbone_type=args.backbone, checkpoint_path=args.checkpoint)
+    model.to(device)
     
+    params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = optim.AdamW(params, lr=args.lr, weight_decay=0.05)
+    
+    lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+    
+    # Training loop
+    for epoch in range(args.epochs):
+        train_epoch(model, optimizer, data_loader, device, epoch)
+        lr_scheduler.step()
+        
+        # Save checkpoint
+        if (epoch + 1) % 5 == 0:
+            checkpoint_path = f"sclc_model_epoch_{epoch+1}.pth"
+            torch.save(model.state_dict(), checkpoint_path)
+            print(f"Saved checkpoint: {checkpoint_path}")
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
