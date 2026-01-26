@@ -16,14 +16,34 @@ Implements the training pipeline for the SCLC diagnostic system with support for
 - Multi-task loss aggregation
 """
 
-def batch_fn(batch):
+def detection_collate_fn(batch):
+    """Custom collate function for DataLoader that unzips (scan, target) pairs."""
     return tuple(zip(*batch))
 
+# Backward compatibility alias; prefer using `detection_collate_fn` directly.
+batch_fn = detection_collate_fn
 class SCLCTrainDataset(torch.utils.data.Dataset):
     def __init__(self, data_path):
         # Initialize dataset
         self.data_path = data_path
-        self.samples = [file for file in os.listdir(data_path) if file.endswith('.nii.gz')]
+
+        # Validate that the data path exists and is a directory
+        if not os.path.isdir(self.data_path):
+            raise ValueError(f"Data path '{self.data_path}' does not exist or is not a directory.")
+
+        try:
+            all_files = os.listdir(self.data_path)
+        except OSError as e:
+            raise ValueError(f"Unable to list contents of data path '{self.data_path}': {e}") from e
+
+        # Collect all valid samples
+        self.samples = [file for file in all_files if file.endswith('.nii.gz')]
+
+        if not self.samples:
+            raise ValueError(
+                f"No '.nii.gz' files found in data path '{self.data_path}'. "
+                "Please provide a directory containing valid data files."
+            )
     
     def __len__(self):
         return len(self.samples)
@@ -37,7 +57,7 @@ class SCLCTrainDataset(torch.utils.data.Dataset):
             'boxes': torch.tensor(data_dict['boxes'], dtype=torch.float32),
             'labels': torch.tensor(data_dict['labels'], dtype=torch.int64),
             'scan_label': torch.tensor(data_dict['scan_label'], dtype=torch.int64),
-            'scan_id': torch.tensor(data_dict['scan_id'], dtype=torch.int64)
+
         }
         return scan, targets       
 
@@ -53,10 +73,21 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
         loss_dict = model(scans, targets)
         
         # loss aggregation
-        global_loss = loss_dict.pop("global_loss_classifier")
-        loss_detection = sum(loss for loss in loss_dict.values())
-        if isinstance(loss_detection, int):
-             loss_detection = torch.tensor(loss_detection).to(device)
+        global_loss = loss_dict.pop("global_classification_loss")
+
+        # ensure detection loss is always a tensor on the correct device,
+        # and handle the case where there are no detection losses explicitly
+        if loss_dict:
+            detection_losses = []
+            for loss in loss_dict.values():
+                if isinstance(loss, torch.Tensor):
+                    detection_losses.append(loss.to(device))
+                else:
+                    detection_losses.append(torch.as_tensor(loss, device=device))
+            loss_detection = sum(detection_losses)
+        else:
+            # no detection losses; use a zero scalar tensor on the target device
+            loss_detection = torch.zeros((), device=device)
         
         # weighted sum
         total_loss = loss_detection + 0.5 * global_loss
@@ -88,10 +119,17 @@ def main(args):
     args = parser.parse_args(args)
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print (f"Device: {device} | Backbone: {args.backbone}")
+    print(f"Device: {device} | Backbone: {args.backbone}")
     
     train_dataset = SCLCTrainDataset(args.data_path)
-    data_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4, collate_fn=batch_fn)
+    data_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=4,
+        collate_fn=batch_fn,
+        pin_memory=(device.type == "cuda"),
+    )
     
     # Model initialization
     model = get_sclc_model(backbone_type=args.backbone, checkpoint_path=args.checkpoint)
@@ -109,9 +147,20 @@ def main(args):
         
         # Save checkpoint
         if (epoch + 1) % 5 == 0:
+            # Save model weights only (backward-compatible with existing usage)
             checkpoint_path = f"sclc_model_epoch_{epoch+1}.pth"
             torch.save(model.state_dict(), checkpoint_path)
-            print(f"Saved checkpoint: {checkpoint_path}")
+            print(f"Saved checkpoint (weights only): {checkpoint_path}")
 
+            # Save full training state for proper resume
+            full_checkpoint_path = f"sclc_full_checkpoint_epoch_{epoch+1}.pth"
+            full_checkpoint = {
+                "epoch": epoch + 1,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": lr_scheduler.state_dict(),
+            }
+            torch.save(full_checkpoint, full_checkpoint_path)
+            print(f"Saved full training checkpoint: {full_checkpoint_path}")
 if __name__ == "__main__":
     main(sys.argv[1:])
