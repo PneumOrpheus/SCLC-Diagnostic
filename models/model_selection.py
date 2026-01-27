@@ -1,6 +1,6 @@
 import os
 import logging
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -26,26 +26,82 @@ Key Components:
 - Dual-Head: Simultaneous Detection and Global Classification.
 """
 
+class SwinFeatureExtractor(nn.Module):
+    """
+    Wrapper for custom SwinTransformer/SwinTransformerV2 models that extracts
+    intermediate features from each stage for use with FPN.
+    """
+    patch_embed: nn.Module
+    pos_drop: nn.Module
+    layers: nn.ModuleList
+    ape: bool
+    absolute_pos_embed: torch.Tensor
+    num_features: List[int]
+    patches_resolution: Tuple[int, int]
+    
+    def __init__(self, swin_model: nn.Module):
+        super(SwinFeatureExtractor, self).__init__()
+        self.patch_embed = swin_model.patch_embed  # type: ignore[attr-defined]
+        self.pos_drop = swin_model.pos_drop  # type: ignore[attr-defined]
+        self.layers = swin_model.layers  # type: ignore[attr-defined]
+        self.ape = swin_model.ape  # type: ignore[attr-defined]
+        if self.ape:
+            self.absolute_pos_embed = swin_model.absolute_pos_embed  # type: ignore[attr-defined]
+        
+        # Compute channel dimensions for each stage
+        embed_dim: int = swin_model.embed_dim  # type: ignore[attr-defined]
+        num_layers: int = swin_model.num_layers  # type: ignore[attr-defined]
+        self.num_features = [int(embed_dim * 2 ** i) for i in range(num_layers)]
+        self.patches_resolution = swin_model.patches_resolution  # type: ignore[attr-defined]
+        
+    def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
+        x = self.patch_embed(x)
+        if self.ape:
+            x = x + self.absolute_pos_embed
+        x = self.pos_drop(x)
+        
+        features = []
+        for i, layer in enumerate(self.layers):
+            x = layer(x)
+            B, L, C = x.shape
+            
+            # Calculate spatial dimensions after each stage
+            H = self.patches_resolution[0] // (2 ** i)
+            W = self.patches_resolution[1] // (2 ** i)
+            feat = x.view(B, H, W, C).permute(0, 3, 1, 2).contiguous()
+            features.append(feat)
+        
+        return features
+
+
 class FlexibleBackbone(nn.Module):
     """
     Wraps timm models to be compatible with torchvision's detection models.
     Supports loading local checkpoints for fine-tuning.
     """
-    def __init__(self, model_name: str, checkpoint_path: str = "", config: Optional[object] = None,  out_channels: int = 256, logger: Optional[logging.Logger] = None):
+    def __init__(self, model_name: str, checkpoint_path: str = "", config: Optional[Any] = None,  out_channels: int = 256, logger: Optional[logging.Logger] = None):
         super(FlexibleBackbone, self).__init__()
         
         print(f"Initializing Backbone: {model_name}")
+        
+        self._use_custom_swin = False
 
         if config is not None and checkpoint_path != "":
-            logger.info(f"Creating model from config file:{config.MODEL.TYPE}/{config.MODEL.NAME}")
-            logger.info(f"=> Path to pretrained weights: '{config.MODEL.PRETRAINED}'")
-            model = build_model(config)
-            load_pretrained(config, model, logger)
-
+            if logger is not None:
+                logger.info(f"Creating model from config file:{config.MODEL.TYPE}/{config.MODEL.NAME}")
+                logger.info(f"=> Path to pretrained weights: '{config.MODEL.PRETRAINED}'")
+            swin_model = build_model(config)
+            load_pretrained(config, swin_model, logger)
+            
+            # Wrap custom Swin model to extract multi-scale features
+            self.body = SwinFeatureExtractor(swin_model)
+            self._use_custom_swin = True
+        else:
+            import timm
+            self.body = timm.create_model(model_name, pretrained=True, features_only=True)
 
         # Dynamic FPN Configuration, get channel counts from the backbone automatically
-        feature_info = self.body.feature_info
-        self.in_channels_list = list(feature_info.channels())  # type: ignore[union-attr]
+        self.in_channels_list = list(self.body.num_features)  # type: ignore[arg-type]
         
         # Create FPN
         self.fpn = FeaturePyramidNetwork(
@@ -97,7 +153,7 @@ class DualHeadSCLCModel(nn.Module):
     """
     Composite model wrapping Faster R-CNN and Global Classifier.
     """
-    def __init__(self, backbone_type: str, checkpoint_path: str = "", config: Optional[object] = None, 
+    def __init__(self, backbone_type: str, checkpoint_path: str = "", config: Optional[Any] = None, 
                  num_detection_classes: int = 2, num_global_classes: int = 2, logger: Optional[logging.Logger] = None):
         super(DualHeadSCLCModel, self).__init__()
         
@@ -130,10 +186,7 @@ class DualHeadSCLCModel(nn.Module):
             aspect_ratios=anchor_aspect_ratios
         )
         
-        # Determine the feature map names for ROI pooling based on the backbone's
-        # actual output feature indices when available. Fallback to using the
-        # length of in_channels_list to preserve previous behavior if the
-        # backbone does not expose out_indices.
+        # Determine the feature map names for ROI pooling based on the backbone's FPN outputs
         featmap_names = [str(i) for i in getattr(self.backbone, "out_indices", range(len(self.backbone.in_channels_list)))]
         
         roi_pooler = MultiScaleRoIAlign(
@@ -215,7 +268,7 @@ def get_sclc_model(
     checkpoint_path: str = "",
     num_detection_classes: int = 2,
     num_global_classes: int = 2,
-    config: Optional[object] = None,
+    config: Optional[Any] = None,
     logger: Optional[logging.Logger] = None
 ) -> DualHeadSCLCModel:
     """
