@@ -31,7 +31,7 @@ class FlexibleBackbone(nn.Module):
     Wraps timm models to be compatible with torchvision's detection models.
     Supports loading local checkpoints for fine-tuning.
     """
-    def __init__(self, model_name: str, checkpoint_path: str = "", config: Optional[object] = None,  out_channels: int = 256, logger: logging.Logger = None):
+    def __init__(self, model_name: str, checkpoint_path: str = "", config: Optional[object] = None,  out_channels: int = 256, logger: Optional[logging.Logger] = None):
         super(FlexibleBackbone, self).__init__()
         
         print(f"Initializing Backbone: {model_name}")
@@ -98,7 +98,7 @@ class DualHeadSCLCModel(nn.Module):
     Composite model wrapping Faster R-CNN and Global Classifier.
     """
     def __init__(self, backbone_type: str, checkpoint_path: str = "", config: Optional[object] = None, 
-                 num_detection_classes: int = 2, num_global_classes: int = 2, logger: logging.Logger = None):
+                 num_detection_classes: int = 2, num_global_classes: int = 2, logger: Optional[logging.Logger] = None):
         super(DualHeadSCLCModel, self).__init__()
         
         # Map simple names to timm model names
@@ -216,7 +216,7 @@ def get_sclc_model(
     num_detection_classes: int = 2,
     num_global_classes: int = 2,
     config: Optional[object] = None,
-    logger: logging.Logger = None
+    logger: Optional[logging.Logger] = None
 ) -> DualHeadSCLCModel:
     """
     Factory function to create DualHeadSCLCModel with specified backbone.
