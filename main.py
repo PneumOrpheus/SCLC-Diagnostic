@@ -1,24 +1,81 @@
-import argparse
-import pydicom
-import dicom2nifti
+import sys
+import torch
+import torch.optim as optim
+from torch.utils.data import DataLoader
+import numpy as np
 import os
-import dicom2nifti.settings as settings
-
-dicom_file_path = '../work/BIG_LUNGE/CT_images/1/DICOM/000066EC/AAC37262/AA143FD3/00007DE1/'
-nifti_output_path = './NIFTI_data'
-
-try:
-    os.makedirs(nifti_output_path, exist_ok=True)
-
-    dicom2nifti.convert_directory(
-        dicom_file_path,
-        nifti_output_path,
-        compression=True,
-        reorient=True
-    )
-except Exception as error:
-    print("Error reading DICOM file:", error)
+import argparse
+from models.model_selection import get_sclc_model
+from training.train import SCLCTrainDataset, detection_collate_fn, train_epoch
 
 
-def parse_option():
-    args = argparse.ArgumentParser()
+from logger import create_logger
+from models.config import get_config
+
+
+def parse_options():
+    parser = argparse.ArgumentParser(description="SCLC Diagnostic System Training")
+    parser.add_argument("--backbone", type=str, default="swinv2", choices=["swinv2", "resnet50", "densenet121"], help="Which backbone model to use")
+    parser.add_argument("--data-path", type=str,default="/home/hansstem/RadImageNet_swin/", help="Path to the SCLC training data")
+    parser.add_argument("--checkpoint", type=str, default="/home/hansstem/RadImageNet_swin/rin_swintf.pth", help="Path to .pth model file from which to resume checkpoint")
+    parser.add_argument("--config", type=str, default="/home/hansstem/RadImageNet_swin/rin_config.yaml", metavar="FILE", help="path to config file")
+    parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
+    parser.add_argument("--batch-size", type=int, default=8, help="Batch size for training")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate for the optimizer")
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="SCLC Diagnostic System Training")
+    args = parse_options()
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device} | Backbone: {args.backbone}")
+
+    batch_fn = detection_collate_fn
+    # train_dataset = SCLCTrainDataset(args.data_path)
+    # data_loader = DataLoader(
+    #     train_dataset,
+    #     batch_size=args.batch_size,
+    #     shuffle=True,
+    #     num_workers=4,
+    #     collate_fn=batch_fn,
+    #     pin_memory=(device.type == "cuda"),
+    # )
+
+    config = get_config(args)
+
+    logger = create_logger(output_dir=config.OUTPUT, dist_rank=-1, name=f"{config.MODEL.NAME}")
+    logger.info(f"Using backbone: {args.backbone}")
+
+    model = get_sclc_model(backbone_type=args.backbone, checkpoint_path=args.checkpoint, config=config, logger=logger)
+    model.to(device)
+
+    params = [p for p in model.parameters() if p.requires_grad]
+    optimizer = optim.AdamW(params, lr=args.lr, weight_decay=0.05)
+    
+    lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+        # Training loop
+    for epoch in range(args.epochs):
+        train_epoch(model, optimizer, data_loader, device, epoch)
+        lr_scheduler.step()
+        
+        # Save checkpoint
+        if (epoch + 1) % 5 == 0:
+            # Save model weights only (backward-compatible with existing usage)
+            checkpoint_path = f"sclc_model_epoch_{epoch+1}.pth"
+            torch.save(model.state_dict(), checkpoint_path)
+            logger.info(f"Saved checkpoint (weights only): {checkpoint_path}")
+
+            # Save full training state for proper resume
+            full_checkpoint_path = f"sclc_full_checkpoint_epoch_{epoch+1}.pth"
+            full_checkpoint = {
+                "epoch": epoch + 1,
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "scheduler_state_dict": lr_scheduler.state_dict(),
+            }
+            torch.save(full_checkpoint, full_checkpoint_path)
+            logger.info(f"Saved full training checkpoint: {full_checkpoint_path}")
+
+    
