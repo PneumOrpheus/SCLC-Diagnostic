@@ -100,7 +100,7 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
                     detection_losses.append(loss.to(device))
                 else:
                     detection_losses.append(torch.as_tensor(loss, device=device))
-            loss_detection = sum(detection_losses)
+            loss_detection = sum(detection_losses, torch.zeros((), device=device))
         else:
             # no detection losses; use a zero scalar tensor on the target device
             loss_detection = torch.zeros((), device=device)
