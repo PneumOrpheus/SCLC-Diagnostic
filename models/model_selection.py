@@ -65,8 +65,8 @@ class SwinFeatureExtractor(nn.Module):
                 x = block(x)
             
             B, L, C = x.shape
-            # Calculate spatial dimensions dynamically from sequence length
-            H = W = int(L ** 0.5)
+            # Use the BasicLayer's known spatial resolution (supports non-square feature maps)
+            H, W = layer.input_resolution
             feat = x.view(B, H, W, C).permute(0, 3, 1, 2).contiguous()
             features.append(feat)
             
@@ -104,7 +104,14 @@ class FlexibleBackbone(nn.Module):
             self.body = timm.create_model(model_name, pretrained=True, features_only=True)
 
         # Dynamic FPN Configuration, get channel counts from the backbone automatically
-        self.in_channels_list = list(self.body.num_features)  # type: ignore[arg-type]
+        if hasattr(self.body, "num_features"):
+            # Custom SwinFeatureExtractor exposes num_features directly
+            self.in_channels_list = list(self.body.num_features)  # type: ignore[arg-type]
+        elif hasattr(self.body, "feature_info"):
+            # timm models with features_only=True expose channel info via feature_info
+            self.in_channels_list = list(self.body.feature_info.channels())
+        else:
+            raise AttributeError("Backbone model does not expose 'num_features' or 'feature_info.channels()'.")
         
         # Create FPN
         self.fpn = FeaturePyramidNetwork(

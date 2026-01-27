@@ -53,7 +53,7 @@ class SCLCTrainDataset(torch.utils.data.Dataset):
         try:
             if path.endswith('.nii.gz') or path.endswith('.nii'):
                 # Load NIfTI file
-                nii_img = nib.loadsave.load(path)
+                nii_img = nib.load(path)
                 scan_data = nii_img.get_fdata().astype(np.float32)
             else:
                 # Load numpy file
@@ -71,15 +71,32 @@ class SCLCTrainDataset(torch.utils.data.Dataset):
         
         # Handle different dimensionalities
         if scan.ndim == 2: 
+            # (H, W) -> (1, H, W)
             scan = scan.unsqueeze(0)
         elif scan.ndim == 3:
-            if scan.shape[0] > 4:
-                mid_slice = scan.shape[0] // 2
-                scan = scan[mid_slice].unsqueeze(0)
+            # Distinguish 2D images with channels from true 3D volumes
+            if scan.shape[-1] in (1, 3):
+                # Likely channel-last image: (H, W, C) -> (C, H, W)
+                scan = scan.permute(2, 0, 1)
+            elif scan.shape[0] in (1, 3):
+                # Likely channel-first image: (C, H, W), keep as-is
+                pass
+            else:
+                # Likely 3D volume: select middle slice along the largest axis
+                depth_axis = int(np.argmax(scan.shape))
+                mid_slice = scan.shape[depth_axis] // 2
+                scan = scan.select(dim=depth_axis, index=mid_slice).unsqueeze(0)
         
         # Normalize scan
         if scan.max() > 1.0:
-            scan = (scan - scan.min()) / (scan.max() - scan.min() + 1e-8)
+            scan_min = scan.min()
+            scan_max = scan.max()
+            # Avoid dividing by a near-zero range for uniform scans
+            if scan_max > scan_min:
+                scan = (scan - scan_min) / (scan_max - scan_min)
+            else:
+                # For uniform scans, map to a stable constant (all zeros)
+                scan = torch.zeros_like(scan)
         
         # TODO: Only apply for ImageNet-pretrained backbones, not for RadImageNet
         # Convert grayscale to RGB for compatibility with pretrained backbones
