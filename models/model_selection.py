@@ -48,10 +48,8 @@ class SwinFeatureExtractor(nn.Module):
         if self.ape:
             self.absolute_pos_embed = swin_model.absolute_pos_embed  # type: ignore[attr-defined]
         
-        # Compute channel dimensions for each stage
-        embed_dim: int = swin_model.embed_dim  # type: ignore[attr-defined]
-        num_layers: int = swin_model.num_layers  # type: ignore[attr-defined]
-        self.num_features = [int(embed_dim * 2 ** i) for i in range(num_layers)]
+        # Layer dim gives channel dimensions
+        self.num_features = [layer.dim for layer in self.layers]
         self.patches_resolution = swin_model.patches_resolution  # type: ignore[attr-defined]
         
     def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
@@ -62,14 +60,19 @@ class SwinFeatureExtractor(nn.Module):
         
         features = []
         for i, layer in enumerate(self.layers):
-            x = layer(x)
-            B, L, C = x.shape
+            # Process blocks and extract features before downsample
+            for block in layer.blocks:
+                x = block(x)
             
-            # Calculate spatial dimensions after each stage
-            H = self.patches_resolution[0] // (2 ** i)
-            W = self.patches_resolution[1] // (2 ** i)
+            B, L, C = x.shape
+            # Calculate spatial dimensions dynamically from sequence length
+            H = W = int(L ** 0.5)
             feat = x.view(B, H, W, C).permute(0, 3, 1, 2).contiguous()
             features.append(feat)
+            
+            # Apply downsample after extracting features
+            if layer.downsample is not None:
+                x = layer.downsample(x)
         
         return features
 
@@ -195,12 +198,16 @@ class DualHeadSCLCModel(nn.Module):
             sampling_ratio=2
         )
         
+        # TODO: Adjust min_size and max_size based on backbone requirements
         # Initialize Detection Head
         self.detector = torchvision.models.detection.FasterRCNN(
             backbone=self.backbone,
             num_classes=num_detection_classes,
             rpn_anchor_generator=anchor_generator,
-            box_roi_pool=roi_pooler
+            box_roi_pool=roi_pooler,
+            # Set min/max size to match Swin input requirements
+            min_size=224,
+            max_size=224,
         )
         
         # Initialize Global Classification Head
