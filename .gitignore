@@ -3,3 +3,6 @@ NIFTI_data/*
 anaconda3/*
 output/*
 models/__pycache__/*
+training/__pycache__/*
+*.pyc
+*.pth
