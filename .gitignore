@@ -2,3 +2,4 @@ venv/*
 NIFTI_data/*
 anaconda3/*
 output/*
+models/__pycache__/*

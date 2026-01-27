@@ -5,11 +5,11 @@
 # Written by Ze Liu
 # --------------------------------------------------------
 
-from .swin_transformer import SwinTransformer
-from .swin_transformer_v2 import SwinTransformerV2
-from .swin_transformer_moe import SwinTransformerMoE
-from .swin_mlp import SwinMLP
-from .simmim import build_simmim
+from models.swin_transformer import SwinTransformer
+from models.swin_transformer_v2 import SwinTransformerV2
+from models.swin_transformer_moe import SwinTransformerMoE
+from models.swin_mlp import SwinMLP
+from models.simmim import build_simmim
 
 
 def build_model(config, is_pretrain=False):

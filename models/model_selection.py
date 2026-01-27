@@ -1,15 +1,18 @@
 import os
+import logging
 from typing import Dict, List, Optional, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import timm
 import torchvision
 from torchvision.ops import FeaturePyramidNetwork, MultiScaleRoIAlign
 from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision.models.detection.image_list import ImageList
 from torchvision.models.detection.transform import GeneralizedRCNNTransform
 from collections import OrderedDict
+
+from models.build import build_model
+from models.utils import load_pretrained
 
 """
 SCLC Diagnostic System - Model Architecture Module
@@ -28,36 +31,17 @@ class FlexibleBackbone(nn.Module):
     Wraps timm models to be compatible with torchvision's detection models.
     Supports loading local checkpoints for fine-tuning.
     """
-    def __init__(self, model_name: str, checkpoint_path: str = "", out_channels: int = 256):
+    def __init__(self, model_name: str, checkpoint_path: str = "", config: Optional[object] = None,  out_channels: int = 256, logger: logging.Logger = None):
         super(FlexibleBackbone, self).__init__()
         
         print(f"Initializing Backbone: {model_name}")
-        
-        # Create backbone using timm, features_only=True extracts the feature maps
-        self.body = timm.create_model(
-            model_name,
-            pretrained=(checkpoint_path == ""),
-            features_only=True,
-            out_indices=(0, 1, 2, 3) # Select features from 4 stages
-        )
-        
-        # Load local checkpoint
-        if checkpoint_path:
-            if os.path.exists(checkpoint_path):
-                print(f"Loading local weights from {checkpoint_path}")
-                state_dict = torch.load(checkpoint_path, map_location='cpu')
-                
-                # Handle potential key mismatches
-                new_state_dict = OrderedDict()
-                for k, v in state_dict.items():
-                    name = k.replace("module.", "").replace("backbone.body.", "")
-                    new_state_dict[name] = v
-                
-                # Use strict=False to ignore heads if they exist in checkpoint but not in features_only model
-                msg = self.body.load_state_dict(new_state_dict, strict=False)
-                print(f"Weights loaded. Missing keys (expected for headless): {len(msg.missing_keys)}")
-            else:
-                raise FileNotFoundError(f"Checkpoint not found at {checkpoint_path}")
+
+        if config is not None and checkpoint_path != "":
+            logger.info(f"Creating model from config file:{config.MODEL.TYPE}/{config.MODEL.NAME}")
+            logger.info(f"=> Path to pretrained weights: '{config.MODEL.PRETRAINED}'")
+            model = build_model(config)
+            load_pretrained(config, model, logger)
+
 
         # Dynamic FPN Configuration, get channel counts from the backbone automatically
         feature_info = self.body.feature_info
@@ -113,8 +97,8 @@ class DualHeadSCLCModel(nn.Module):
     """
     Composite model wrapping Faster R-CNN and Global Classifier.
     """
-    def __init__(self, backbone_type: str, checkpoint_path: str = "", 
-                 num_detection_classes: int = 2, num_global_classes: int = 2):
+    def __init__(self, backbone_type: str, checkpoint_path: str = "", config: Optional[object] = None, 
+                 num_detection_classes: int = 2, num_global_classes: int = 2, logger: logging.Logger = None):
         super(DualHeadSCLCModel, self).__init__()
         
         # Map simple names to timm model names
@@ -127,12 +111,13 @@ class DualHeadSCLCModel(nn.Module):
         
         if backbone_type not in backbone_map:
             raise ValueError(f"Unsupported backbone type: {backbone_type}. Choose from {list(backbone_map.keys())}")
-        
+
+
         model_name = backbone_map[backbone_type]
         fpn_out_channels = 256
         
         # Initialize Flexible Backbone
-        self.backbone = FlexibleBackbone(model_name, checkpoint_path, out_channels=fpn_out_channels)
+        self.backbone = FlexibleBackbone(model_name, checkpoint_path, config, out_channels=fpn_out_channels, logger=logger)
         
         # RPN Anchor Generator
         num_feature_levels = len(self.backbone.in_channels_list)
@@ -225,15 +210,35 @@ class DualHeadSCLCModel(nn.Module):
             global_probabilities = F.softmax(global_logits, dim=1)
             return detections, global_probabilities
         
-def get_sclc_model(backbone_type="swinv2", checkpoint_path="", 
-                   num_detection_classes=2, num_global_classes=2) -> DualHeadSCLCModel:
+def get_sclc_model(
+    backbone_type: str = "swinv2",
+    checkpoint_path: str = "",
+    num_detection_classes: int = 2,
+    num_global_classes: int = 2,
+    config: Optional[object] = None,
+    logger: logging.Logger = None
+) -> DualHeadSCLCModel:
     """
     Factory function to create DualHeadSCLCModel with specified backbone.
+    
+    Args:
+        backbone_type: One of 'swin', 'swinv2', 'resnet', 'densenet'
+        checkpoint_path: Path to pretrained weights (.pth file)
+        num_detection_classes: Number of detection classes (including background)
+        num_global_classes: Number of global classification classes
+        config: Optional Microsoft-style yacs config object. If provided,
+                will use config.MODEL.PRETRAINED for checkpoint_path and
+                config.MODEL.NUM_CLASSES for num_global_classes.
+                
+    Returns:
+        Initialized DualHeadSCLCModel
     """
     model = DualHeadSCLCModel(
         backbone_type=backbone_type,
         checkpoint_path=checkpoint_path,
+        config=config,
         num_detection_classes=num_detection_classes,
-        num_global_classes=num_global_classes
+        num_global_classes=num_global_classes,
+        logger=logger
     )
     return model

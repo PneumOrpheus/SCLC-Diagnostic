@@ -14,8 +14,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import trunc_normal_
 
-from .swin_transformer import SwinTransformer
-from .swin_transformer_v2 import SwinTransformerV2
+from models.swin_transformer import SwinTransformer
+from models.swin_transformer_v2 import SwinTransformerV2
 
 
 def norm_targets(targets, patch_size):
