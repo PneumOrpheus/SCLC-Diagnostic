@@ -56,6 +56,11 @@ if __name__ == "__main__":
     optimizer = optim.AdamW(params, lr=args.lr, weight_decay=0.05)
     
     lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+    
+    # Create checkpoint directories
+    os.makedirs("checkpoint_weights", exist_ok=True)
+    os.makedirs("full_checkpoints", exist_ok=True)
+    
     # Training loop
     for epoch in range(args.epochs):
         train_epoch(model, optimizer, data_loader, device, epoch)
