@@ -32,15 +32,13 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device} | Backbone: {args.backbone}")
 
-    # TODO: Remove backward compatibility alias in future versions
-    batch_fn = detection_collate_fn
     train_dataset = SCLCTrainDataset(args.data_path)
     data_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=4,
-        collate_fn=batch_fn,
+        collate_fn=detection_collate_fn,
         pin_memory=(device.type == "cuda"),
     )
 
