@@ -15,7 +15,7 @@ from models.config import get_config
 
 def parse_options():
     parser = argparse.ArgumentParser(description="SCLC Diagnostic System Training")
-    parser.add_argument("--backbone", type=str, default="swinv2", choices=["swinv2", "resnet50", "densenet121"], help="Which backbone model to use")
+    parser.add_argument("--backbone", type=str, default="swinv2", choices=["swin", "swinv2", "resnet50", "densenet121"], help="Which backbone model to use")
     parser.add_argument("--data-path", type=str,default="", help="Path to the SCLC training data")
     parser.add_argument("--checkpoint", type=str, default="", help="Path to .pth model file from which to resume checkpoint")
     parser.add_argument("--config", type=str, default="", metavar="FILE", help="path to config file")
@@ -64,12 +64,12 @@ if __name__ == "__main__":
         # Save checkpoint
         if (epoch + 1) % 5 == 0:
             # Save model weights only
-            checkpoint_path = f"sclc_model_epoch_{epoch+1}.pth"
+            checkpoint_path = f"checkpoint_weights/sclc_{args.backbone}_model_weights_epoch_{epoch+1}.pth"
             torch.save(model.state_dict(), checkpoint_path)
             logger.info(f"Saved checkpoint (weights only): {checkpoint_path}")
 
             # Save full training state for proper resume
-            full_checkpoint_path = f"sclc_full_checkpoint_epoch_{epoch+1}.pth"
+            full_checkpoint_path = f"full_checkpoints/sclc_{args.backbone}_full_checkpoint_epoch_{epoch+1}.pth"
             full_checkpoint = {
                 "epoch": epoch + 1,
                 "model_state_dict": model.state_dict(),
