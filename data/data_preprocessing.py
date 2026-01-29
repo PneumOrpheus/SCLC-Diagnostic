@@ -1,172 +1,381 @@
 import os
 import numpy as np
-import pydicom
+import nibabel as nib
 import scipy.ndimage
 import torch
-from typing import List, Tuple, Dict, Optional
+import torch.nn.functional as F
+from typing import List, Tuple, Optional, Union
 
-def load_dicom_series(dicom_dir: str) -> List[Tuple[np.ndarray, Dict]]:
-    """Load a DICOM series from a directory and return the image volume and metadata.
+"""
+SCLC Data Preprocessing Module
+------------------------------
+Provides preprocessing utilities for CT scan data in NIfTI format (.nii, .nii.gz).
+Supports multi-channel windowing for RadImageNet-pretrained backbones.
+"""
 
-    Loads a full DICOM series from a directory, sorting slices by spatial position.
-    
-    Args:
-        directory (str): Path to folder containing DICOM files.
-    
-    Returns:
-        List: Sorted list of DICOM slice objects.
-    """
-    
-    if not os.path.exists(dicom_dir):
-        raise FileNotFoundError(f"Directory {dicom_dir} does not exist.")
-        
-    files = [os.path.join(dicom_dir, f) for f in os.listdir(dicom_dir) if f.endswith('.dcm')]
-    if not files:
-        raise ValueError(f"No DICOM files found in {dicom_dir}")
-        
-    slices = [pydicom.dcmread(f) for f in files]
-    
-    # Sort by ImagePositionPatient Z-axis to ensure correct anatomical order and if ImagePositionPatient is missing, fall back to SliceLocation
-    try:
-        slices.sort(key=lambda x: float(x.ImagePositionPatient[2]))
-    except AttributeError:
-        slices.sort(key=lambda x: float(x.SliceLocation))
-        
-    return slices
 
-def convert_to_hounsfield_units(slices: List[pydicom.dataset.FileDataset]) -> np.ndarray:
-    """Convert pixel values to Hounsfield Units (HU). Handles the 'padding' values used by 
-    scanners for pixels outside the circular field of view.
+def load_nifti_volume(file_path: str) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    """Load a NIfTI file and return the image volume and affine matrix.
 
     Args:
-        slices (List[pydicom.dataset.FileDataset]): List of DICOM slice objects.
-        
+        file_path (str): Path to the NIfTI file (.nii or .nii.gz).
+
     Returns:
-        np.ndarray: 3D numpy array of image data in Hounsfield Units.
+        Tuple[np.ndarray, np.ndarray]: 
+            - 3D numpy array of image data
+            - Affine transformation matrix (or None if unavailable)
     """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File {file_path} does not exist.")
     
-    # Convert each 2D slice to HU individually, then stack into a 3D volume
-    hu_slices = []
-    for s in slices:
-        slice_image = s.pixel_array.astype(np.int16)
-
-        # Handle rescale parameters on a per-slice basis
-        intercept = getattr(s, "RescaleIntercept", 0)
-        slope = getattr(s, "RescaleSlope", 1)
-
-        if slope != 1:
-            slice_image = slope * slice_image.astype(np.float64)
-            slice_image = slice_image.astype(np.int16)
-
-        slice_image += np.int16(intercept)
-        hu_slices.append(slice_image)
-
-    image = np.stack(hu_slices).astype(np.int16)
-    # Clip typical scanner bounds to clean up artifacts, as per standard 12-bit CT depth 
-    image[image < -1024] = -1024
-    image[image > 3071] = 3071
+    if not (file_path.endswith('.nii') or file_path.endswith('.nii.gz')):
+        raise ValueError(f"File {file_path} is not a valid NIfTI file.")
     
-    return np.array(image, dtype=np.int16)
-
-def resample_volume(image: np.ndarray, scan: List, new_spacing: List[float] = [1.0, 1.0, 1.0]) -> np.ndarray:
-    """
-    Resamples the 3D volume to an isotropic spacing of 1x1x1 mm.
-    This ensures that 3D features are spatially consistent across different patients/scanners.
+    nii_img = nib.load(file_path) # type: ignore
+    volume = nii_img.get_fdata(dtype=np.float32) # type: ignore
+    affine = nii_img.affine # type: ignore
     
+    return volume, affine
+
+
+def load_numpy_volume(file_path: str) -> np.ndarray:
+    """Load a numpy file (.npy or .npz) and return the image volume.
+
     Args:
-        image (np.ndarray): The 3D volume in HU.
-        scan (List): The list of DICOM metadata objects.
-        new_spacing (List): Target spacing [z, y, x] in mm.
-        
-    Returns:
-        np.ndarray: Resampled 3D volume.
-    """
-    if not scan:
-        raise ValueError("resample_volume received an empty 'scan' list; cannot determine slice thickness.")
+        file_path (str): Path to the numpy file.
 
-    if len(scan) >= 2:
-        try:
-            slice_thickness = np.abs(
-                scan[0].ImagePositionPatient[2] - scan[1].ImagePositionPatient[2]
-            )
-        except AttributeError:
-            slice_thickness = scan[0].SliceThickness
+    Returns:
+        np.ndarray: Image data array.
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File {file_path} does not exist.")
+    
+    data = np.load(file_path, allow_pickle=True)
+    
+    # Handle .npz files or dictionary-style .npy files
+    if hasattr(data, "item"):
+        data_dict = data.item()
+        if isinstance(data_dict, dict) and 'scan' in data_dict:
+            return data_dict['scan'].astype(np.float32)
+        return np.array(data_dict, dtype=np.float32)
+    
+    return np.array(data, dtype=np.float32)
+
+
+def load_volume(file_path: str) -> np.ndarray:
+    """Load a volume from either NIfTI or numpy format.
+
+    Args:
+        file_path (str): Path to the data file.
+
+    Returns:
+        np.ndarray: Image volume as float32 array.
+    """
+    if file_path.endswith('.nii') or file_path.endswith('.nii.gz'):
+        volume, _ = load_nifti_volume(file_path)
+        return volume
+    elif file_path.endswith('.npy') or file_path.endswith('.npz'):
+        return load_numpy_volume(file_path)
     else:
-        # Single-slice scan: fall back to SliceThickness if available
-        try:
-            slice_thickness = scan[0].SliceThickness
-        except AttributeError:
-            raise ValueError(
-                "Unable to determine slice thickness for single-slice scan: "
-                "SliceThickness attribute is missing."
-            )
-        
-    current_spacing = np.array([slice_thickness, scan[0].PixelSpacing[0], scan[0].PixelSpacing[1]], dtype=np.float32)
-    
-    resize_factor = current_spacing / np.array(new_spacing, dtype=np.float32)
-    new_real_shape = np.round(image.shape * resize_factor)
-    new_shape = new_real_shape.astype(np.int32)
-    real_resize_factor = new_shape / image.shape
-    
-    # Linear interpolation is used for speed and safety against ringing artifacts in high-contrast CTs
-    image_resampled = scipy.ndimage.zoom(image, real_resize_factor, order=1)
-    
-    return image_resampled
+        raise ValueError(f"Unsupported file format: {file_path}. "
+                        "Supported formats: .nii, .nii.gz, .npy, .npz")
 
-def apply_windowing(image: np.ndarray, window_center: float, window_width: float) -> np.ndarray:
-    """
-    Apply windowing to the image to enhance contrast for specific tissues.
-    Formula: output = (input - (center - width/2)) / width.
+
+def clip_hounsfield_units(volume: np.ndarray, 
+                          min_hu: float = -1024, 
+                          max_hu: float = 3071) -> np.ndarray:
+    """Clip volume to valid Hounsfield Unit range for CT scans.
     
+    Standard 12-bit CT depth ranges from -1024 to 3071 HU.
+
     Args:
-        image (np.ndarray): The 3D volume in HU.
-        window_center (float): Center of the window.
-        window_width (float): Width of the window.
-        
+        volume (np.ndarray): The 3D volume (assumed to be in HU or raw intensity).
+        min_hu (float): Minimum HU value to clip to.
+        max_hu (float): Maximum HU value to clip to.
+
     Returns:
-        np.ndarray: Windowed image.
+        np.ndarray: Clipped volume.
+    """
+    return np.clip(volume, min_hu, max_hu)
+
+
+def resample_volume_isotropic(volume: np.ndarray, 
+                               current_spacing: Tuple[float, float, float],
+                               target_spacing: Tuple[float, float, float] = (1.0, 1.0, 1.0),
+                               order: int = 1) -> np.ndarray:
+    """Resample a 3D volume to isotropic spacing.
+
+    Args:
+        volume (np.ndarray): The 3D volume to resample.
+        current_spacing (Tuple[float, float, float]): Current voxel spacing (z, y, x) in mm.
+        target_spacing (Tuple[float, float, float]): Target voxel spacing in mm.
+        order (int): Interpolation order (0=nearest, 1=linear, 3=cubic).
+
+    Returns:
+        np.ndarray: Resampled volume.
+    """
+    current_spacing_array = np.array(current_spacing, dtype=np.float32)
+    target_spacing_array = np.array(target_spacing, dtype=np.float32)
+    
+    resize_factor = current_spacing_array / target_spacing_array
+    new_shape = np.round(volume.shape * resize_factor).astype(np.int32)
+    real_resize_factor = new_shape / np.array(volume.shape)
+    
+    return scipy.ndimage.zoom(volume, real_resize_factor, order=order)
+
+
+def apply_windowing(volume: np.ndarray, 
+                    window_center: float, 
+                    window_width: float) -> np.ndarray:
+    """Apply CT windowing to enhance contrast for specific tissues.
+
+    Windowing formula maps HU values to [0, 1] range based on window center and width.
+
+    Args:
+        volume (np.ndarray): The volume in Hounsfield Units.
+        window_center (float): Center of the window (level).
+        window_width (float): Width of the window.
+
+    Returns:
+        np.ndarray: Windowed and normalized image in [0, 1] range.
     """
     img_min = window_center - (window_width / 2)
     img_max = window_center + (window_width / 2)
     
-    windowed_image = np.clip(image, img_min, img_max)
+    windowed = np.clip(volume, img_min, img_max)
+    windowed = (windowed - img_min) / (img_max - img_min)
     
-    # Min-Max normalization
-    windowed_image = (windowed_image - img_min) / (img_max - img_min)
-    
-    return windowed_image
+    return windowed.astype(np.float32)
 
-def preprocess_sample(dicom_dir: str, output_file: str) -> None:
-    """
-    Main pipeline function for a single patient scan, which generates a multi-channel 2.5D tensor representation.
+
+def create_multichannel_ct(volume: np.ndarray) -> np.ndarray:
+    """Create a 3-channel representation using different CT windows.
+
+    Creates three channels optimized for different anatomical structures:
+    - Lung window (L:-600, W:1500): Nodules and parenchyma
+    - Mediastinal window (L:50, W:350): Lymph nodes and soft tissue
+    - Bone/Wide window (L:300, W:2000): Chest wall and spine context
 
     Args:
-        dicom_dir (str): Path to the directory containing the DICOM series for a single patient.
-        output_file (str): Path to the output file where the processed multi-channel tensor will be saved
-            as a compressed NumPy array (e.g., ``.npy``).
+        volume (np.ndarray): 3D volume in Hounsfield Units.
 
     Returns:
-        None: The function saves the processed tensor to ``output_file`` and prints a summary message.
+        np.ndarray: Multi-channel volume with shape (..., 3) in channel-last format.
     """
-    # Load and convert
-    slices = load_dicom_series(dicom_dir)
-    volume_hu = convert_to_hounsfield_units(slices)
+    lung_channel = apply_windowing(volume, window_center=-600, window_width=1500)
+    mediastinal_channel = apply_windowing(volume, window_center=50, window_width=350)
+    bone_channel = apply_windowing(volume, window_center=300, window_width=2000)
     
-    # Resample to Isotropic 1mm
-    volume_resampled = resample_volume(volume_hu, slices, new_spacing=[1.0, 1.0, 1.0])
+    return np.stack([lung_channel, mediastinal_channel, bone_channel], axis=-1)
+
+
+def normalize_intensity(volume: np.ndarray) -> np.ndarray:
+    """Normalize volume intensity to [0, 1] range using min-max normalization.
+
+    Handles edge cases where volume has uniform intensity.
+
+    Args:
+        volume (np.ndarray): Input volume.
+
+    Returns:
+        np.ndarray: Normalized volume in [0, 1] range.
+    """
+    vol_min = volume.min()
+    vol_max = volume.max()
     
-    # Multi-Channel Windowing (Best for nodules/parenchyma)
-    lung_channel = apply_windowing(volume_resampled, window_center=-600, window_width=1500)
+    if vol_max > vol_min:
+        return (volume - vol_min) / (vol_max - vol_min)
+    else:
+        # Uniform volume - return zeros to avoid division issues
+        return np.zeros_like(volume, dtype=np.float32)
+
+
+def extract_2d_slice(volume: np.ndarray, 
+                     slice_index: Optional[int] = None,
+                     axis: int = 0) -> np.ndarray:
+    """Extract a 2D slice from a 3D volume.
+
+    Args:
+        volume (np.ndarray): 3D volume with shape (D, H, W) or (D, H, W, C).
+        slice_index (int, optional): Index of slice to extract. Defaults to middle slice.
+        axis (int): Axis along which to slice (0=axial, 1=coronal, 2=sagittal).
+
+    Returns:
+        np.ndarray: 2D slice with shape (H, W) or (H, W, C).
+    """
+    index: int = slice_index if slice_index is not None else volume.shape[axis] // 2
     
-    # Mediastinal Window (W:350, L:50) (Best for Lymph Nodes/Soft Tissue)
-    mediastinal_channel = apply_windowing(volume_resampled, window_center=50, window_width=350)
+    return np.take(volume, index, axis=axis)
+
+
+def prepare_tensor_for_model(scan: np.ndarray, 
+                              img_size: int = 224,
+                              convert_to_rgb: bool = True) -> torch.Tensor:
+    """Prepare a scan array as a tensor ready for model input.
+
+    Handles dimensionality, channel conversion, and resizing.
+
+    Args:
+        scan (np.ndarray): Input scan array (2D or 3D).
+        img_size (int): Target image size (height and width).
+        convert_to_rgb (bool): Whether to convert grayscale to 3-channel RGB.
+
+    Returns:
+        torch.Tensor: Prepared tensor with shape (C, H, W).
+    """
+    tensor = torch.tensor(scan, dtype=torch.float32)
     
-    # Bone/Wide Window (W:2000, L:300) (Context for chest wall/spine)
-    context_channel = apply_windowing(volume_resampled, window_center=300, window_width=2000)
+    # Handle different dimensionalities
+    if tensor.ndim == 2:
+        # (H, W) -> (1, H, W)
+        tensor = tensor.unsqueeze(0)
+    elif tensor.ndim == 3:
+        # Distinguish 2D images with channels from true 3D volumes
+        if tensor.shape[-1] in (1, 3):
+            # Channel-last image: (H, W, C) -> (C, H, W)
+            tensor = tensor.permute(2, 0, 1)
+        elif tensor.shape[0] in (1, 3):
+            # Channel-first image: (C, H, W), keep as-is
+            pass
+        else:
+            # 3D volume: select middle slice along the largest axis
+            depth_axis = int(np.argmax(tensor.shape))
+            mid_slice = tensor.shape[depth_axis] // 2
+            tensor = tensor.select(dim=depth_axis, index=mid_slice).unsqueeze(0)
     
-    # Stack Channels, allowing direct input to RadImageNet-pretrained backbones
-    final_tensor = np.stack([lung_channel, mediastinal_channel, context_channel], axis=-1)
+    # Normalize if not already in [0, 1]
+    if tensor.max() > 1.0:
+        tensor_min = tensor.min()
+        tensor_max = tensor.max()
+        if tensor_max > tensor_min:
+            tensor = (tensor - tensor_min) / (tensor_max - tensor_min)
+        else:
+            tensor = torch.zeros_like(tensor)
     
-    # Save as compressed NumPy array for efficient dataloading
-    np.save(output_file, final_tensor)
-    print(f"Processed {dicom_dir} -> {output_file} with shape {final_tensor.shape}")
+    # Convert grayscale to RGB if needed
+    if convert_to_rgb and tensor.shape[0] == 1:
+        tensor = tensor.repeat(3, 1, 1)
+    
+    # Resize to model's expected input size
+    tensor = F.interpolate(
+        tensor.unsqueeze(0),
+        size=(img_size, img_size),
+        mode='bilinear',
+        align_corners=False
+    ).squeeze(0)
+    
+    return tensor
+
+
+def preprocess_nifti_to_numpy(input_path: str, 
+                               output_path: str,
+                               use_multichannel: bool = True,
+                               extract_slice: bool = False,
+                               slice_index: Optional[int] = None) -> None:
+    """Preprocess a NIfTI file and save as numpy array.
+
+    Main pipeline function for converting raw NIfTI CT scans to preprocessed
+    numpy arrays ready for training.
+
+    Args:
+        input_path (str): Path to input NIfTI file.
+        output_path (str): Path for output numpy file.
+        use_multichannel (bool): Whether to create 3-channel windowed output.
+        extract_slice (bool): Whether to extract a single 2D slice.
+        slice_idx (int, optional): Slice index to extract (default: middle).
+
+    Returns:
+        None: Saves processed array to output_path.
+    """
+    # Load volume
+    volume, _ = load_nifti_volume(input_path)
+    
+    # Clip to valid HU range
+    volume = clip_hounsfield_units(volume)
+    
+    if use_multichannel:
+        # Create multi-channel representation
+        processed = create_multichannel_ct(volume)
+    else:
+        # Simple normalization
+        processed = normalize_intensity(volume)
+    
+    if extract_slice:
+        processed = extract_2d_slice(processed, slice_index=slice_index, axis=0)
+    
+    # Save as numpy array
+    os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
+    np.save(output_path, processed.astype(np.float32))
+    print(f"Processed {input_path} -> {output_path} with shape {processed.shape}")
+
+
+def batch_preprocess_directory(input_dir: str,
+                                output_dir: str,
+                                use_multichannel: bool = True,
+                                extract_slice: bool = False) -> None:
+    """Batch preprocess all NIfTI files in a directory.
+
+    Args:
+        input_dir (str): Directory containing NIfTI files.
+        output_dir (str): Directory for output numpy files.
+        use_multichannel (bool): Whether to create 3-channel windowed output.
+        extract_slice (bool): Whether to extract single 2D slices.
+
+    Returns:
+        None: Saves processed arrays to output_dir.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    nifti_files = [f for f in os.listdir(input_dir) 
+                   if f.endswith('.nii') or f.endswith('.nii.gz')]
+    
+    if not nifti_files:
+        print(f"No NIfTI files found in {input_dir}")
+        return
+    
+    for filename in nifti_files:
+        input_path = os.path.join(input_dir, filename)
+        # Replace .nii.gz or .nii with .npy
+        output_filename = filename.replace('.nii.gz', '.npy').replace('.nii', '.npy')
+        output_path = os.path.join(output_dir, output_filename)
+        
+        try:
+            preprocess_nifti_to_numpy(
+                input_path, 
+                output_path,
+                use_multichannel=use_multichannel,
+                extract_slice=extract_slice
+            )
+        except Exception as e:
+            print(f"Error processing {filename}: {e}")
+
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Preprocess CT scans for SCLC classification")
+    parser.add_argument("--input", type=str, required=True, help="Input NIfTI file or directory")
+    parser.add_argument("--output", type=str, required=True, help="Output numpy file or directory")
+    parser.add_argument("--multichannel", action="store_true", default=True,
+                        help="Create 3-channel windowed output")
+    parser.add_argument("--extract-slice", action="store_true",
+                        help="Extract middle 2D slice instead of full volume")
+    parser.add_argument("--batch", action="store_true",
+                        help="Process entire directory")
+    
+    args = parser.parse_args()
+    
+    if args.batch:
+        batch_preprocess_directory(
+            args.input, 
+            args.output,
+            use_multichannel=args.multichannel,
+            extract_slice=args.extract_slice
+        )
+    else:
+        preprocess_nifti_to_numpy(
+            args.input,
+            args.output,
+            use_multichannel=args.multichannel,
+            extract_slice=args.extract_slice
+        )
