@@ -7,9 +7,15 @@ import numpy as np
 import nibabel as nib
 import os
 
+# Shared preprocessing utilities
+from data.data_preprocessing import (
+    load_volume,
+    prepare_tensor_for_model,
+)
+
 """
 SCLC Diagnostic System Training
-===============================
+-------------------------------
 Implements the training pipeline for the SCLC diagnostic system with support for:
 - Backbone model selection
 - Resuming from checkpoints for fine-tuning
@@ -52,64 +58,17 @@ class SCLCTrainDataset(torch.utils.data.Dataset):
         path = os.path.join(self.data_path, self.samples[idx])
         
         try:
-            if path.endswith('.nii.gz') or path.endswith('.nii'):
-                # Load NIfTI file
-                nii_img = nib.load(path)
-                scan_data = nii_img.get_fdata(dtype=np.float32)
-            else:
-                # Load numpy file
-                data = np.load(path, allow_pickle=True)
-                if hasattr(data, "item"):
-                    data_dict = data.item()
-                    scan_data = data_dict['scan']
-                else:
-                    scan_data = data
+            # Use shared preprocessing utilities
+            scan_data = load_volume(path)
         except Exception as e:
             raise RuntimeError(f"Error loading data file '{path}': {e}") from e
 
-        # Convert to tensor (C, H, W) for 2D or (C, D, H, W) for 3D
-        scan = torch.tensor(scan_data, dtype=torch.float32)
-        
-        # Handle different dimensionalities
-        if scan.ndim == 2: 
-            # (H, W) -> (1, H, W)
-            scan = scan.unsqueeze(0)
-        elif scan.ndim == 3:
-            # Distinguish 2D images with channels from true 3D volumes
-            if scan.shape[-1] in (1, 3):
-                # Likely channel-last image: (H, W, C) -> (C, H, W)
-                scan = scan.permute(2, 0, 1)
-            elif scan.shape[0] in (1, 3):
-                # Likely channel-first image: (C, H, W), keep as-is
-                pass
-            else:
-                # Likely 3D volume: select middle slice along the largest axis
-                depth_axis = int(np.argmax(scan.shape))
-                mid_slice = scan.shape[depth_axis] // 2
-                scan = scan.select(dim=depth_axis, index=mid_slice).unsqueeze(0)
-        
-        # Normalize scan
-        if scan.max() > 1.0:
-            scan_min = scan.min()
-            scan_max = scan.max()
-            # Avoid dividing by a near-zero range for uniform scans
-            if scan_max > scan_min:
-                scan = (scan - scan_min) / (scan_max - scan_min)
-            else:
-                # For uniform scans, map to a stable constant (all zeros)
-                scan = torch.zeros_like(scan)
-        
-        # Convert grayscale to RGB if using ImageNet-pretrained backbones
-        if self.convert_to_rgb and scan.shape[0] == 1:
-            scan = scan.repeat(3, 1, 1)
-        
-        # Resize to model's expected input size
-        scan = F.interpolate(
-            scan.unsqueeze(0), 
-            size=(self.img_size, self.img_size), 
-            mode='bilinear', 
-            align_corners=False
-        ).squeeze(0)
+        # Prepare tensor using shared preprocessing function
+        scan = prepare_tensor_for_model(
+            scan_data, 
+            img_size=self.img_size, 
+            convert_to_rgb=self.convert_to_rgb
+        )
         
         # Create placeholder targets for NIfTI files without annotation data 
         targets = {
