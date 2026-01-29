@@ -21,10 +21,11 @@ def detection_collate_fn(batch):
     return tuple(zip(*batch))
 
 class SCLCTrainDataset(torch.utils.data.Dataset):
-    def __init__(self, data_path, img_size=224):
+    def __init__(self, data_path, img_size=224, convert_to_rgb=True):
         # Initialize dataset
         self.data_path = data_path
         self.img_size = img_size
+        self.convert_to_rgb = convert_to_rgb
 
         # Validate that the data path exists and is a directory
         if not os.path.isdir(self.data_path):
@@ -54,7 +55,7 @@ class SCLCTrainDataset(torch.utils.data.Dataset):
             if path.endswith('.nii.gz') or path.endswith('.nii'):
                 # Load NIfTI file
                 nii_img = nib.load(path)
-                scan_data = nii_img.get_fdata().astype(np.float32)
+                scan_data = nii_img.get_fdata(dtype=np.float32)
             else:
                 # Load numpy file
                 data = np.load(path, allow_pickle=True)
@@ -98,9 +99,8 @@ class SCLCTrainDataset(torch.utils.data.Dataset):
                 # For uniform scans, map to a stable constant (all zeros)
                 scan = torch.zeros_like(scan)
         
-        # TODO: Only apply for ImageNet-pretrained backbones, not for RadImageNet
-        # Convert grayscale to RGB for compatibility with pretrained backbones
-        if scan.shape[0] == 1:
+        # Convert grayscale to RGB if using ImageNet-pretrained backbones
+        if self.convert_to_rgb and scan.shape[0] == 1:
             scan = scan.repeat(3, 1, 1)
         
         # Resize to model's expected input size
@@ -134,7 +134,7 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
         # Loss aggregation
         global_loss = loss_dict.pop("global_classification_loss")
 
-        # Ensure detection loss is always a tensor on the correct device,
+        # Ensure detection loss is always a tensor on the correct device
         if loss_dict:
             detection_losses = []
             for loss in loss_dict.values():
