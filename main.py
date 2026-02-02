@@ -1,12 +1,12 @@
 import sys
 import torch
 import torch.optim as optim
-from monai.data.dataloader import DataLoader
+from monai.data import DataLoader  # type: ignore[attr-defined]
 import numpy as np
 import os
 import argparse
 from models.model_selection import get_sclc_model
-from training.train import SCLCTrainDataset, detection_collate_fn, train_epoch
+from training.train import create_train_dataset, sclc_collate_fn, train_epoch
 
 
 from logger import create_logger
@@ -34,13 +34,21 @@ if __name__ == "__main__":
 
     # Use RGB conversion only for ImageNet-pretrained timm models
     uses_timm_model = not (args.checkpoint and args.config)
-    train_dataset = SCLCTrainDataset(args.data_path, convert_to_rgb=uses_timm_model)
+    
+    # Create MONAI CacheDataset for efficient data loading
+    train_dataset = create_train_dataset(
+        data_path=args.data_path,
+        convert_to_rgb=uses_timm_model,
+        cache_rate=1.0,
+        num_workers=4,
+    )
+    
     data_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=4,
-        collate_fn=detection_collate_fn,
+        collate_fn=sclc_collate_fn,
         pin_memory=(device.type == "cuda"),
     )
 

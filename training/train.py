@@ -1,17 +1,16 @@
 import sys
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
 import torch.nn.functional as F
 import numpy as np
-import nibabel as nib
 import os
+from typing import Any, Dict, List, Sequence, Optional
 
-# Shared preprocessing utilities
-from data.data_preprocessing import (
-    load_volume,
-    prepare_tensor_for_model,
-)
+from monai.data import CacheDataset, DataLoader, list_data_collate  # type: ignore[attr-defined]
+from monai.transforms import Compose  # type: ignore[attr-defined]
+
+# MONAI transforms for preprocessing
+from data.transforms import get_train_transforms, get_val_transforms
 
 """
 SCLC Diagnostic System Training
@@ -20,64 +19,185 @@ Implements the training pipeline for the SCLC diagnostic system with support for
 - Backbone model selection
 - Resuming from checkpoints for fine-tuning
 - Multi-task loss aggregation
+- MONAI CacheDataset for efficient data loading
 """
 
-def detection_collate_fn(batch):
-    """Custom collate function for DataLoader that unzips (scan, target) pairs."""
-    return tuple(zip(*batch))
 
+def sclc_collate_fn(batch: List[Dict[str, Any]]) -> tuple:
+    """Custom collate function for detection-style training.
+    
+    Converts MONAI's dictionary batch format to the (scans, targets) tuple format
+    expected by the detection model.
+    
+    Args:
+        batch: List of dictionaries with 'image' and target keys.
+        
+    Returns:
+        Tuple of (scans, targets) where scans is a list of tensors and
+        targets is a list of dictionaries.
+    """
+    scans = []
+    targets = []
+    
+    for i, item in enumerate(batch):
+        scans.append(item["image"])
+        target = {
+            "boxes": item.get("boxes", torch.zeros((0, 4), dtype=torch.float32)),
+            "labels": item.get("labels", torch.zeros((0,), dtype=torch.int64)),
+            "scan_label": item.get("scan_label", torch.tensor(0, dtype=torch.int64)),
+            "scan_id": torch.tensor(i, dtype=torch.int64),
+        }
+        targets.append(target)
+    
+    return tuple(scans), tuple(targets)
+
+
+def get_data_list(data_path: str) -> List[Dict[str, str]]:
+    """Create a list of data dictionaries for MONAI dataset.
+    
+    Args:
+        data_path: Path to directory containing scan files.
+        
+    Returns:
+        List of dictionaries with 'image' key pointing to file paths.
+    """
+    if not os.path.isdir(data_path):
+        raise ValueError(f"Data path '{data_path}' does not exist or is not a directory.")
+    
+    try:
+        all_files = os.listdir(data_path)
+    except OSError as e:
+        raise ValueError(f"Unable to list contents of data path '{data_path}': {e}") from e
+    
+    # Collect all valid samples for NIfTI and numpy formats
+    valid_extensions = ('.nii.gz', '.nii', '.npy', '.npz')
+    samples = [f for f in all_files if any(f.endswith(ext) for ext in valid_extensions)]
+    
+    if not samples:
+        raise ValueError(
+            f"No valid data files found in data path '{data_path}'. "
+            f"Supported formats: {valid_extensions}"
+        )
+    
+    # Create list of dictionaries for MONAI
+    data_list = [{"image": os.path.join(data_path, f)} for f in samples]
+    
+    return data_list
+
+
+def create_train_dataset(
+    data_path: str,
+    img_size: int = 224,
+    convert_to_rgb: bool = True,
+    use_multichannel_windowing: bool = False,
+    cache_rate: float = 1.0,
+    num_workers: int = 4
+) -> CacheDataset:
+    """Create a MONAI CacheDataset for training.
+    
+    Args:
+        data_path: Path to directory containing scan files.
+        img_size: Target image size (height and width).
+        convert_to_rgb: Whether to convert grayscale to 3-channel RGB.
+        use_multichannel_windowing: Whether to use multi-channel CT windowing.
+        cache_rate: Fraction of data to cache (0.0 to 1.0).
+        num_workers: Number of workers for caching.
+        
+    Returns:
+        CacheDataset configured for training.
+    """
+    data_list = get_data_list(data_path)
+    
+    transforms = get_train_transforms(
+        img_size=img_size,
+        convert_to_rgb=convert_to_rgb,
+        use_multichannel_windowing=use_multichannel_windowing
+    )
+    
+    dataset = CacheDataset(
+        data=data_list,
+        transform=transforms,
+        cache_rate=cache_rate,
+        num_workers=num_workers,
+    )
+    
+    return dataset
+
+
+def create_val_dataset(
+    data_path: str,
+    img_size: int = 224,
+    convert_to_rgb: bool = True,
+    use_multichannel_windowing: bool = False,
+    cache_rate: float = 1.0,
+    num_workers: int = 4
+) -> CacheDataset:
+    """Create a MONAI CacheDataset for validation.
+    
+    Args:
+        data_path: Path to directory containing scan files.
+        img_size: Target image size (height and width).
+        convert_to_rgb: Whether to convert grayscale to 3-channel RGB.
+        use_multichannel_windowing: Whether to use multi-channel CT windowing.
+        cache_rate: Fraction of data to cache (0.0 to 1.0).
+        num_workers: Number of workers for caching.
+        
+    Returns:
+        CacheDataset configured for validation.
+    """
+    data_list = get_data_list(data_path)
+    
+    transforms = get_val_transforms(
+        img_size=img_size,
+        convert_to_rgb=convert_to_rgb,
+        use_multichannel_windowing=use_multichannel_windowing
+    )
+    
+    dataset = CacheDataset(
+        data=data_list,
+        transform=transforms,
+        cache_rate=cache_rate,
+        num_workers=num_workers,
+    )
+    
+    return dataset
+
+
+# Keep legacy class for backward compatibility
 class SCLCTrainDataset(torch.utils.data.Dataset):
-    def __init__(self, data_path, img_size=224, convert_to_rgb=True):
-        # Initialize dataset
+    """Legacy dataset class - use create_train_dataset() with CacheDataset instead."""
+    
+    def __init__(self, data_path: str, img_size: int = 224, convert_to_rgb: bool = True):
+        import warnings
+        warnings.warn(
+            "SCLCTrainDataset is deprecated. Use create_train_dataset() for MONAI CacheDataset.",
+            DeprecationWarning
+        )
         self.data_path = data_path
         self.img_size = img_size
         self.convert_to_rgb = convert_to_rgb
-
-        # Validate that the data path exists and is a directory
-        if not os.path.isdir(self.data_path):
-            raise ValueError(f"Data path '{self.data_path}' does not exist or is not a directory.")
-
-        try:
-            all_files = os.listdir(self.data_path)
-        except OSError as e:
-            raise ValueError(f"Unable to list contents of data path '{self.data_path}': {e}") from e
-
-        # Collect all valid sample for both NIfTI and numpy formats
-        self.samples = [f for f in all_files if f.endswith('.nii.gz') or f.endswith('.nii') or f.endswith('.npy') or f.endswith('.npz')]
-
-        if not self.samples:
-            raise ValueError(
-                f"No valid data files found in data path '{self.data_path}'. "
-                "Supported formats: .nii.gz, .nii, .npy, .npz"
-            )
+        self._data_list = get_data_list(data_path)
+        self._transforms = get_train_transforms(img_size, convert_to_rgb)
     
-    def __len__(self):
-        return len(self.samples)
+    def __len__(self) -> int:
+        return len(self._data_list)
     
-    def __getitem__(self, idx):
-        path = os.path.join(self.data_path, self.samples[idx])
-        
-        try:
-            # Use shared preprocessing utilities
-            scan_data = load_volume(path)
-        except Exception as e:
-            raise RuntimeError(f"Error loading data file '{path}': {e}") from e
-
-        # Prepare tensor using shared preprocessing function
-        scan = prepare_tensor_for_model(
-            scan_data, 
-            img_size=self.img_size, 
-            convert_to_rgb=self.convert_to_rgb
-        )
-        
-        # Create placeholder targets for NIfTI files without annotation data 
+    def __getitem__(self, idx: int) -> tuple:
+        data = self._transforms(self._data_list[idx])  # type: ignore[assignment]
+        scan = data["image"]  # type: ignore[index]
         targets = {
-            'boxes': torch.zeros((0, 4), dtype=torch.float32),
-            'labels': torch.zeros((0,), dtype=torch.int64),
-            'scan_label': torch.tensor(0, dtype=torch.int64),
+            'boxes': data.get("boxes", torch.zeros((0, 4), dtype=torch.float32)),  # type: ignore[union-attr]
+            'labels': data.get("labels", torch.zeros((0,), dtype=torch.int64)),  # type: ignore[union-attr]
+            'scan_label': data.get("scan_label", torch.tensor(0, dtype=torch.int64)),  # type: ignore[union-attr]
             'scan_id': torch.tensor(idx, dtype=torch.int64),
         }
-        return scan, targets       
+        return scan, targets
+
+
+# Legacy alias for backward compatibility
+def detection_collate_fn(batch):
+    """Legacy collate function - use sclc_collate_fn instead."""
+    return tuple(zip(*batch))       
 
 
 def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
