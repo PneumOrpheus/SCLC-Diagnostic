@@ -1,7 +1,7 @@
 import sys
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from monai.data.dataloader import DataLoader
 import numpy as np
 import os
 import argparse
