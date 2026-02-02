@@ -16,7 +16,7 @@ from models.config import get_config
 def parse_options():
     parser = argparse.ArgumentParser(description="SCLC Diagnostic System Training")
     parser.add_argument("--backbone", type=str, default="swinv2", choices=["swin", "swinv2", "resnet50", "densenet121"], help="Which backbone model to use")
-    parser.add_argument("--data-path", type=str,default="", help="Path to the SCLC training data")
+    parser.add_argument("--data-path", type=str,default="/home/data/Lung-PET-CT-Dx", help="Path to the SCLC training data")
     parser.add_argument("--checkpoint", type=str, default="", help="Path to .pth model file from which to resume checkpoint")
     parser.add_argument("--config", type=str, default="", metavar="FILE", help="path to config file")
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")

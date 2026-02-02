@@ -1,15 +1,21 @@
 import os
+import tempfile
 import numpy as np
 import nibabel as nib
 import scipy.ndimage
 import torch
 import torch.nn.functional as F
+import dicom2nifti
+import dicom2nifti.settings as dicom2nifti_settings
+import pydicom
 from typing import List, Tuple, Optional, Union
+
 
 """
 SCLC Data Preprocessing Module
 ------------------------------
-Provides preprocessing utilities for CT scan data in NIfTI format (.nii, .nii.gz).
+Provides preprocessing utilities for CT scan data in NIfTI format (.nii, .nii.gz)
+and DICOM format (.dcm or DICOM directories).
 Supports multi-channel windowing for RadImageNet-pretrained backbones.
 """
 
@@ -62,11 +68,143 @@ def load_numpy_volume(file_path: str) -> np.ndarray:
     return np.array(data, dtype=np.float32)
 
 
-def load_volume(file_path: str) -> np.ndarray:
-    """Load a volume from either NIfTI or numpy format.
+def is_dicom_file(file_path: str) -> bool:
+    """Check if a file is a valid DICOM file.
 
     Args:
-        file_path (str): Path to the data file.
+        file_path (str): Path to the file to check.
+
+    Returns:
+        bool: True if the file is a valid DICOM file, False otherwise.
+    """
+    if not os.path.isfile(file_path):
+        return False
+    
+    try:
+        pydicom.dcmread(file_path, stop_before_pixels=True)
+        return True
+    except Exception:
+        return False
+
+
+def is_dicom_directory(dir_path: str) -> bool:
+    """Check if a directory contains DICOM files.
+
+    Args:
+        dir_path (str): Path to the directory to check.
+
+    Returns:
+        bool: True if the directory contains at least one DICOM file.
+    """
+    if not os.path.isdir(dir_path):
+        return False
+    
+    for filename in os.listdir(dir_path):
+        file_path = os.path.join(dir_path, filename)
+        if is_dicom_file(file_path):
+            return True
+    return False
+
+
+def convert_dicom_to_nifti(dicom_path: str, 
+                            output_path: Optional[str] = None,
+                            reorient: bool = True) -> str:
+    """Convert a DICOM directory or file to NIfTI format.
+
+    Uses dicom2nifti package to perform the conversion.
+
+    Args:
+        dicom_path (str): Path to DICOM directory or single DICOM file.
+        output_path (str, optional): Path for output NIfTI file. 
+            If None, creates a temporary file.
+        reorient (bool): Whether to reorient the volume to standard orientation.
+
+    Returns:
+        str: Path to the created NIfTI file.
+
+    Raises:
+        ValueError: If dicom_path is not a valid DICOM source.
+    """
+    # Configure dicom2nifti settings
+    dicom2nifti_settings.disable_validate_slice_increment()
+    dicom2nifti_settings.disable_validate_orthogonal()
+    if not reorient:
+        dicom2nifti_settings.disable_resampling()
+    
+    # Determine output path
+    if output_path is None:
+        temp_dir = tempfile.mkdtemp()
+        output_path = os.path.join(temp_dir, "converted.nii.gz")
+    
+    # Ensure output directory exists
+    output_dir = os.path.dirname(output_path)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+    
+    if os.path.isdir(dicom_path):
+        # Convert DICOM directory
+        if not is_dicom_directory(dicom_path):
+            raise ValueError(f"Directory {dicom_path} does not contain valid DICOM files.")
+        dicom2nifti.dicom_series_to_nifti(dicom_path, output_path, reorient_nifti=reorient)
+    elif os.path.isfile(dicom_path):
+        # For single DICOM file, we need to find all files in the same directory
+        # that belong to the same series
+        if not is_dicom_file(dicom_path):
+            raise ValueError(f"File {dicom_path} is not a valid DICOM file.")
+        
+        parent_dir = os.path.dirname(dicom_path)
+        if parent_dir and is_dicom_directory(parent_dir):
+            # Convert the entire series from the parent directory
+            dicom2nifti.dicom_series_to_nifti(parent_dir, output_path, reorient_nifti=reorient)
+        else:
+            raise ValueError(
+                f"Cannot convert single DICOM file {dicom_path}. "
+                "Please provide a directory containing the full DICOM series."
+            )
+    else:
+        raise ValueError(f"Path {dicom_path} does not exist.")
+    
+    return output_path
+
+
+def load_dicom_volume(dicom_path: str, 
+                       convert_to_nifti_path: Optional[str] = None) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    """Load a DICOM directory or file and return the image volume.
+
+    Converts DICOM to NIfTI internally and loads the result.
+
+    Args:
+        dicom_path (str): Path to DICOM directory or single DICOM file.
+        convert_to_nifti_path (str, optional): Path to save the converted NIfTI file.
+            If None, uses a temporary file that is cleaned up after loading.
+
+    Returns:
+        Tuple[np.ndarray, Optional[np.ndarray]]: 
+            - 3D numpy array of image data
+            - Affine transformation matrix (or None if unavailable)
+    """
+    # Convert DICOM to NIfTI
+    use_temp = convert_to_nifti_path is None
+    nifti_path = convert_dicom_to_nifti(dicom_path, convert_to_nifti_path)
+    
+    try:
+        # Load the converted NIfTI file
+        volume, affine = load_nifti_volume(nifti_path)
+        return volume, affine
+    finally:
+        # Clean up temporary file if we created one
+        if use_temp and os.path.exists(nifti_path):
+            os.remove(nifti_path)
+            temp_dir = os.path.dirname(nifti_path)
+            if os.path.isdir(temp_dir) and not os.listdir(temp_dir):
+                os.rmdir(temp_dir)
+
+
+def load_volume(file_path: str) -> np.ndarray:
+    """Load a volume from NIfTI, numpy, or DICOM format.
+
+    Args:
+        file_path (str): Path to the data file or DICOM directory.
 
     Returns:
         np.ndarray: Image volume as float32 array.
@@ -76,9 +214,15 @@ def load_volume(file_path: str) -> np.ndarray:
         return volume
     elif file_path.endswith('.npy') or file_path.endswith('.npz'):
         return load_numpy_volume(file_path)
+    elif os.path.isdir(file_path) and is_dicom_directory(file_path):
+        volume, _ = load_dicom_volume(file_path)
+        return volume
+    elif file_path.endswith('.dcm') or is_dicom_file(file_path):
+        volume, _ = load_dicom_volume(file_path)
+        return volume
     else:
         raise ValueError(f"Unsupported file format: {file_path}. "
-                        "Supported formats: .nii, .nii.gz, .npy, .npz")
+                        "Supported formats: .nii, .nii.gz, .npy, .npz, .dcm, or DICOM directory")
 
 
 def clip_hounsfield_units(volume: np.ndarray, 
@@ -309,14 +453,98 @@ def preprocess_nifti_to_numpy(input_path: str,
     print(f"Processed {input_path} -> {output_path} with shape {processed.shape}")
 
 
+def preprocess_dicom_to_numpy(input_path: str,
+                               output_path: str,
+                               use_multichannel: bool = True,
+                               extract_slice: bool = False,
+                               slice_index: Optional[int] = None,
+                               save_nifti: bool = False,
+                               nifti_output_path: Optional[str] = None) -> None:
+    """Preprocess a DICOM directory/file and save as numpy array.
+
+    Pipeline function for converting DICOM CT scans to preprocessed
+    numpy arrays ready for training.
+
+    Args:
+        input_path (str): Path to input DICOM directory or file.
+        output_path (str): Path for output numpy file.
+        use_multichannel (bool): Whether to create 3-channel windowed output.
+        extract_slice (bool): Whether to extract a single 2D slice.
+        slice_index (int, optional): Slice index to extract (default: middle).
+        save_nifti (bool): Whether to also save the intermediate NIfTI file.
+        nifti_output_path (str, optional): Path for NIfTI output if save_nifti is True.
+
+    Returns:
+        None: Saves processed array to output_path.
+    """
+    # Determine NIfTI output path if saving
+    if save_nifti:
+        if nifti_output_path is None:
+            nifti_output_path = output_path.replace('.npy', '.nii.gz')
+        volume, _ = load_dicom_volume(input_path, convert_to_nifti_path=nifti_output_path)
+    else:
+        volume, _ = load_dicom_volume(input_path)
+    
+    # Clip to valid HU range
+    volume = clip_hounsfield_units(volume)
+    
+    if use_multichannel:
+        processed = create_multichannel_ct(volume)
+    else:
+        processed = normalize_intensity(volume)
+    
+    if extract_slice:
+        processed = extract_2d_slice(processed, slice_index=slice_index, axis=0)
+    
+    # Save as numpy array
+    os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
+    np.save(output_path, processed.astype(np.float32))
+    print(f"Processed DICOM {input_path} -> {output_path} with shape {processed.shape}")
+
+
+def batch_convert_dicom_to_nifti(input_dir: str,
+                                  output_dir: str,
+                                  reorient: bool = True) -> None:
+    """Batch convert all DICOM directories to NIfTI files.
+
+    Args:
+        input_dir (str): Directory containing DICOM subdirectories.
+        output_dir (str): Directory for output NIfTI files.
+        reorient (bool): Whether to reorient volumes to standard orientation.
+
+    Returns:
+        None: Saves converted NIfTI files to output_dir.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Find DICOM directories
+    dicom_dirs = [d for d in os.listdir(input_dir)
+                  if os.path.isdir(os.path.join(input_dir, d)) and 
+                  is_dicom_directory(os.path.join(input_dir, d))]
+    
+    if not dicom_dirs:
+        print(f"No DICOM directories found in {input_dir}")
+        return
+    
+    for dirname in dicom_dirs:
+        dicom_path = os.path.join(input_dir, dirname)
+        output_path = os.path.join(output_dir, f"{dirname}.nii.gz")
+        
+        try:
+            convert_dicom_to_nifti(dicom_path, output_path, reorient=reorient)
+            print(f"Converted {dicom_path} -> {output_path}")
+        except Exception as e:
+            print(f"Error converting {dirname}: {e}")
+
+
 def batch_preprocess_directory(input_dir: str,
                                 output_dir: str,
                                 use_multichannel: bool = True,
                                 extract_slice: bool = False) -> None:
-    """Batch preprocess all NIfTI files in a directory.
+    """Batch preprocess all NIfTI and DICOM files/directories in a directory.
 
     Args:
-        input_dir (str): Directory containing NIfTI files.
+        input_dir (str): Directory containing NIfTI files or DICOM subdirectories.
         output_dir (str): Directory for output numpy files.
         use_multichannel (bool): Whether to create 3-channel windowed output.
         extract_slice (bool): Whether to extract single 2D slices.
@@ -326,16 +554,28 @@ def batch_preprocess_directory(input_dir: str,
     """
     os.makedirs(output_dir, exist_ok=True)
     
+    # Find NIfTI files
     nifti_files = [f for f in os.listdir(input_dir) 
                    if f.endswith('.nii') or f.endswith('.nii.gz')]
     
-    if not nifti_files:
-        print(f"No NIfTI files found in {input_dir}")
+    # Find DICOM directories
+    dicom_dirs = [d for d in os.listdir(input_dir)
+                  if os.path.isdir(os.path.join(input_dir, d)) and 
+                  is_dicom_directory(os.path.join(input_dir, d))]
+    
+    # Find individual DICOM files
+    dicom_files = [f for f in os.listdir(input_dir)
+                   if f.endswith('.dcm') or 
+                   (os.path.isfile(os.path.join(input_dir, f)) and 
+                    is_dicom_file(os.path.join(input_dir, f)))]
+    
+    if not nifti_files and not dicom_dirs and not dicom_files:
+        print(f"No NIfTI or DICOM files found in {input_dir}")
         return
     
+    # Process NIfTI files
     for filename in nifti_files:
         input_path = os.path.join(input_dir, filename)
-        # Replace .nii.gz or .nii with .npy
         output_filename = filename.replace('.nii.gz', '.npy').replace('.nii', '.npy')
         output_path = os.path.join(output_dir, output_filename)
         
@@ -348,24 +588,75 @@ def batch_preprocess_directory(input_dir: str,
             )
         except Exception as e:
             print(f"Error processing {filename}: {e}")
+    
+    # Process DICOM directories
+    for dirname in dicom_dirs:
+        input_path = os.path.join(input_dir, dirname)
+        output_filename = f"{dirname}.npy"
+        output_path = os.path.join(output_dir, output_filename)
+        
+        try:
+            preprocess_dicom_to_numpy(
+                input_path,
+                output_path,
+                use_multichannel=use_multichannel,
+                extract_slice=extract_slice
+            )
+        except Exception as e:
+            print(f"Error processing DICOM directory {dirname}: {e}")
+    
+    # Process individual DICOM files
+    processed_dicom_parents = set()
+    for filename in dicom_files:
+        input_path = os.path.join(input_dir, filename)
+        parent_dir = os.path.dirname(input_path)
+        
+        # Avoid processing the same parent directory multiple times
+        if parent_dir in processed_dicom_parents:
+            continue
+        processed_dicom_parents.add(parent_dir)
+        
+        output_filename = f"{os.path.basename(parent_dir)}_dicom.npy"
+        output_path = os.path.join(output_dir, output_filename)
+        
+        try:
+            preprocess_dicom_to_numpy(
+                parent_dir,
+                output_path,
+                use_multichannel=use_multichannel,
+                extract_slice=extract_slice
+            )
+        except Exception as e:
+            print(f"Error processing DICOM file {filename}: {e}")
 
 
 if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="Preprocess CT scans for SCLC classification")
-    parser.add_argument("--input", type=str, required=True, help="Input NIfTI file or directory")
-    parser.add_argument("--output", type=str, required=True, help="Output numpy file or directory")
+    parser.add_argument("--input", type=str, required=True, help="Input NIfTI/DICOM file or directory")
+    parser.add_argument("--output", type=str, required=True, help="Output numpy/NIfTI file or directory")
     parser.add_argument("--multichannel", action="store_true", default=True,
                         help="Create 3-channel windowed output")
     parser.add_argument("--extract-slice", action="store_true",
                         help="Extract middle 2D slice instead of full volume")
     parser.add_argument("--batch", action="store_true",
                         help="Process entire directory")
+    parser.add_argument("--convert-dicom", action="store_true",
+                        help="Convert DICOM to NIfTI only (no preprocessing)")
+    parser.add_argument("--save-nifti", action="store_true",
+                        help="Also save intermediate NIfTI when processing DICOM")
     
     args = parser.parse_args()
     
-    if args.batch:
+    if args.convert_dicom:
+        # DICOM to NIfTI conversion only
+        if args.batch:
+            batch_convert_dicom_to_nifti(args.input, args.output)
+        else:
+            output_path = convert_dicom_to_nifti(args.input, args.output)
+            print(f"Converted DICOM to NIfTI: {output_path}")
+    elif args.batch:
         batch_preprocess_directory(
             args.input, 
             args.output,
@@ -373,9 +664,27 @@ if __name__ == "__main__":
             extract_slice=args.extract_slice
         )
     else:
-        preprocess_nifti_to_numpy(
-            args.input,
-            args.output,
-            use_multichannel=args.multichannel,
-            extract_slice=args.extract_slice
-        )
+        # Determine input type and process accordingly
+        if os.path.isdir(args.input) and is_dicom_directory(args.input):
+            preprocess_dicom_to_numpy(
+                args.input,
+                args.output,
+                use_multichannel=args.multichannel,
+                extract_slice=args.extract_slice,
+                save_nifti=args.save_nifti
+            )
+        elif args.input.endswith('.dcm') or is_dicom_file(args.input):
+            preprocess_dicom_to_numpy(
+                args.input,
+                args.output,
+                use_multichannel=args.multichannel,
+                extract_slice=args.extract_slice,
+                save_nifti=args.save_nifti
+            )
+        else:
+            preprocess_nifti_to_numpy(
+                args.input,
+                args.output,
+                use_multichannel=args.multichannel,
+                extract_slice=args.extract_slice
+            )
