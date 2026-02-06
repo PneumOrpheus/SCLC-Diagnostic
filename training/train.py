@@ -157,18 +157,20 @@ def get_data_list(
     return data_list
 
 
-def create_train_dataset(
+def create_dataset(
     data_path: str,
+    split: str = "train",
     img_size: int = 224,
     convert_to_rgb: bool = True,
     use_multichannel_windowing: bool = False,
     cache_rate: float = 1.0,
     num_workers: int = 4
 ) -> CacheDataset:
-    """Create a MONAI CacheDataset for training.
+    """Create a MONAI CacheDataset.
     
     Args:
         data_path: Path to directory containing scan files.
+        split: One of 'train', 'val', or 'test'.
         img_size: Target image size (height and width).
         convert_to_rgb: Whether to convert grayscale to 3-channel RGB.
         use_multichannel_windowing: Whether to use multi-channel CT windowing.
@@ -176,52 +178,23 @@ def create_train_dataset(
         num_workers: Number of workers for caching.
         
     Returns:
-        CacheDataset configured for training.
+        CacheDataset configured for the specified split.
     """
-    data_list = get_data_list(data_path, split="train")
-    transforms = get_train_transforms(
-        img_size=img_size,
-        convert_to_rgb=convert_to_rgb,
-        use_multichannel_windowing=use_multichannel_windowing
-    )
-    dataset = CacheDataset(
-        data=data_list,
-        transform=transforms,
-        cache_rate=cache_rate,
-        num_workers=num_workers,
-    )
+    data_list = get_data_list(data_path, split=split)
     
-    return dataset
-
-
-def create_val_dataset(
-    data_path: str,
-    img_size: int = 224,
-    convert_to_rgb: bool = True,
-    use_multichannel_windowing: bool = False,
-    cache_rate: float = 1.0,
-    num_workers: int = 4
-) -> CacheDataset:
-    """Create a MONAI CacheDataset for validation.
-    
-    Args:
-        data_path: Path to directory containing scan files.
-        img_size: Target image size (height and width).
-        convert_to_rgb: Whether to convert grayscale to 3-channel RGB.
-        use_multichannel_windowing: Whether to use multi-channel CT windowing.
-        cache_rate: Fraction of data to cache (0.0 to 1.0).
-        num_workers: Number of workers for caching.
-        
-    Returns:
-        CacheDataset configured for validation.
-    """
-    data_list = get_data_list(data_path, split="val")
-    
-    transforms = get_val_transforms(
-        img_size=img_size,
-        convert_to_rgb=convert_to_rgb,
-        use_multichannel_windowing=use_multichannel_windowing
-    )
+    if split == "train":
+        transforms = get_train_transforms(
+            img_size=img_size,
+            convert_to_rgb=convert_to_rgb,
+            use_multichannel_windowing=use_multichannel_windowing
+        )
+    else:
+        # val and test use val transforms (no augmentation)
+        transforms = get_val_transforms(
+            img_size=img_size,
+            convert_to_rgb=convert_to_rgb,
+            use_multichannel_windowing=use_multichannel_windowing
+        )
     
     dataset = CacheDataset(
         data=data_list,
@@ -231,47 +204,6 @@ def create_val_dataset(
     )
     
     return dataset
-
-
-def create_test_dataset(
-    data_path: str,
-    img_size: int = 224,
-    convert_to_rgb: bool = True,
-    use_multichannel_windowing: bool = False,
-    cache_rate: float = 1.0,
-    num_workers: int = 4
-) -> CacheDataset:
-    """Create a MONAI CacheDataset for testing.
-    
-    Args:
-        data_path: Path to directory containing scan files.
-        img_size: Target image size (height and width).
-        convert_to_rgb: Whether to convert grayscale to 3-channel RGB.
-        use_multichannel_windowing: Whether to use multi-channel CT windowing.
-        cache_rate: Fraction of data to cache (0.0 to 1.0).
-        num_workers: Number of workers for caching.
-        
-    Returns:
-        CacheDataset configured for testing.
-    """
-    # Use 'test' split
-    data_list = get_data_list(data_path, split="test")
-    
-    # Use same transforms as validation (no augmentation)
-    transforms = get_val_transforms(
-        img_size=img_size,
-        convert_to_rgb=convert_to_rgb,
-        use_multichannel_windowing=use_multichannel_windowing
-    )
-    
-    dataset = CacheDataset(
-        data=data_list,
-        transform=transforms,
-        cache_rate=cache_rate,
-        num_workers=num_workers,
-    )
-    
-    return dataset  
 
 
 def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):

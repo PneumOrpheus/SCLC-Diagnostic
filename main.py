@@ -6,7 +6,7 @@ import numpy as np
 import os
 import argparse
 from models.model_selection import get_sclc_model
-from training.train import create_train_dataset, create_val_dataset, create_test_dataset, sclc_collate_fn, train_epoch
+from training.train import create_dataset, sclc_collate_fn, train_epoch
 
 
 from logger import create_logger
@@ -36,22 +36,25 @@ if __name__ == "__main__":
     # Use RGB conversion only for ImageNet-pretrained timm models
     uses_timm_model = not (args.checkpoint and args.config)
     
-    train_dataset = create_train_dataset(
+    train_dataset = create_dataset(
         data_path=args.data_path,
+        split="train",
         convert_to_rgb=uses_timm_model,
         cache_rate=1.0,
         num_workers=4,
     )
     
-    val_dataset = create_val_dataset(
+    val_dataset = create_dataset(
         data_path=args.data_path,
+        split="val",
         convert_to_rgb=uses_timm_model,
         cache_rate=1.0,
         num_workers=4,
     )
 
-    test_dataset = create_test_dataset(
+    test_dataset = create_dataset(
         data_path=args.data_path,
+        split="test",
         convert_to_rgb=uses_timm_model,
         cache_rate=0.0,  # Typically don't need to cache test data during training
         num_workers=4,
