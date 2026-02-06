@@ -22,6 +22,7 @@ def parse_options():
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=8, help="Batch size for training")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate for the optimizer")
+    parser.add_argument("--train-backbone-only", action="store_true", help="Train only the backbone (freeze FPN and heads)")
     return parser.parse_args()
 
 
@@ -56,8 +57,16 @@ if __name__ == "__main__":
 
     logger = create_logger(output_dir=config.OUTPUT, dist_rank=-1, name=f"{config.MODEL.NAME}")
     logger.info(f"Using backbone: {args.backbone}")
+    if args.train_backbone_only:
+        logger.info("Training mode: backbone-only (FPN and heads frozen)")
 
-    model = get_sclc_model(backbone_type=args.backbone, checkpoint_path=args.checkpoint, config=config, logger=logger)
+    model = get_sclc_model(
+        backbone_type=args.backbone, 
+        checkpoint_path=args.checkpoint, 
+        config=config, 
+        train_backbone_only=args.train_backbone_only,
+        logger=logger
+    )
     model.to(device)
 
     params = [p for p in model.parameters() if p.requires_grad]
