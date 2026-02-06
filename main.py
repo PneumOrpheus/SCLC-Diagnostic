@@ -1,12 +1,12 @@
 import sys
 import torch
 import torch.optim as optim
-from monai.data import DataLoader  # type: ignore[attr-defined]
+from monai.data import DataLoader 
 import numpy as np
 import os
 import argparse
 from models.model_selection import get_sclc_model
-from training.train import create_train_dataset, sclc_collate_fn, train_epoch
+from training.train import create_train_dataset, create_val_dataset, create_test_dataset, sclc_collate_fn, train_epoch
 
 
 from logger import create_logger
@@ -17,8 +17,8 @@ def parse_options():
     parser = argparse.ArgumentParser(description="SCLC Diagnostic System Training")
     parser.add_argument("--backbone", type=str, default="swinv2", choices=["swin", "swinv2", "resnet50", "densenet121"], help="Which backbone model to use")
     parser.add_argument("--data-path", type=str,default="/home/data/Lung-PET-CT-Dx", help="Path to the SCLC training data")
-    parser.add_argument("--checkpoint", type=str, default="", help="Path to .pth model file from which to resume checkpoint")
-    parser.add_argument("--config", type=str, default="", metavar="FILE", help="path to config file")
+    parser.add_argument("--checkpoint", type=str, default="/home/hansstem/RadImageNet_swin/rin_swintf.pth", help="Path to .pth model file from which to resume checkpoint")
+    parser.add_argument("--config", type=str, default="/home/hansstem/RadImageNet_swin/rin_config.yaml", metavar="FILE", help="path to config file")
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=8, help="Batch size for training")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate for the optimizer")
@@ -36,7 +36,6 @@ if __name__ == "__main__":
     # Use RGB conversion only for ImageNet-pretrained timm models
     uses_timm_model = not (args.checkpoint and args.config)
     
-    # Create MONAI CacheDataset for efficient data loading
     train_dataset = create_train_dataset(
         data_path=args.data_path,
         convert_to_rgb=uses_timm_model,
@@ -44,10 +43,42 @@ if __name__ == "__main__":
         num_workers=4,
     )
     
-    data_loader = DataLoader(
+    val_dataset = create_val_dataset(
+        data_path=args.data_path,
+        convert_to_rgb=uses_timm_model,
+        cache_rate=1.0,
+        num_workers=4,
+    )
+
+    test_dataset = create_test_dataset(
+        data_path=args.data_path,
+        convert_to_rgb=uses_timm_model,
+        cache_rate=0.0,  # Typically don't need to cache test data during training
+        num_workers=4,
+    )
+
+    train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
+        num_workers=4,
+        collate_fn=sclc_collate_fn,
+        pin_memory=(device.type == "cuda"),
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=4,
+        collate_fn=sclc_collate_fn,
+        pin_memory=(device.type == "cuda"),
+    )
+
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
         num_workers=4,
         collate_fn=sclc_collate_fn,
         pin_memory=(device.type == "cuda"),
@@ -80,7 +111,7 @@ if __name__ == "__main__":
     
     # Training loop
     for epoch in range(args.epochs):
-        train_epoch(model, optimizer, data_loader, device, epoch)
+        train_epoch(model, optimizer, train_loader, device, epoch)
         lr_scheduler.step()
         
         # Save checkpoint
@@ -101,4 +132,3 @@ if __name__ == "__main__":
             torch.save(full_checkpoint, full_checkpoint_path)
             logger.info(f"Saved full training checkpoint: {full_checkpoint_path}")
 
-    

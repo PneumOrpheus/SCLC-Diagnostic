@@ -41,10 +41,16 @@ def sclc_collate_fn(batch: List[Dict[str, Any]]) -> tuple:
     
     for i, item in enumerate(batch):
         scans.append(item["image"])
+
+        # Ensure scan_label is a tensor
+        scan_label = item.get("scan_label", 0)
+        if not isinstance(scan_label, torch.Tensor):
+            scan_label = torch.tensor(scan_label, dtype=torch.int64)
+
         target = {
             "boxes": item.get("boxes", torch.zeros((0, 4), dtype=torch.float32)),
             "labels": item.get("labels", torch.zeros((0,), dtype=torch.int64)),
-            "scan_label": item.get("scan_label", torch.tensor(0, dtype=torch.int64)),
+            "scan_label": scan_label,
             "scan_id": torch.tensor(i, dtype=torch.int64),
         }
         targets.append(target)
@@ -52,11 +58,21 @@ def sclc_collate_fn(batch: List[Dict[str, Any]]) -> tuple:
     return tuple(scans), tuple(targets)
 
 
-def get_data_list(data_path: str) -> List[Dict[str, str]]:
-    """Create a list of data dictionaries for MONAI dataset.
+def get_data_list(
+    data_path: str, 
+    split: str = "train", 
+    val_frac: float = 0.1, 
+    test_frac: float = 0.1, 
+    seed: int = 42
+) -> List[Dict[str, Any]]:
+    """Create a list of data dictionaries for MONAI dataset with patient-level splitting.
     
     Args:
         data_path: Path to directory containing scan files.
+        split: One of 'train', 'val', or 'test'.
+        val_frac: Fraction of patients to use for validation.
+        test_frac: Fraction of patients to use for testing.
+        seed: Random seed for reproducibility.
         
     Returns:
         List of dictionaries with 'image' key pointing to file paths.
@@ -79,9 +95,65 @@ def get_data_list(data_path: str) -> List[Dict[str, str]]:
             f"Supported formats: {valid_extensions}"
         )
     
-    # Create list of dictionaries for MONAI
-    data_list = [{"image": os.path.join(data_path, f)} for f in samples]
+    # A: Adenocarcinoma (0), B: Small Cell Carcinoma (1), E: Large Cell Carcinoma (2), G: Squamous Cell Carcinoma (3)
+    class_map = {'A': 0, 'B': 1, 'E': 2, 'G': 3}
+
+    # Filename format: Lung_Dx-A0126_1.3.6.1... -> Patient ID: Lung_Dx-A0126
+    patient_files = {}
+    for f in samples:
+        parts = f.split('_')
+        if len(parts) >= 2:
+            # Reconstruct "Lung_Dx-A0126"
+            patient_id = f"{parts[0]}_{parts[1]}"
+            if patient_id not in patient_files:
+                patient_files[patient_id] = []
+            patient_files[patient_id].append(f)
+
+    all_patients = sorted(list(patient_files.keys()))
     
+    # Shuffle patients deterministically
+    rng = np.random.default_rng(seed)
+    rng.shuffle(all_patients)
+    
+    # Calculate split indices
+    n_total = len(all_patients)
+    n_test = int(n_total * test_frac)
+    n_val = int(n_total * val_frac)
+    n_train = n_total - n_test - n_val
+    
+    if split == 'train':
+        selected_patients = set(all_patients[:n_train])
+    elif split == 'val':
+        selected_patients = set(all_patients[n_train:n_train+n_val])
+    elif split == 'test':
+        selected_patients = set(all_patients[n_train+n_val:])
+    else:
+        # Fallback to all if split name is unknown (e.g. for legacy behavior)
+        selected_patients = set(all_patients)
+
+    print(f"Data Split '{split}': {len(selected_patients)} patients.")
+
+    # Create list of dictionaries for MONAI
+    data_list = []
+    
+    for pid in selected_patients:
+        files = patient_files.get(pid, [])
+        for f in files:
+            # Determine label from filename (e.g. Lung_Dx-A0126_...)
+            label = -1
+            for key, val in class_map.items():
+                if f"-{key}" in f:
+                    label = val
+                    break
+            
+            # Adds to data list with image path and class label
+            if label != -1:
+                data_list.append({
+                    "image": os.path.join(data_path, f),
+                    "scan_label": label
+                })
+    
+    print(f"  -> {len(data_list)} images found for split '{split}'.")
     return data_list
 
 
@@ -106,14 +178,12 @@ def create_train_dataset(
     Returns:
         CacheDataset configured for training.
     """
-    data_list = get_data_list(data_path)
-    
+    data_list = get_data_list(data_path, split="train")
     transforms = get_train_transforms(
         img_size=img_size,
         convert_to_rgb=convert_to_rgb,
         use_multichannel_windowing=use_multichannel_windowing
     )
-    
     dataset = CacheDataset(
         data=data_list,
         transform=transforms,
@@ -145,7 +215,7 @@ def create_val_dataset(
     Returns:
         CacheDataset configured for validation.
     """
-    data_list = get_data_list(data_path)
+    data_list = get_data_list(data_path, split="val")
     
     transforms = get_val_transforms(
         img_size=img_size,
@@ -163,41 +233,45 @@ def create_val_dataset(
     return dataset
 
 
-# Keep legacy class for backward compatibility
-class SCLCTrainDataset(torch.utils.data.Dataset):
-    """Legacy dataset class - use create_train_dataset() with CacheDataset instead."""
+def create_test_dataset(
+    data_path: str,
+    img_size: int = 224,
+    convert_to_rgb: bool = True,
+    use_multichannel_windowing: bool = False,
+    cache_rate: float = 1.0,
+    num_workers: int = 4
+) -> CacheDataset:
+    """Create a MONAI CacheDataset for testing.
     
-    def __init__(self, data_path: str, img_size: int = 224, convert_to_rgb: bool = True):
-        import warnings
-        warnings.warn(
-            "SCLCTrainDataset is deprecated. Use create_train_dataset() for MONAI CacheDataset.",
-            DeprecationWarning
-        )
-        self.data_path = data_path
-        self.img_size = img_size
-        self.convert_to_rgb = convert_to_rgb
-        self._data_list = get_data_list(data_path)
-        self._transforms = get_train_transforms(img_size, convert_to_rgb)
+    Args:
+        data_path: Path to directory containing scan files.
+        img_size: Target image size (height and width).
+        convert_to_rgb: Whether to convert grayscale to 3-channel RGB.
+        use_multichannel_windowing: Whether to use multi-channel CT windowing.
+        cache_rate: Fraction of data to cache (0.0 to 1.0).
+        num_workers: Number of workers for caching.
+        
+    Returns:
+        CacheDataset configured for testing.
+    """
+    # Use 'test' split
+    data_list = get_data_list(data_path, split="test")
     
-    def __len__(self) -> int:
-        return len(self._data_list)
+    # Use same transforms as validation (no augmentation)
+    transforms = get_val_transforms(
+        img_size=img_size,
+        convert_to_rgb=convert_to_rgb,
+        use_multichannel_windowing=use_multichannel_windowing
+    )
     
-    def __getitem__(self, idx: int) -> tuple:
-        data = self._transforms(self._data_list[idx])  # type: ignore[assignment]
-        scan = data["image"]  # type: ignore[index]
-        targets = {
-            'boxes': data.get("boxes", torch.zeros((0, 4), dtype=torch.float32)),  # type: ignore[union-attr]
-            'labels': data.get("labels", torch.zeros((0,), dtype=torch.int64)),  # type: ignore[union-attr]
-            'scan_label': data.get("scan_label", torch.tensor(0, dtype=torch.int64)),  # type: ignore[union-attr]
-            'scan_id': torch.tensor(idx, dtype=torch.int64),
-        }
-        return scan, targets
-
-
-# Legacy alias for backward compatibility
-def detection_collate_fn(batch):
-    """Legacy collate function - use sclc_collate_fn instead."""
-    return tuple(zip(*batch))       
+    dataset = CacheDataset(
+        data=data_list,
+        transform=transforms,
+        cache_rate=cache_rate,
+        num_workers=num_workers,
+    )
+    
+    return dataset  
 
 
 def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
