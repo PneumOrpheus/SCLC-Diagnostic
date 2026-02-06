@@ -193,7 +193,7 @@ class DualHeadSCLCModel(nn.Module):
                             to train only the backbone as a baseline.
     """
     def __init__(self, backbone_type: str, checkpoint_path: str = "", config: Optional[Any] = None, 
-                 num_detection_classes: int = 2, num_global_classes: int = 2, 
+                 num_detection_classes: int = 5, num_global_classes: int = 4, 
                  train_backbone_only: bool = False, logger: Optional[logging.Logger] = None):
         super(DualHeadSCLCModel, self).__init__()
         
@@ -222,7 +222,7 @@ class DualHeadSCLCModel(nn.Module):
         
         # RPN Anchor Generator
         num_feature_levels = len(self.backbone.in_channels_list)
-        base_anchor_sizes = (32, 64, 128, 256, 512)
+        base_anchor_sizes = (8, 16, 32, 64, 128)
         # Use one scale per feature level, slicing from the predefined base sizes
         anchor_sizes = tuple((base_anchor_sizes[i],) for i in range(min(num_feature_levels, len(base_anchor_sizes))))
         anchor_aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
@@ -353,8 +353,8 @@ class DualHeadSCLCModel(nn.Module):
 def get_sclc_model(
     backbone_type: str = "swinv2",
     checkpoint_path: str = "",
-    num_detection_classes: int = 2,
-    num_global_classes: int = 2,
+    num_detection_classes: int = 5,
+    num_global_classes: int = 4,
     train_backbone_only: bool = False,
     config: Optional[Any] = None,
     logger: Optional[logging.Logger] = None
@@ -365,8 +365,10 @@ def get_sclc_model(
     Args:
         backbone_type: One of 'swin', 'swinv2', 'resnet', 'densenet'
         checkpoint_path: Path to pretrained weights (.pth file)
-        num_detection_classes: Number of detection classes (including background)
-        num_global_classes: Number of global classification classes
+        num_detection_classes: Number of detection classes (including background).
+            Default 5: background + A(Adenocarcinoma) + B(Small Cell) + E(Large Cell) + G(Squamous Cell)
+        num_global_classes: Number of global classification classes.
+            Default 4: A(Adenocarcinoma), B(Small Cell), E(Large Cell), G(Squamous Cell)
         train_backbone_only: If True, freezes FPN and heads to train only backbone
         config: Optional Microsoft-style yacs config object. If provided,
                 will use config.MODEL.PRETRAINED for checkpoint_path and
