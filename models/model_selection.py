@@ -49,7 +49,7 @@ class SwinFeatureExtractor(nn.Module):
             self.absolute_pos_embed = swin_model.absolute_pos_embed  # type: ignore[attr-defined]
         
         # Layer dim gives channel dimensions
-        self.num_features = [layer.dim for layer in self.layers]
+        self.num_features = [int(getattr(layer, "dim")) for layer in self.layers]
         self.patches_resolution = swin_model.patches_resolution  # type: ignore[attr-defined]
         
     def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
@@ -61,18 +61,20 @@ class SwinFeatureExtractor(nn.Module):
         features = []
         for i, layer in enumerate(self.layers):
             # Process blocks and extract features before downsample
-            for block in layer.blocks:
+            blocks: nn.ModuleList = layer.blocks  # type: ignore[assignment]
+            for block in blocks:
                 x = block(x)
             
             B, L, C = x.shape
-            # Use the BasicLayer's known spatial resolution (supports non-square feature maps)
-            H, W = layer.input_resolution
-            feat = x.view(B, H, W, C).permute(0, 3, 1, 2).contiguous()
+            # Use BasicLayer's known spatial resolution
+            H, W = layer.input_resolution  # type: ignore[union-attr]
+            feat = x.view(B, int(H), int(W), int(C)).permute(0, 3, 1, 2).contiguous()
             features.append(feat)
             
             # Apply downsample after extracting features
-            if layer.downsample is not None:
-                x = layer.downsample(x)
+            downsample: Optional[nn.Module] = layer.downsample  # type: ignore[assignment]
+            if downsample is not None:
+                x = downsample(x)
         
         return features
 
@@ -106,11 +108,11 @@ class FlexibleBackbone(nn.Module):
 
         # Get channel counts from the backbone automatically
         if hasattr(self.body, "num_features"):
-            # Custom SwinFeatureExtractor exposes num_features directly
+            # Case SwinFeatureExtractor
             self.in_channels_list = list(self.body.num_features)  # type: ignore[arg-type]
         elif hasattr(self.body, "feature_info"):
-            # timm models with features_only=True expose channel info via feature_info
-            self.in_channels_list = list(self.body.feature_info.channels())
+            # For timm models
+            self.in_channels_list = list(self.body.feature_info.channels())  # type: ignore[union-attr]
         else:
             raise AttributeError("Backbone model does not give 'num_features' or 'feature_info.channels()'.")
 
