@@ -86,6 +86,9 @@ def get_data_list(
         raise ValueError(f"Unable to list contents of data path '{data_path}': {e}") from e
     
     # Collect all valid samples for NIfTI and numpy formats
+    # If there exists a _Eq_1 file we want to use that one instead, since Eq (Equalized / Equidistant): This suffix indicates that dcm2niix has interpolated the image data to create a new volume with equal slice spacing. This is necessary because the NIfTI format generally assumes a constant distance between slices (stored in the header), whereas DICOM allows for variable spacing (e.g., in some CT scans where slice thickness changes, or if slices are missing).
+    #  For most volumetric analyses (like segmentation or registration), you typically want to use the _Eq version, as it corrects the spatial distortion caused by the variable spacing
+    # TODO: Implement logic to prefer _Eq files if both versions exist
     valid_extensions = ('.nii.gz', '.nii', '.npy', '.npz')
     samples = [f for f in all_files if any(f.endswith(ext) for ext in valid_extensions)]
     
@@ -208,7 +211,15 @@ def create_dataset(
 
 def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
     model.train()
+    running_loss = 0.0
+    running_det_loss = 0.0
+    running_global_loss = 0.0
     
+    num_batches = len(data_loader)
+    if num_batches == 0:
+        print("Warning: Train data loader is empty.")
+        return {"loss": 0.0, "det_loss": 0.0, "global_loss": 0.0}
+
     for i, (scans, targets) in enumerate(data_loader):
         scans = list(scan.to(device) for scan in scans)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
@@ -243,8 +254,75 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
         
         optimizer.step()
         
+        # Statistics
+        running_loss += total_loss.item()
+        running_det_loss += loss_detection.item()
+        running_global_loss += global_loss.item()
+        
         if i % print_freq == 0:
             print(f"Epoch [{epoch}], Iteration [{i}/{len(data_loader)}], "
                   f"Total loss: {total_loss.item():.4f}, "
                   f"Detection loss: {loss_detection.item():.4f}, "
                   f"Global loss: {global_loss.item():.4f}")
+
+    metrics = {
+        "loss": running_loss / num_batches,
+        "det_loss": running_det_loss / num_batches,
+        "global_loss": running_global_loss / num_batches
+    }
+    return metrics
+
+
+@torch.no_grad()
+def validate_epoch(model, data_loader, device, phase="val"):
+    """
+    Computes validation loss. 
+    NOTE: Sets model to train() mode with no_grad() because standard torchvision 
+    detection models only return losses in train mode (and predictions in eval mode).
+    """
+    # Preserve original training state 
+    was_training = model.training
+    model.train() 
+    
+    running_loss = 0.0
+    running_det_loss = 0.0
+    running_global_loss = 0.0
+    
+    num_batches = len(data_loader)
+    if num_batches == 0:
+        print(f"Warning: {phase} data loader is empty.")
+        model.train(was_training)
+        return {"loss": 0.0, "det_loss": 0.0, "global_loss": 0.0}
+    
+    print(f"Starting {phase} evaluation...")
+    
+    for scans, targets in data_loader:
+        scans = list(scan.to(device) for scan in scans)
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        
+        loss_dict = model(scans, targets)
+        
+        global_loss = loss_dict.pop("global_classification_loss")
+
+        if loss_dict:
+            detection_losses = [l.to(device) if isinstance(l, torch.Tensor) else torch.as_tensor(l, device=device) for l in loss_dict.values()]
+            loss_detection = sum(detection_losses, torch.zeros((), device=device))
+        else:
+            loss_detection = torch.zeros((), device=device)
+            
+        total_loss = loss_detection + 0.5 * global_loss
+        
+        running_loss += total_loss.item()
+        running_det_loss += loss_detection.item()
+        running_global_loss += global_loss.item()
+        
+    avg_loss = running_loss / num_batches
+    avg_det = running_det_loss / num_batches
+    avg_global = running_global_loss / num_batches
+    
+    print(f"  {phase.capitalize()} Loss: {avg_loss:.4f} (Det: {avg_det:.4f}, Global: {avg_global:.4f})")
+    
+    # Restore model state
+    model.train(was_training)
+    
+    return {"loss": avg_loss, "det_loss": avg_det, "global_loss": avg_global}

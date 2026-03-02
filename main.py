@@ -6,7 +6,7 @@ import numpy as np
 import os
 import argparse
 from models.model_selection import get_sclc_model
-from training.train import create_dataset, sclc_collate_fn, train_epoch
+from training.train import create_dataset, sclc_collate_fn, train_epoch, validate_epoch
 
 
 from logger import create_logger
@@ -112,12 +112,31 @@ if __name__ == "__main__":
     os.makedirs("checkpoint_weights", exist_ok=True)
     os.makedirs("full_checkpoints", exist_ok=True)
     
+    best_val_loss = float("inf")
+
     # Training loop
     for epoch in range(args.epochs):
-        train_epoch(model, optimizer, train_loader, device, epoch)
+        print(f"\n--- Epoch {epoch+1}/{args.epochs} ---")
+        
+        # Train
+        train_metrics = train_epoch(model, optimizer, train_loader, device, epoch + 1)
+        
+        # Validation
+        val_metrics = validate_epoch(model, val_loader, device, phase="val")
+        
         lr_scheduler.step()
         
-        # Save checkpoint
+        # Logging
+        logger.info(f"Epoch {epoch+1}: Train Loss: {train_metrics['loss']:.4f}, Val Loss: {val_metrics['loss']:.4f}")
+
+        # Save Best Model
+        if val_metrics["loss"] < best_val_loss:
+            best_val_loss = val_metrics["loss"]
+            best_path = f"checkpoint_weights/sclc_{args.backbone}_best.pth"
+            torch.save(model.state_dict(), best_path)
+            logger.info(f"New best model saved to {best_path}")
+        
+        # Save checkpoint periodically
         if (epoch + 1) % 5 == 0:
             # Save model weights only
             checkpoint_path = f"checkpoint_weights/sclc_{args.backbone}_model_weights_epoch_{epoch+1}.pth"
@@ -131,7 +150,20 @@ if __name__ == "__main__":
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": lr_scheduler.state_dict(),
+                "best_val_loss": best_val_loss,
             }
             torch.save(full_checkpoint, full_checkpoint_path)
             logger.info(f"Saved full training checkpoint: {full_checkpoint_path}")
+
+    # Final Testing
+    print("\n--- Final Testing ---")
+    
+    # Load best model for testing
+    best_path = f"checkpoint_weights/sclc_{args.backbone}_best.pth"
+    if os.path.exists(best_path):
+        print(f"Loading best model from {best_path} for testing...")
+        model.load_state_dict(torch.load(best_path, map_location=device))
+    
+    test_metrics = validate_epoch(model, test_loader, device, phase="test")
+    logger.info(f"Final Test Results - Loss: {test_metrics['loss']:.4f} (Det: {test_metrics['det_loss']:.4f}, Global: {test_metrics['global_loss']:.4f})")
 
