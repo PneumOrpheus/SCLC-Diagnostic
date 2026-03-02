@@ -6,6 +6,7 @@ Custom and composed transforms for CT scan preprocessing using MONAI's transform
 
 import numpy as np
 import torch
+import nibabel as nib
 from typing import Any, Dict, Hashable, Mapping, Optional, Union
 
 from monai.config import KeysCollection  # type: ignore[attr-defined]
@@ -20,32 +21,94 @@ from monai.transforms import (  # type: ignore[attr-defined]
 )
 
 
-class ExtractMiddleSliced(MapTransform):
-    """Extract the middle 2D slice from a 3D volume along the specified axis.
+class LoadNiftiWithRGBSupportd(MapTransform):
+    """Load NIfTI files with support for RGB structured dtypes and 4D volumes.
     
-    For volumes with shape (C, D, H, W), extracts middle slice to get (C, H, W).
+    Handles:
+    - Standard 3D NIfTI volumes (X, Y, Z)
+    - RGB structured dtypes (datatype 128)
+    - 4D volumes (X, Y, Z, T) - takes first time point
+    - Squeezes single-slice dimensions
+    """
+    
+    def __init__(
+        self,
+        keys: KeysCollection,
+        allow_missing_keys: bool = False
+    ) -> None:
+        super().__init__(keys, allow_missing_keys)
+    
+    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
+        d: Dict[Hashable, Any] = dict(data)
+        for key in self.key_iterator(d):
+            filepath = d[key]
+            img = nib.load(filepath)
+            raw = np.asanyarray(img.dataobj)
+            
+            # Check if it's an RGB structured dtype
+            if raw.dtype.names is not None and set(raw.dtype.names) == {'R', 'G', 'B'}:
+                # Convert RGB to grayscale using standard luminance weights
+                r = raw['R'].astype(np.float32)
+                g = raw['G'].astype(np.float32)
+                b = raw['B'].astype(np.float32)
+                gray = 0.299 * r + 0.587 * g + 0.114 * b
+                # Scale to CT HU-like range (-1024 to 3071) from 0-255
+                arr = (gray / 255.0) * 4095 - 1024
+            else:
+                # Standard NIfTI - get float data
+                arr = img.get_fdata().astype(np.float32)
+            
+            # Handle 4D volumes by taking first time/frame
+            if arr.ndim == 4:
+                arr = arr[..., 0]
+            
+            # Squeeze any remaining single dimensions but keep at least 3D for proper slice extraction
+            while arr.ndim > 3:
+                # Find dimensions of size 1 and squeeze them
+                for ax in range(arr.ndim - 1, 2, -1):
+                    if arr.shape[ax] == 1:
+                        arr = arr.squeeze(axis=ax)
+                        break
+                else:
+                    break
+            
+            # Ensure we have a valid 3D volume (at least 3 slices)
+            if arr.ndim == 3 and arr.shape[2] < 3:
+                # Repeat the few slices to avoid edge cases  
+                reps = (3 // arr.shape[2]) + 1
+                arr = np.repeat(arr, reps, axis=2)
+            
+            # Add channel dimension (C, X, Y, Z)
+            d[key] = arr[np.newaxis, ...]
+        return d
+
+
+class ExtractMiddleSliced(MapTransform):
+    """Extract the middle 2D slice from a 3D volume along the slice axis.
+    
+    For NIfTI volumes with shape (C, X, Y, Z), extracts middle slice along Z
+    to get (C, X, Y). NIfTI stores axial CT slices along the last spatial axis.
     """
     
     def __init__(
         self, 
         keys: KeysCollection,
-        axis: int = 1,  # After channel-first: axis 1 is depth
         allow_missing_keys: bool = False
     ) -> None:
         super().__init__(keys, allow_missing_keys)
-        self.axis = axis
     
     def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
         d: Dict[Hashable, Any] = dict(data)
         for key in self.key_iterator(d):
             volume = d[key]
             if hasattr(volume, 'ndim') and volume.ndim >= 3:
-                # For channel-first data (C, D, H, W), depth is axis 1
-                depth_axis = self.axis
+                # NIfTI data is (C, X, Y, Z) - slices are along the last axis
                 if volume.ndim == 4:
-                    depth_axis = 1  # (C, D, H, W)
+                    depth_axis = 3
                 elif volume.ndim == 3:
-                    depth_axis = 0 if volume.shape[0] > volume.shape[-1] else 1
+                    depth_axis = 2
+                else:
+                    depth_axis = -1
                     
                 mid_idx = volume.shape[depth_axis] // 2
                 if isinstance(volume, np.ndarray):
@@ -196,8 +259,8 @@ def get_train_transforms(
         Composed MONAI transforms for training.
     """
     transforms = [
-        # Load image from file path
-        LoadImaged(keys=["image"], ensure_channel_first=True, image_only=True),
+        # Load image from file path (handles both standard and RGB NIfTI files)
+        LoadNiftiWithRGBSupportd(keys=["image"]),
         
         # Clip to valid HU range for CT
         ScaleIntensityRanged(
@@ -226,13 +289,10 @@ def get_train_transforms(
             )
         )
     
-    # Extract middle slice for 3D volumes
+    # Extract middle slice for 3D volumes (result is already channel-first)
     transforms.append(ExtractMiddleSliced(keys=["image"]))
     
-    # Ensure channel-first format
-    transforms.append(EnsureChannelFirstd(keys=["image"]))
-    
-    # Convert to RGB if needed
+    # Convert to RGB if needed (also ensures 3 channels)
     if convert_to_rgb and not use_multichannel_windowing:
         transforms.append(EnsureRGBd(keys=["image"]))
     

@@ -86,8 +86,6 @@ def get_data_list(
         raise ValueError(f"Unable to list contents of data path '{data_path}': {e}") from e
     
     # Collect all valid samples for NIfTI and numpy formats
-    # If there exists a _Eq_1 file we want to use that one instead, since Eq (Equalized / Equidistant): This suffix indicates that dcm2niix has interpolated the image data to create a new volume with equal slice spacing. This is necessary because the NIfTI format generally assumes a constant distance between slices (stored in the header), whereas DICOM allows for variable spacing (e.g., in some CT scans where slice thickness changes, or if slices are missing).
-    #  For most volumetric analyses (like segmentation or registration), you typically want to use the _Eq version, as it corrects the spatial distortion caused by the variable spacing
     # TODO: Implement logic to prefer _Eq files if both versions exist
     valid_extensions = ('.nii.gz', '.nii', '.npy', '.npz')
     samples = [f for f in all_files if any(f.endswith(ext) for ext in valid_extensions)]
