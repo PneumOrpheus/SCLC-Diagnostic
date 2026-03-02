@@ -49,7 +49,7 @@ class SwinFeatureExtractor(nn.Module):
             self.absolute_pos_embed = swin_model.absolute_pos_embed  # type: ignore[attr-defined]
         
         # Layer dim gives channel dimensions
-        self.num_features = [layer.dim for layer in self.layers]
+        self.num_features = [int(getattr(layer, "dim")) for layer in self.layers]
         self.patches_resolution = swin_model.patches_resolution  # type: ignore[attr-defined]
         
     def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
@@ -61,28 +61,31 @@ class SwinFeatureExtractor(nn.Module):
         features = []
         for i, layer in enumerate(self.layers):
             # Process blocks and extract features before downsample
-            for block in layer.blocks:
+            blocks: nn.ModuleList = layer.blocks  # type: ignore[assignment]
+            for block in blocks:
                 x = block(x)
             
             B, L, C = x.shape
-            # Use the BasicLayer's known spatial resolution (supports non-square feature maps)
-            H, W = layer.input_resolution
-            feat = x.view(B, H, W, C).permute(0, 3, 1, 2).contiguous()
+            # Use BasicLayer's known spatial resolution
+            H, W = layer.input_resolution  # type: ignore[union-attr]
+            feat = x.view(B, int(H), int(W), int(C)).permute(0, 3, 1, 2).contiguous()
             features.append(feat)
             
             # Apply downsample after extracting features
-            if layer.downsample is not None:
-                x = layer.downsample(x)
+            downsample: Optional[nn.Module] = layer.downsample  # type: ignore[assignment]
+            if downsample is not None:
+                x = downsample(x)
         
         return features
 
 
 class FlexibleBackbone(nn.Module):
     """
-    Wraps timm models to be compatible with torchvision's detection models.
+    Pure backbone wrapper for timm/custom Swin models.
+    Extracts multi-scale features without FPN - use BackboneWithFPN for detection tasks.
     Supports loading local checkpoints for fine-tuning.
     """
-    def __init__(self, model_name: str, checkpoint_path: str = "", config: Optional[Any] = None,  out_channels: int = 256, logger: Optional[logging.Logger] = None):
+    def __init__(self, model_name: str, checkpoint_path: str = "", config: Optional[Any] = None, logger: Optional[logging.Logger] = None):
         super(FlexibleBackbone, self).__init__()
         
         print(f"Initializing Backbone: {model_name}")
@@ -103,15 +106,40 @@ class FlexibleBackbone(nn.Module):
             import timm
             self.body = timm.create_model(model_name, pretrained=True, features_only=True)
 
-        # Dynamic FPN Configuration, get channel counts from the backbone automatically
+        # Get channel counts from the backbone automatically
         if hasattr(self.body, "num_features"):
-            # Custom SwinFeatureExtractor exposes num_features directly
+            # Case SwinFeatureExtractor
             self.in_channels_list = list(self.body.num_features)  # type: ignore[arg-type]
         elif hasattr(self.body, "feature_info"):
-            # timm models with features_only=True expose channel info via feature_info
-            self.in_channels_list = list(self.body.feature_info.channels())
+            # For timm models
+            self.in_channels_list = list(self.body.feature_info.channels())  # type: ignore[union-attr]
         else:
-            raise AttributeError("Backbone model does not expose 'num_features' or 'feature_info.channels()'.")
+            raise AttributeError("Backbone model does not give 'num_features' or 'feature_info.channels()'.")
+
+    def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
+        """Returns list of multi-scale feature maps from backbone stages."""
+        xs = self.body(x)
+        
+        # Ensure NCHW format for all features
+        features = []
+        for i, feature in enumerate(xs):
+            if feature.ndim == 4 and feature.shape[1] != self.in_channels_list[i]:
+                feature = feature.permute(0, 3, 1, 2)
+            features.append(feature)
+        
+        return features
+
+
+class BackboneWithFPN(nn.Module):
+    """
+    Combines FlexibleBackbone with Feature Pyramid Network.
+    Compatible with torchvision's detection models.
+    """
+    def __init__(self, backbone: FlexibleBackbone, out_channels: int = 256):
+        super(BackboneWithFPN, self).__init__()
+        
+        self.backbone = backbone
+        self.in_channels_list = backbone.in_channels_list
         
         # Create FPN
         self.fpn = FeaturePyramidNetwork(
@@ -122,16 +150,13 @@ class FlexibleBackbone(nn.Module):
         # Required attribute for torchvision detection models
         self.out_channels = out_channels
 
-    def forward(self, x: torch.Tensor) -> Dict:
+    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
         # Get features from backbone
-        xs = self.body(x)
+        xs = self.backbone(x)
         
         # Prepare dictionary for FPN
         x_dict = OrderedDict()
         for i, feature in enumerate(xs):
-            # Ensure NCHW format
-            if feature.ndim == 4 and feature.shape[1] != self.in_channels_list[i]:
-                 feature = feature.permute(0, 3, 1, 2)
             x_dict[f"{i}"] = feature
             
         # Pass through FPN
@@ -162,10 +187,17 @@ class GlobalClassificationHead(nn.Module):
 class DualHeadSCLCModel(nn.Module):
     """
     Composite model wrapping Faster R-CNN and Global Classifier.
+    
+    Args:
+        train_backbone_only: If True, freezes FPN, detection head, and global classifier
+                            to train only the backbone as a baseline.
     """
     def __init__(self, backbone_type: str, checkpoint_path: str = "", config: Optional[Any] = None, 
-                 num_detection_classes: int = 2, num_global_classes: int = 2, logger: Optional[logging.Logger] = None):
+                 num_detection_classes: int = 5, num_global_classes: int = 4, 
+                 train_backbone_only: bool = False, logger: Optional[logging.Logger] = None):
         super(DualHeadSCLCModel, self).__init__()
+        
+        self._train_backbone_only = train_backbone_only
         
         # Map simple names to timm model names
         backbone_map = {
@@ -182,12 +214,15 @@ class DualHeadSCLCModel(nn.Module):
         model_name = backbone_map[backbone_type]
         fpn_out_channels = 256
         
-        # Initialize Flexible Backbone
-        self.backbone = FlexibleBackbone(model_name, checkpoint_path, config, out_channels=fpn_out_channels, logger=logger)
+        # Initialize backbone (without FPN)
+        self._backbone_core = FlexibleBackbone(model_name, checkpoint_path, config, logger=logger)
+        
+        # Initialize BackboneWithFPN wrapper for detection
+        self.backbone = BackboneWithFPN(self._backbone_core, out_channels=fpn_out_channels)
         
         # RPN Anchor Generator
         num_feature_levels = len(self.backbone.in_channels_list)
-        base_anchor_sizes = (32, 64, 128, 256, 512)
+        base_anchor_sizes = (8, 16, 32, 64, 128)
         # Use one scale per feature level, slicing from the predefined base sizes
         anchor_sizes = tuple((base_anchor_sizes[i],) for i in range(min(num_feature_levels, len(base_anchor_sizes))))
         anchor_aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
@@ -222,6 +257,44 @@ class DualHeadSCLCModel(nn.Module):
             in_channels=fpn_out_channels,
             num_classes=num_global_classes
         )
+        
+        # Apply backbone-only training mode if requested
+        if train_backbone_only:
+            self._freeze_non_backbone_params()
+    
+    def _freeze_non_backbone_params(self) -> None:
+        """Freeze all parameters except the backbone for baseline training."""
+        # Freeze FPN
+        for param in self.backbone.fpn.parameters():
+            param.requires_grad = False
+        
+        # Freeze detection head (RPN and ROI heads)
+        for param in self.detector.rpn.parameters():
+            param.requires_grad = False
+        for param in self.detector.roi_heads.parameters():
+            param.requires_grad = False
+        
+        # Freeze global classifier
+        for param in self.global_classifier.parameters():
+            param.requires_grad = False
+    
+    def _unfreeze_all_params(self) -> None:
+        """Unfreeze all parameters for full model training."""
+        for param in self.parameters():
+            param.requires_grad = True
+    
+    def set_train_backbone_only(self, enable: bool) -> None:
+        """
+        Toggle backbone-only training mode.
+        
+        Args:
+            enable: If True, freezes non-backbone params. If False, unfreezes all.
+        """
+        self._train_backbone_only = enable
+        if enable:
+            self._freeze_non_backbone_params()
+        else:
+            self._unfreeze_all_params()
         
     def forward(self, scans: List[torch.Tensor], targets: Optional[List[Dict]] = None) -> Union[Dict[str, torch.Tensor], Tuple[List[Dict], torch.Tensor]]:
         # Internal transform for normalization
@@ -280,8 +353,9 @@ class DualHeadSCLCModel(nn.Module):
 def get_sclc_model(
     backbone_type: str = "swinv2",
     checkpoint_path: str = "",
-    num_detection_classes: int = 2,
-    num_global_classes: int = 2,
+    num_detection_classes: int = 5,
+    num_global_classes: int = 4,
+    train_backbone_only: bool = False,
     config: Optional[Any] = None,
     logger: Optional[logging.Logger] = None
 ) -> DualHeadSCLCModel:
@@ -291,8 +365,11 @@ def get_sclc_model(
     Args:
         backbone_type: One of 'swin', 'swinv2', 'resnet', 'densenet'
         checkpoint_path: Path to pretrained weights (.pth file)
-        num_detection_classes: Number of detection classes (including background)
-        num_global_classes: Number of global classification classes
+        num_detection_classes: Number of detection classes (including background).
+            Default 5: background + A(Adenocarcinoma) + B(Small Cell) + E(Large Cell) + G(Squamous Cell)
+        num_global_classes: Number of global classification classes.
+            Default 4: A(Adenocarcinoma), B(Small Cell), E(Large Cell), G(Squamous Cell)
+        train_backbone_only: If True, freezes FPN and heads to train only backbone
         config: Optional Microsoft-style yacs config object. If provided,
                 will use config.MODEL.PRETRAINED for checkpoint_path and
                 config.MODEL.NUM_CLASSES for num_global_classes.
@@ -306,6 +383,7 @@ def get_sclc_model(
         config=config,
         num_detection_classes=num_detection_classes,
         num_global_classes=num_global_classes,
+        train_backbone_only=train_backbone_only,
         logger=logger
     )
     return model

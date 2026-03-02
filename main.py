@@ -1,12 +1,12 @@
 import sys
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from monai.data import DataLoader 
 import numpy as np
 import os
 import argparse
 from models.model_selection import get_sclc_model
-from training.train import SCLCTrainDataset, detection_collate_fn, train_epoch
+from training.train import create_dataset, sclc_collate_fn, train_epoch, validate_epoch
 
 
 from logger import create_logger
@@ -15,13 +15,14 @@ from models.config import get_config
 
 def parse_options():
     parser = argparse.ArgumentParser(description="SCLC Diagnostic System Training")
-    parser.add_argument("--backbone", type=str, default="swinv2", choices=["swinv2", "resnet50", "densenet121"], help="Which backbone model to use")
-    parser.add_argument("--data-path", type=str,default="", help="Path to the SCLC training data")
-    parser.add_argument("--checkpoint", type=str, default="", help="Path to .pth model file from which to resume checkpoint")
-    parser.add_argument("--config", type=str, default="", metavar="FILE", help="path to config file")
+    parser.add_argument("--backbone", type=str, default="swinv2", choices=["swin", "swinv2", "resnet50", "densenet121"], help="Which backbone model to use")
+    parser.add_argument("--data-path", type=str,default="/home/data/Lung-PET-CT-Dx", help="Path to the SCLC training data")
+    parser.add_argument("--checkpoint", type=str, default="/home/data/RadImageNet/RadImageNet_swin/rin_swintf.pth", help="Path to .pth model file from which to resume checkpoint")
+    parser.add_argument("--config", type=str, default="/home/data/RadImageNet/RadImageNet_swin/rin_config.yaml", metavar="FILE", help="path to config file")
     parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=8, help="Batch size for training")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate for the optimizer")
+    parser.add_argument("--train-backbone-only", action="store_true", help="Train only the backbone (freeze FPN and heads)")
     return parser.parse_args()
 
 
@@ -32,15 +33,57 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device} | Backbone: {args.backbone}")
 
-    # TODO: Remove backward compatibility alias in future versions
-    batch_fn = detection_collate_fn
-    train_dataset = SCLCTrainDataset(args.data_path)
-    data_loader = DataLoader(
+    # Use RGB conversion only for ImageNet-pretrained timm models
+    uses_timm_model = not (args.checkpoint and args.config)
+    
+    train_dataset = create_dataset(
+        data_path=args.data_path,
+        split="train",
+        convert_to_rgb=uses_timm_model,
+        cache_rate=1.0,
+        num_workers=4,
+    )
+    
+    val_dataset = create_dataset(
+        data_path=args.data_path,
+        split="val",
+        convert_to_rgb=uses_timm_model,
+        cache_rate=1.0,
+        num_workers=4,
+    )
+
+    test_dataset = create_dataset(
+        data_path=args.data_path,
+        split="test",
+        convert_to_rgb=uses_timm_model,
+        cache_rate=0.0,  # Typically don't need to cache test data during training
+        num_workers=4,
+    )
+
+    train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=4,
-        collate_fn=batch_fn,
+        collate_fn=sclc_collate_fn,
+        pin_memory=(device.type == "cuda"),
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=4,
+        collate_fn=sclc_collate_fn,
+        pin_memory=(device.type == "cuda"),
+    )
+
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=4,
+        collate_fn=sclc_collate_fn,
         pin_memory=(device.type == "cuda"),
     )
 
@@ -48,35 +91,79 @@ if __name__ == "__main__":
 
     logger = create_logger(output_dir=config.OUTPUT, dist_rank=-1, name=f"{config.MODEL.NAME}")
     logger.info(f"Using backbone: {args.backbone}")
+    if args.train_backbone_only:
+        logger.info("Training mode: backbone-only (FPN and heads frozen)")
 
-    model = get_sclc_model(backbone_type=args.backbone, checkpoint_path=args.checkpoint, config=config, logger=logger)
+    model = get_sclc_model(
+        backbone_type=args.backbone, 
+        checkpoint_path=args.checkpoint, 
+        config=config, 
+        train_backbone_only=args.train_backbone_only,
+        logger=logger
+    )
     model.to(device)
 
     params = [p for p in model.parameters() if p.requires_grad]
     optimizer = optim.AdamW(params, lr=args.lr, weight_decay=0.05)
     
     lr_scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+    
+    # Create checkpoint directories
+    os.makedirs("checkpoint_weights", exist_ok=True)
+    os.makedirs("full_checkpoints", exist_ok=True)
+    
+    best_val_loss = float("inf")
+
     # Training loop
     for epoch in range(args.epochs):
-        train_epoch(model, optimizer, data_loader, device, epoch)
+        print(f"\n--- Epoch {epoch+1}/{args.epochs} ---")
+        
+        # Train
+        train_metrics = train_epoch(model, optimizer, train_loader, device, epoch + 1)
+        
+        # Validation
+        val_metrics = validate_epoch(model, val_loader, device, phase="val")
+        
         lr_scheduler.step()
         
-        # Save checkpoint
+        # Logging
+        logger.info(f"Epoch {epoch+1}: Train Loss: {train_metrics['loss']:.4f}, Val Loss: {val_metrics['loss']:.4f}")
+
+        # Save Best Model
+        if val_metrics["loss"] < best_val_loss:
+            best_val_loss = val_metrics["loss"]
+            best_path = f"checkpoint_weights/sclc_{args.backbone}_best.pth"
+            torch.save(model.state_dict(), best_path)
+            logger.info(f"New best model saved to {best_path}")
+        
+        # Save checkpoint periodically
         if (epoch + 1) % 5 == 0:
             # Save model weights only
-            checkpoint_path = f"sclc_model_epoch_{epoch+1}.pth"
+            checkpoint_path = f"checkpoint_weights/sclc_{args.backbone}_model_weights_epoch_{epoch+1}.pth"
             torch.save(model.state_dict(), checkpoint_path)
             logger.info(f"Saved checkpoint (weights only): {checkpoint_path}")
 
             # Save full training state for proper resume
-            full_checkpoint_path = f"sclc_full_checkpoint_epoch_{epoch+1}.pth"
+            full_checkpoint_path = f"full_checkpoints/sclc_{args.backbone}_full_checkpoint_epoch_{epoch+1}.pth"
             full_checkpoint = {
                 "epoch": epoch + 1,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": lr_scheduler.state_dict(),
+                "best_val_loss": best_val_loss,
             }
             torch.save(full_checkpoint, full_checkpoint_path)
             logger.info(f"Saved full training checkpoint: {full_checkpoint_path}")
 
+    # Final Testing
+    print("\n--- Final Testing ---")
     
+    # Load best model for testing
+    best_path = f"checkpoint_weights/sclc_{args.backbone}_best.pth"
+    if os.path.exists(best_path):
+        print(f"Loading best model from {best_path} for testing...")
+        model.load_state_dict(torch.load(best_path, map_location=device))
+    
+    test_metrics = validate_epoch(model, test_loader, device, phase="test")
+    logger.info(f"Final Test Results - Loss: {test_metrics['loss']:.4f} (Det: {test_metrics['det_loss']:.4f}, Global: {test_metrics['global_loss']:.4f})")
+
