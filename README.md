@@ -43,6 +43,9 @@ The preprocessing module supports specialized multi-channel windowing for CT sca
 ## 📁 Project Structure
 
 ```
+data/ 
+├── Lung-PET-CT-Dx 
+│   └── {patient_id}_{series_uid}.nii.gz
 SCLC-Classification/
 ├── main.py                 # Training entry point
 ├── data/
@@ -61,6 +64,9 @@ SCLC-Classification/
 ├── requirements.txt        # Pip dependencies
 └── Dockerfile              # Docker container setup
 ```
+
+### Lung-PET-CT-Dx dataset
+Patients with Names/IDs containing the letter 'A' were diagnosed with Adenocarcinoma, 'B' with Small Cell Carcinoma, 'E' with Large Cell Carcinoma, and 'G' with Squamous Cell Carcinoma.
 
 ## 🚀 Getting Started
 
