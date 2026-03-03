@@ -19,7 +19,18 @@ from .data_preprocessing import (
     batch_preprocess_directory,
 )
 
+from .biglunge_loader import (
+    create_biglunge_dataset,
+    get_biglunge_data_list,
+    load_patient_labels,
+    get_class_names,
+    get_num_classes,
+    CLASS_NAMES,
+    NORWEGIAN_CLASS_MAP,
+)
+
 __all__ = [
+    # Data preprocessing
     "load_nifti_volume",
     "load_numpy_volume",
     "load_volume",
@@ -32,4 +43,12 @@ __all__ = [
     "prepare_tensor_for_model",
     "preprocess_nifti_to_numpy",
     "batch_preprocess_directory",
+    # BigLunge dataset
+    "create_biglunge_dataset",
+    "get_biglunge_data_list",
+    "load_patient_labels",
+    "get_class_names",
+    "get_num_classes",
+    "CLASS_NAMES",
+    "NORWEGIAN_CLASS_MAP",
 ]
