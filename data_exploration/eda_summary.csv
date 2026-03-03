@@ -1,0 +1,21 @@
+Metric,Value,Unit
+Total NIfTI volumes,1350,scans
+Unique patients,355,patients
+  Adenocarcinoma (volumes),1002,scans
+  Adenocarcinoma (patients),251,patients
+  Large Cell Carcinoma (volumes),11,scans
+  Large Cell Carcinoma (patients),5,patients
+  Small Cell Carcinoma (volumes),112,scans
+  Small Cell Carcinoma (patients),38,patients
+  Squamous Cell Carcinoma (volumes),225,scans
+  Squamous Cell Carcinoma (patients),61,patients
+CT modality volumes,1069,scans
+PT modality volumes,37,scans
+Median X dim,512,voxels
+Median Y dim,512,voxels
+Median Z dim (depth),181,slices
+Median pixel spacing,0.781,mm
+Median slice spacing,2.030,mm
+Slice spacing range,"[0.625, 141.250]",mm
+Mean volume intensity (sampled),-476.2,HU
+Volume intensity range,"[-3046, 266366]",HU
