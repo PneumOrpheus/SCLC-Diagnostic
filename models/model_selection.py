@@ -355,7 +355,11 @@ class DualHeadSCLCModel(nn.Module):
                     f"{missing_labels}"
                 )
             gt_labels = torch.stack([t["scan_label"] for t in targets_transformed])
-            global_loss = F.cross_entropy(global_logits, gt_labels, weight=self.class_weights)
+            global_loss = F.cross_entropy(
+                global_logits, gt_labels,
+                weight=self.class_weights,
+                label_smoothing=0.1
+            )
             losses['global_classification_loss'] = global_loss
             return losses
         else:
