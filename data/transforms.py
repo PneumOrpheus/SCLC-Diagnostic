@@ -18,6 +18,13 @@ from monai.transforms import (  # type: ignore[attr-defined]
     ScaleIntensityRanged,
     Resized,
     ToTensord,
+    RandFlipd,
+    RandRotate90d,
+    RandAffined,
+    RandGaussianNoised,
+    RandAdjustContrastd,
+    RandScaleIntensityd,
+    RandShiftIntensityd,
 )
 
 
@@ -247,7 +254,7 @@ def get_train_transforms(
     convert_to_rgb: bool = True,
     use_multichannel_windowing: bool = False
 ) -> Compose:
-    """Get the training transforms pipeline.
+    """Get the training transforms pipeline with data augmentation.
     
     Args:
         img_size: Target image size (height and width).
@@ -301,6 +308,30 @@ def get_train_transforms(
         Resized(keys=["image"], spatial_size=(img_size, img_size), mode="bilinear")
     )
     
+    # --- Data Augmentation (training only) ---
+    
+    # Spatial augmentation
+    transforms.append(RandFlipd(keys=["image"], prob=0.5, spatial_axis=0))
+    transforms.append(RandFlipd(keys=["image"], prob=0.5, spatial_axis=1))
+    transforms.append(RandRotate90d(keys=["image"], prob=0.5, spatial_axes=(0, 1)))
+    transforms.append(
+        RandAffined(
+            keys=["image"],
+            prob=0.3,
+            rotate_range=(0.15,),
+            scale_range=(0.1, 0.1),
+            translate_range=(10, 10),
+            mode="bilinear",
+            padding_mode="zeros",
+        )
+    )
+    
+    # Intensity augmentation
+    transforms.append(RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5))
+    transforms.append(RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5))
+    transforms.append(RandGaussianNoised(keys=["image"], prob=0.2, mean=0.0, std=0.02))
+    transforms.append(RandAdjustContrastd(keys=["image"], prob=0.3, gamma=(0.8, 1.2)))
+    
     # Add placeholder targets
     transforms.append(AddPlaceholderTargetsd(keys=["image"]))
     
@@ -315,9 +346,7 @@ def get_val_transforms(
     convert_to_rgb: bool = True,
     use_multichannel_windowing: bool = False
 ) -> Compose:
-    """Get the validation transforms pipeline.
-    
-    Same as training transforms but without augmentations.
+    """Get the validation/test transforms pipeline (no augmentation).
     
     Args:
         img_size: Target image size (height and width).
@@ -325,10 +354,47 @@ def get_val_transforms(
         use_multichannel_windowing: Whether to use multi-channel CT windowing.
     
     Returns:
-        Composed MONAI transforms for validation.
+        Composed MONAI transforms for validation/test.
     """
-    return get_train_transforms(
-        img_size=img_size,
-        convert_to_rgb=convert_to_rgb,
-        use_multichannel_windowing=use_multichannel_windowing
+    transforms = [
+        LoadNiftiWithRGBSupportd(keys=["image"]),
+        
+        ScaleIntensityRanged(
+            keys=["image"],
+            a_min=-1024,
+            a_max=3071,
+            b_min=-1024,
+            b_max=3071,
+            clip=True,
+        ),
+    ]
+    
+    if use_multichannel_windowing:
+        transforms.append(CreateMultiChannelCTd(keys=["image"]))
+    else:
+        transforms.append(
+            ScaleIntensityRanged(
+                keys=["image"],
+                a_min=-1024,
+                a_max=3071,
+                b_min=0,
+                b_max=1,
+                clip=True,
+            )
+        )
+    
+    transforms.append(ExtractMiddleSliced(keys=["image"]))
+    
+    if convert_to_rgb and not use_multichannel_windowing:
+        transforms.append(EnsureRGBd(keys=["image"]))
+    
+    transforms.append(
+        Resized(keys=["image"], spatial_size=(img_size, img_size), mode="bilinear")
     )
+    
+    # No augmentation for val/test
+    
+    transforms.append(AddPlaceholderTargetsd(keys=["image"]))
+    transforms.append(ToTensord(keys=["image"]))
+    
+    return Compose(transforms)
