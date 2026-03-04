@@ -96,8 +96,8 @@ def get_data_list(
             f"Supported formats: {valid_extensions}"
         )
     
-    # A: Adenocarcinoma (0), B: Small Cell Carcinoma (1), E: Large Cell Carcinoma (2), G: Squamous Cell Carcinoma (3)
-    class_map = {'A': 0, 'B': 1, 'E': 2, 'G': 3}
+    # A: Adenocarcinoma (0), B: Small Cell Carcinoma (1), G: Squamous Cell Carcinoma (2)
+    class_map = {'A': 0, 'B': 1, 'G': 2}
 
     # Filename format: Lung_Dx-A0126_1.3.6.1... -> Patient ID: Lung_Dx-A0126
     patient_files = {}
@@ -129,7 +129,7 @@ def get_data_list(
     elif split == 'test':
         selected_patients = set(all_patients[n_train+n_val:])
     else:
-        # Fallback to all if split name is unknown (e.g. for legacy behavior)
+        # Fallback to all if split name is unknown
         selected_patients = set(all_patients)
 
     print(f"Data Split '{split}': {len(selected_patients)} patients.")
@@ -240,8 +240,8 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
         else:
             loss_detection = torch.zeros((), device=device)
         
-        # Weighted sum
-        total_loss = loss_detection + 0.5 * global_loss
+        # Weighted sum - global classification is the primary task
+        total_loss = loss_detection + 1.0 * global_loss
         
         # Backward pass
         optimizer.zero_grad()
@@ -308,7 +308,7 @@ def validate_epoch(model, data_loader, device, phase="val"):
         else:
             loss_detection = torch.zeros((), device=device)
             
-        total_loss = loss_detection + 0.5 * global_loss
+        total_loss = loss_detection + 1.0 * global_loss
         
         running_loss += total_loss.item()
         running_det_loss += loss_detection.item()
