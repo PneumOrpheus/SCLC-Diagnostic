@@ -1,14 +1,28 @@
 # SCLC-Classification
 
-A deep learning diagnostic system for **Small Cell Lung Cancer (SCLC)** detection and classification using CT scan data. The system implements a dual-head architecture combining object detection with global image classification, supporting multiple state-of-the-art backbone models including Swin Transformer V2.
+A deep learning diagnostic system for **lung cancer subtype classification** with a special focus on **Small Cell Lung Cancer (SCLC)** using CT scan data. The system implements a dual-head architecture combining object detection with global image classification, supporting multiple state-of-the-art backbone models including Swin Transformer V2.
 
 ## 🔬 Overview
 
 This project provides an end-to-end pipeline for:
+- **Domain-Adaptive Pre-Training (DAPT)** on Lung-PET-CT-Dx to learn lung CT-specific features
+- **Fine-tuning** on the BigLunge dataset for target classification
 - **CT scan preprocessing** with multi-channel windowing optimized for lung imaging
 - **Lesion detection** using Faster R-CNN with Feature Pyramid Networks (FPN)
-- **Global classification** for image-level SCLC diagnosis
+- **Global classification** for image-level lung cancer subtype diagnosis
 - **Transfer learning** from RadImageNet-pretrained or ImageNet-pretrained models
+
+### Target Classes
+
+The model classifies CT scans into **3 lung cancer subtypes**, aligned across both the DAPT and fine-tuning datasets:
+
+| Index | Class | DAPT Label (Lung-PET-CT-Dx) | Fine-tune Label (BigLunge) |
+|-------|-------|------------------------------|----------------------------|
+| 0 | Adenocarcinoma | `A` | `Adenokarsinom` |
+| 1 | Small Cell Carcinoma | `B` | `Småcelletkarsinom` |
+| 2 | Squamous Cell Carcinoma | `G` | `Plateepitelkarsinom` |
+
+> Irrelevant classes (e.g., Large Cell Carcinoma, Non-small Cell NOS) are excluded during data loading to ensure consistent class alignment between both training phases.
 
 ## 🏗️ Architecture
 
@@ -28,7 +42,48 @@ The system uses a composite architecture (`DualHeadSCLCModel`) that combines:
    - Region Proposal Network (RPN)
    - Multi-scale ROI pooling
 
-4. **Global Classification Head** - For image-level SCLC classification
+4. **Global Classification Head** - For image-level cancer subtype classification with:
+   - Class-weighted cross-entropy loss (inverse-frequency weighting)
+   - Label smoothing (0.1) to prevent overconfident predictions and class collapse
+   - Automatic weight computation from training data distribution
+
+### Training Pipeline
+
+The training follows a two-phase transfer learning strategy:
+
+```
+RadImageNet Weights ──► DAPT (Lung-PET-CT-Dx) ──► Fine-tune (BigLunge) ──► Test
+```
+
+**Phase 1 — Domain-Adaptive Pre-Training (DAPT):**
+- Trains backbone + FPN + detection head on Lung-PET-CT-Dx (global classifier frozen)
+- **Real bounding box annotations** loaded from PASCAL VOC XML files and aggregated into per-patient union boxes
+- 30 epochs default, learning rate 1e-4
+- Linear warmup (5 epochs) followed by cosine annealing
+- Early stopping with configurable patience
+
+**Phase 2 — Fine-tuning on BigLunge:**
+- Unfreezes all layers for full model training
+- 50 epochs default, base learning rate 5e-5
+- **Differential learning rates**: backbone at 0.1× base LR, FPN/heads at 1× base LR
+- Linear warmup (5 epochs) followed by cosine annealing
+- Early stopping with configurable patience
+- Class-weighted loss recomputed for the fine-tuning dataset
+
+### Data Augmentation
+
+Training transforms include spatial and intensity augmentations (validation/test use no augmentation):
+
+| Augmentation | Parameters | Probability |
+|---|---|---|
+| Random Horizontal Flip | — | 0.5 |
+| Random Vertical Flip | — | 0.5 |
+| Random 90° Rotation | axes (0,1) | 0.5 |
+| Random Affine | rotate ±0.15 rad, scale ±0.1, translate ±10 px | 0.3 |
+| Random Scale Intensity | factors ±0.1 | 0.5 |
+| Random Shift Intensity | offsets ±0.1 | 0.5 |
+| Random Gaussian Noise | std=0.02 | 0.2 |
+| Random Adjust Contrast | gamma 0.8–1.2 | 0.3 |
 
 ### CT Preprocessing Pipeline
 
@@ -44,22 +99,27 @@ The preprocessing module supports specialized multi-channel windowing for CT sca
 
 ```
 SCLC-Classification/
-├── main.py                 # Training entry point
+├── main.py                     # Main pipeline (DAPT → Fine-tune → Inference)
+├── logger.py                   # Logging utilities
+├── lr_scheduler.py             # Learning rate schedulers
+├── optimizer.py                # Optimizer utilities
 ├── data/
-│   └── data_preprocessing.py   # CT preprocessing utilities
+│   ├── biglunge_loader.py      # BigLunge dataset loader with class mapping
+│   ├── data_preprocessing.py   # CT preprocessing utilities
+│   └── transforms.py           # MONAI transforms (train/val/test pipelines)
 ├── models/
-│   ├── build.py            # Model builder
-│   ├── config.py           # Configuration management
-│   ├── model_selection.py  # Backbone & dual-head architecture
-│   ├── swin_transformer.py # Swin Transformer V1
+│   ├── build.py                # Model builder
+│   ├── config.py               # Configuration management (YACS)
+│   ├── model_selection.py      # Backbone & dual-head architecture
+│   ├── swin_transformer.py     # Swin Transformer V1
 │   └── swin_transformer_v2.py  # Swin Transformer V2
 ├── training/
-│   └── train.py            # Training loop and dataset
+│   └── train.py                # Training/validation epoch functions & dataset creation
 ├── kernels/
-│   └── window_process/     # CUDA kernels for Swin window operations
-├── environment.yaml        # Conda environment specification
-├── requirements.txt        # Pip dependencies
-└── Dockerfile              # Docker container setup
+│   └── window_process/         # CUDA kernels for Swin window operations
+├── environment.yaml            # Conda environment specification
+├── requirements.txt            # Pip dependencies
+└── Dockerfile                  # Docker container setup
 ```
 
 ## 🚀 Getting Started
@@ -111,41 +171,97 @@ Place your CT scan files in a data directory. Files should contain 3D volumetric
 
 ## 💻 Usage
 
-### Training
+### Full Pipeline (DAPT + Fine-tune + Test)
+
+Runs the complete training pipeline: domain-adaptive pre-training on Lung-PET-CT-Dx, fine-tuning on BigLunge, and test set evaluation.
 
 ```bash
-python main.py \
+python main.py --mode full \
     --backbone swinv2 \
-    --data-path /path/to/training/data \
-    --epochs 20 \
-    --batch-size 8 \
-    --lr 1e-4
+    --dapt-backbone-dataset /path/to/Lung-PET-CT-Dx \
+    --fine-tuning-dataset /path/to/BigLunge/data \
+    --fine-tuning-csv /path/to/BigLunge/patients_parameters.csv \
+    --annotation-dir /path/to/Annotation
 ```
 
-### Training with RadImageNet Pretrained Weights
+### DAPT Only (Backbone Pre-training)
 
-To use RadImageNet-pretrained Swin Transformer weights for better medical imaging transfer learning:
+Pre-trains the backbone on Lung-PET-CT-Dx and saves the checkpoint.
 
 ```bash
-python main.py \
+python main.py --mode dapt \
     --backbone swinv2 \
-    --config /path/to/rin_config.yaml \
-    --checkpoint /path/to/rin_swintf.pth \
-    --data-path /path/to/training/data \
-    --epochs 20
+    --dapt-backbone-dataset /path/to/Lung-PET-CT-Dx \
+    --dapt-epochs 30 \
+    --dapt-lr 1e-4
+```
+
+### Fine-tune Only (Requires Pre-trained Checkpoint)
+
+Fine-tunes a pre-trained model on BigLunge.
+
+```bash
+python main.py --mode finetune \
+    --backbone swinv2 \
+    --pretrained-checkpoint /path/to/dapt_swinv2_best.pth \
+    --fine-tuning-dataset /path/to/BigLunge/data \
+    --fine-tuning-csv /path/to/BigLunge/patients_parameters.csv \
+    --finetune-epochs 50 \
+    --finetune-lr 5e-5
+```
+
+### Inference Only
+
+Runs inference on the BigLunge test set using a trained model.
+
+```bash
+python main.py --mode inference \
+    --model-checkpoint /path/to/finetune_swinv2_best.pth \
+    --fine-tuning-dataset /path/to/BigLunge/data \
+    --fine-tuning-csv /path/to/BigLunge/patients_parameters.csv
 ```
 
 ### Command-Line Arguments
 
+#### Mode & Model
+
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
-| `--backbone` | str | `swinv2` | Backbone model: `swin`, `swinv2`, `resnet50`, `densenet121` |
-| `--data-path` | str | `""` | Path to training data directory |
-| `--checkpoint` | str | `""` | Path to pretrained `.pth` checkpoint file |
-| `--config` | str | `""` | Path to YAML config file for Swin models |
-| `--epochs` | int | `20` | Number of training epochs |
+| `--mode` | str | `full` | Pipeline mode: `full`, `dapt`, `finetune`, or `inference` |
+| `--backbone` | str | `swinv2` | Backbone architecture: `swin`, `swinv2`, `resnet50`, `densenet121` |
+| `--config` | str | *(RadImageNet config)* | Path to YAML config file for Swin models |
+| `--initial-checkpoint` | str | *(RadImageNet weights)* | Path to initial backbone checkpoint |
+
+#### Dataset Paths
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `--dapt-backbone-dataset` | str | `/home/data/Lung-PET-CT-Dx` | Path to DAPT dataset (Lung-PET-CT-Dx) |
+| `--fine-tuning-dataset` | str | `/home/data/BigLunge/...` | Path to fine-tuning dataset (BigLunge) |
+| `--fine-tuning-csv` | str | `/home/data/BigLunge/patients_parameters.csv` | Path to BigLunge patient labels CSV |
+| `--pretrained-checkpoint` | str | `""` | Path to pre-trained checkpoint (for `finetune` mode) |
+| `--model-checkpoint` | str | `""` | Path to final model checkpoint (for `inference` mode) |
+
+#### Training Hyperparameters
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `--dapt-epochs` | int | `30` | Number of DAPT epochs |
+| `--dapt-lr` | float | `1e-4` | Learning rate for DAPT phase |
+| `--finetune-epochs` | int | `50` | Number of fine-tuning epochs |
+| `--finetune-lr` | float | `5e-5` | Base learning rate for fine-tuning (backbone gets 0.1×) |
 | `--batch-size` | int | `8` | Batch size for training |
-| `--lr` | float | `1e-4` | Learning rate |
+| `--weight-decay` | float | `0.05` | Weight decay for AdamW optimizer |
+| `--patience` | int | `10` | Early stopping patience (epochs without val loss improvement) |
+| `--num-workers` | int | `4` | Number of data loading workers |
+| `--annotation-dir` | str | `/home/data/Annotation` | Path to annotation directory with per-patient XML bounding boxes |
+
+#### Output
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `--output-dir` | str | `output` | Output directory for logs and results |
+| `--checkpoint-dir` | str | `/home/data/trained_models` | Directory for saving model checkpoints |
 
 ## 📦 Dependencies
 
@@ -154,6 +270,7 @@ python main.py \
 - `torch >= 2.0.0` - Deep learning framework
 - `torchvision >= 0.17.0` - Computer vision models
 - `timm >= 0.9.10` - Pretrained image models
+- `monai` - Medical Open Network for AI (transforms, data loading)
 - `numpy == 1.26.4` - Numerical computing
 - `nibabel >= 5.0.0` - NIfTI file handling
 - `scipy == 1.13.1` - Scientific computing
@@ -166,12 +283,10 @@ python main.py \
 
 ## 📊 Checkpoints
 
-Training checkpoints are saved in two formats:
+Checkpoints are saved in two formats:
 
-1. **Weights only** (`checkpoint_weights/`): Model state dict for inference
-2. **Full checkpoint** (`full_checkpoints/`): Complete training state for resuming
-
-Checkpoints are saved every 5 epochs.
+1. **Best model weights** (`dapt_{backbone}_best.pth`, `finetune_{backbone}_best.pth`): Model state dict for the best validation loss, used for inference
+2. **Periodic full checkpoints** (every 5 epochs): Complete training state (model, optimizer, scheduler, best loss) for resuming interrupted training
 
 ## 🔧 Configuration
 
