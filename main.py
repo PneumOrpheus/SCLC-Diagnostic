@@ -8,6 +8,7 @@ import os
 import argparse
 from typing import Dict, List, Optional, Any, Tuple
 import json
+from collections import Counter
 
 from models.model_selection import get_sclc_model
 from models.config import get_config
@@ -141,13 +142,13 @@ Examples:
     )
 
     # Training hyperparameters - DAPT phase
-    parser.add_argument("--dapt-epochs", type=int, default=20,
+    parser.add_argument("--dapt-epochs", type=int, default=30,
                         help="Number of epochs for DAPT (backbone pre-training)")
     parser.add_argument("--dapt-lr", type=float, default=1e-4,
                         help="Learning rate for DAPT phase")
 
     # Training hyperparameters - Fine-tuning phase
-    parser.add_argument("--finetune-epochs", type=int, default=30,
+    parser.add_argument("--finetune-epochs", type=int, default=50,
                         help="Number of epochs for fine-tuning")
     parser.add_argument("--finetune-lr", type=float, default=5e-5,
                         help="Learning rate for fine-tuning (typically lower than DAPT)")
@@ -161,7 +162,36 @@ Examples:
     parser.add_argument("--output-dir", type=str, default="output", help="Output directory for logs")
     parser.add_argument("--checkpoint-dir", type=str, default="/home/data/trained_models", help="Checkpoint directory")
 
+    # Early stopping
+    parser.add_argument("--patience", type=int, default=10,
+                        help="Early stopping patience (epochs without improvement)")
+
+    # Annotation directory for bounding boxes (Lung-PET-CT-Dx)
+    parser.add_argument("--annotation-dir", type=str, default="/home/data/Annotation",
+                        help="Path to annotation directory with per-patient XML bounding boxes")
+
     return parser.parse_args()
+
+
+def compute_class_weights(data_loader: DataLoader, num_classes: int, device: torch.device) -> torch.Tensor:
+    """Compute inverse-frequency class weights from a dataloader.
+    
+    Returns:
+        Tensor of shape (num_classes,) with weights inversely proportional to class frequency.
+    """
+    class_counts = Counter()
+    for _, targets in data_loader:
+        for t in targets:
+            label = t["scan_label"].item() if isinstance(t["scan_label"], torch.Tensor) else t["scan_label"]
+            class_counts[label] += 1
+    
+    total = sum(class_counts.values())
+    weights = torch.zeros(num_classes, dtype=torch.float32)
+    for cls_idx in range(num_classes):
+        count = class_counts.get(cls_idx, 1)  # avoid division by zero
+        weights[cls_idx] = total / (num_classes * count)
+    
+    return weights.to(device)
 
 def create_dataloaders(
     data_path: str,
@@ -173,7 +203,8 @@ def create_dataloaders(
     num_workers: int = 4,
     cache_rate_train: float = 1.0,
     cache_rate_val: float = 1.0,
-    cache_rate_test: float = 0.5
+    cache_rate_test: float = 0.5,
+    annotation_dir: str = ""
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Create train, val, test dataloaders for specified dataset."""
 
@@ -209,6 +240,7 @@ def create_dataloaders(
             convert_to_rgb=convert_to_rgb,
             cache_rate=cache_rate_train,
             num_workers=num_workers,
+            annotation_dir=annotation_dir,
         )
         val_dataset = create_dataset(
             data_path=data_path,
@@ -216,6 +248,7 @@ def create_dataloaders(
             convert_to_rgb=convert_to_rgb,
             cache_rate=cache_rate_val,
             num_workers=num_workers,
+            annotation_dir=annotation_dir,
         )
         test_dataset = create_dataset(
             data_path=data_path,
@@ -223,6 +256,7 @@ def create_dataloaders(
             convert_to_rgb=convert_to_rgb,
             cache_rate=cache_rate_test,
             num_workers=num_workers,
+            annotation_dir=annotation_dir,
         )
 
     train_loader = DataLoader(
@@ -265,13 +299,15 @@ def run_dapt_phase(
     weight_decay: float,
     checkpoint_dir: str,
     logger,
-    backbone_type: str
+    backbone_type: str,
+    patience: int = 10
 ) -> str:
     """
     Phase 1: Domain-Adaptive Pre-Training (DAPT)
     
-    Pre-trains the backbone on Lung-PET-CT-Dx dataset with FPN and heads frozen.
-    This helps the backbone learn lung CT-specific features before fine-tuning.
+    Pre-trains the backbone, FPN, and detection head on Lung-PET-CT-Dx dataset
+    using bounding box annotations. Only the global classifier is frozen.
+    This helps the backbone learn lung CT-specific spatial features.
     
     Returns:
         Path to best checkpoint.
@@ -279,24 +315,38 @@ def run_dapt_phase(
     logger.info("-" * 70)
     logger.info("PHASE 1: Domain-Adaptive Pre-Training (DAPT)")
     logger.info("-" * 70)
-    logger.info(f"Epochs: {epochs}, Learning Rate: {lr}")
-    logger.info("Mode: Backbone-only training (FPN and heads frozen)")
+    logger.info(f"Epochs: {epochs}, Learning Rate: {lr}, Patience: {patience}")
+    logger.info("Mode: Backbone + FPN + Detection training (global classifier frozen)")
 
-    # Enable backbone-only training
-    model.set_train_backbone_only(True)
+    # Unfreeze all, then freeze only global classifier
+    model.set_train_backbone_only(False)
+    for param in model.global_classifier.parameters():
+        param.requires_grad = False
 
-    # Only optimize backbone parameters
+    # Optimize backbone + FPN + detection parameters
     params = [p for p in model.parameters() if p.requires_grad]
     logger.info(f"Trainable parameters: {sum(p.numel() for p in params):,}")
 
     optimizer = optim.AdamW(params, lr=lr, weight_decay=weight_decay)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    
+    # LR schedule - linear warmup for 5 epochs then cosine decay
+    warmup_epochs = min(5, epochs // 4)
+    
+    def lr_lambda(epoch):
+        if epoch < warmup_epochs:
+            return (epoch + 1) / warmup_epochs
+        else:
+            progress = (epoch - warmup_epochs) / max(1, epochs - warmup_epochs)
+            return 0.5 * (1.0 + np.cos(np.pi * progress))
+    
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
     best_val_loss = float("inf")
     best_checkpoint_path = ""
+    epochs_without_improvement = 0
 
     for epoch in range(epochs):
-        logger.info(f"\n--- DAPT Epoch {epoch+1}/{epochs} ---")
+        logger.info(f"\n--- DAPT Epoch {epoch+1}/{epochs} (LR: {optimizer.param_groups[0]['lr']:.2e}) ---")
 
         # Train
         train_metrics = train_epoch(model, optimizer, train_loader, device, epoch + 1)
@@ -314,11 +364,17 @@ def run_dapt_phase(
         # Save best model
         if val_metrics["loss"] < best_val_loss:
             best_val_loss = val_metrics["loss"]
+            epochs_without_improvement = 0
             best_checkpoint_path = os.path.join(
                 checkpoint_dir, f"dapt_{backbone_type}_best.pth"
             )
             torch.save(model.state_dict(), best_checkpoint_path)
             logger.info(f"New best DAPT model saved: {best_checkpoint_path}")
+        else:
+            epochs_without_improvement += 1
+            if epochs_without_improvement >= patience:
+                logger.info(f"Early stopping triggered after {epoch+1} epochs (patience={patience})")
+                break
 
         # Periodic checkpoint
         if (epoch + 1) % 5 == 0:
@@ -349,13 +405,14 @@ def run_finetune_phase(
     weight_decay: float,
     checkpoint_dir: str,
     logger,
-    backbone_type: str
+    backbone_type: str,
+    patience: int = 10
 ) -> str:
     """
     Phase 2: Fine-tuning on BigLunge Dataset
     
-    Fine-tunes the complete model (backbone + FPN + heads) on the target dataset
-    with a lower learning rate.
+    Fine-tunes the complete model (backbone + FPN + heads) on the target dataset.
+    Uses differential learning rates: lower for backbone, higher for heads.
     
     Returns:
         Path to best checkpoint.
@@ -363,24 +420,55 @@ def run_finetune_phase(
     logger.info("-" * 70)
     logger.info("PHASE 2: Fine-tuning on BigLunge Dataset")
     logger.info("-" * 70)
-    logger.info(f"Epochs: {epochs}, Learning Rate: {lr}")
+    logger.info(f"Epochs: {epochs}, Base Learning Rate: {lr}, Patience: {patience}")
     logger.info("Mode: Full model training (all layers unfrozen)")
+    logger.info("Using differential LR: backbone=0.1x, FPN/heads=1x")
 
     # Unfreeze all layers for fine-tuning
     model.set_train_backbone_only(False)
 
-    # Optimize all parameters
-    params = [p for p in model.parameters() if p.requires_grad]
-    logger.info(f"Trainable parameters: {sum(p.numel() for p in params):,}")
+    # Backbone gets 10x lower LR than heads
+    backbone_params = []
+    head_params = []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        if "backbone" in name and "fpn" not in name:
+            backbone_params.append(param)
+        else:
+            head_params.append(param)
+    
+    param_groups = [
+        {"params": backbone_params, "lr": lr * 0.1},   # backbone: lower LR
+        {"params": head_params, "lr": lr},               # FPN + heads: full LR
+    ]
+    
+    logger.info(f"Backbone params: {sum(p.numel() for p in backbone_params):,} (LR: {lr * 0.1:.2e})")
+    logger.info(f"Head params: {sum(p.numel() for p in head_params):,} (LR: {lr:.2e})")
+    logger.info(f"Total trainable: {sum(p.numel() for p in backbone_params) + sum(p.numel() for p in head_params):,}")
 
-    optimizer = optim.AdamW(params, lr=lr, weight_decay=weight_decay)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+    optimizer = optim.AdamW(param_groups, weight_decay=weight_decay)
+    
+    # LR schedule - linear warmup for 5 epochs then cosine decay
+    warmup_epochs = min(5, epochs // 4)
+    
+    def lr_lambda(epoch):
+        if epoch < warmup_epochs:
+            return (epoch + 1) / warmup_epochs
+        else:
+            progress = (epoch - warmup_epochs) / max(1, epochs - warmup_epochs)
+            return 0.5 * (1.0 + np.cos(np.pi * progress))
+    
+    scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda)
 
     best_val_loss = float("inf")
     best_checkpoint_path = ""
+    epochs_without_improvement = 0
 
     for epoch in range(epochs):
-        logger.info(f"\n--- Fine-tune Epoch {epoch+1}/{epochs} ---")
+        current_lr_backbone = optimizer.param_groups[0]['lr']
+        current_lr_head = optimizer.param_groups[1]['lr']
+        logger.info(f"\n--- Fine-tune Epoch {epoch+1}/{epochs} (LR backbone: {current_lr_backbone:.2e}, head: {current_lr_head:.2e}) ---")
 
         # Train
         train_metrics = train_epoch(model, optimizer, train_loader, device, epoch + 1)
@@ -400,11 +488,17 @@ def run_finetune_phase(
         # Save best model
         if val_metrics["loss"] < best_val_loss:
             best_val_loss = val_metrics["loss"]
+            epochs_without_improvement = 0
             best_checkpoint_path = os.path.join(
                 checkpoint_dir, f"finetune_{backbone_type}_best.pth"
             )
             torch.save(model.state_dict(), best_checkpoint_path)
             logger.info(f"New best fine-tuned model saved: {best_checkpoint_path}")
+        else:
+            epochs_without_improvement += 1
+            if epochs_without_improvement >= patience:
+                logger.info(f"Early stopping triggered after {epoch+1} epochs (patience={patience})")
+                break
 
         # Periodic checkpoint
         if (epoch + 1) % 5 == 0:
@@ -639,16 +733,23 @@ def main():
         )
         model.to(device)
 
-        # Create DAPT dataloaders
+        # Create DAPT dataloaders (with annotation bounding boxes)
         logger.info(f"\nLoading DAPT dataset from: {args.dapt_backbone_dataset}")
+        logger.info(f"Annotation directory: {args.annotation_dir}")
         dapt_train_loader, dapt_val_loader, _ = create_dataloaders(
             data_path=args.dapt_backbone_dataset,
             batch_size=args.batch_size,
             device=device,
             dataset_type="lung_pet_ct",
             convert_to_rgb=uses_timm_model,
-            num_workers=args.num_workers
+            num_workers=args.num_workers,
+            annotation_dir=args.annotation_dir
         )
+
+        # Compute class weights for DAPT dataset
+        dapt_class_weights = compute_class_weights(dapt_train_loader, num_classes=3, device=device)
+        model.set_class_weights(dapt_class_weights)
+        logger.info(f"DAPT class weights: {dapt_class_weights.cpu().numpy()}")
 
         # Run DAPT phase
         dapt_checkpoint = run_dapt_phase(
@@ -661,7 +762,8 @@ def main():
             weight_decay=args.weight_decay,
             checkpoint_dir=args.checkpoint_dir,
             logger=logger,
-            backbone_type=args.backbone
+            backbone_type=args.backbone,
+            patience=args.patience
         )
 
         if args.mode == "dapt":
@@ -717,6 +819,11 @@ def main():
             num_workers=args.num_workers
         )
 
+        # Compute class weights for BigLunge training set
+        finetune_class_weights = compute_class_weights(finetune_train_loader, num_classes=3, device=device)
+        model.set_class_weights(finetune_class_weights)
+        logger.info(f"Fine-tuning class weights: {finetune_class_weights.cpu().numpy()}")
+
         # Run fine-tuning phase
         finetune_checkpoint = run_finetune_phase(
             model=model,
@@ -728,7 +835,8 @@ def main():
             weight_decay=args.weight_decay,
             checkpoint_dir=args.checkpoint_dir,
             logger=logger,
-            backbone_type=args.backbone
+            backbone_type=args.backbone,
+            patience=args.patience
         )
 
         # Load best model for testing
