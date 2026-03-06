@@ -167,6 +167,26 @@ docker run --gpus all -it --rm \
     sclc-classification
 ```
 
+### Tmux
+To run long training sessions without interruption, we recommend using `tmux` to create a persistent terminal session.
+
+Example workflow:
+
+    tmux 
+    conda activate /path/to/your/conda/environment
+    python main.py \
+    --backbone swinv2 \
+    --config /path/to/rin_config.yaml \
+    --checkpoint /path/to/rin_swintf.pth \
+    --data-path /path/to/training/data \
+    --epochs 20
+
+Then you can detach from the session by Ctrl + B , D
+To attach to the session again:
+
+    tmux ls
+    tmux attach -t 0
+
 ### Data Format
 
 The system supports the following input formats:
