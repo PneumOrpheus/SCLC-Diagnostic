@@ -19,15 +19,13 @@ The dataset is organized by patient folders with NiFTI files.
 NORWEGIAN_CLASS_MAP = {
     "Adenokarsinom": 0,
     "Småcelletkarsinom": 1,
-    "IkkesmåcelletkarsinomUNS": 2,
-    "Plateepitelkarsinom": 3,
+    "Plateepitelkarsinom": 2,
 }
 
-# English class names for reference
+# English class names for reference - aligned with Lung-PET-CT-Dx: A=0, B=1, G=2
 CLASS_NAMES = [
     "Adenocarcinoma",
     "Small Cell Carcinoma", 
-    "Non-small Cell Carcinoma NOS",
     "Squamous Cell Carcinoma",
 ]
 

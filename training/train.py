@@ -4,6 +4,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 import os
+import glob
+import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Sequence, Optional
 
 from monai.data import CacheDataset, DataLoader, list_data_collate  # type: ignore[attr-defined]
@@ -58,12 +60,98 @@ def sclc_collate_fn(batch: List[Dict[str, Any]]) -> tuple:
     return tuple(scans), tuple(targets)
 
 
+def load_patient_annotations(
+    annotation_dir: str,
+    patient_short_id: str,
+    class_map: Dict[str, int],
+    orig_size: int = 512,
+    target_size: int = 224
+) -> Dict[str, Any]:
+    """Load and aggregate bounding box annotations for a patient from XML files.
+    
+    Annotations are per-slice PASCAL VOC XMLs at original DICOM resolution (512x512).
+    We aggregate all per-slice boxes into a union bounding box and scale to target size.
+    
+    Args:
+        annotation_dir: Root annotation directory (e.g. /home/data/Annotation).
+        patient_short_id: Short patient ID (e.g. 'A0001').
+        class_map: Dict mapping class letters to class indices.
+        orig_size: Original annotation coordinate space (512).
+        target_size: Target image size (224).
+        
+    Returns:
+        Dict with 'boxes' (tensor [N,4]) and 'labels' (tensor [N]) or empty tensors.
+    """
+    patient_annot_dir = os.path.join(annotation_dir, patient_short_id)
+    if not os.path.isdir(patient_annot_dir):
+        return {"boxes": torch.zeros((0, 4), dtype=torch.float32),
+                "labels": torch.zeros((0,), dtype=torch.int64)}
+    
+    xml_files = glob.glob(os.path.join(patient_annot_dir, "*.xml"))
+    if not xml_files:
+        return {"boxes": torch.zeros((0, 4), dtype=torch.float32),
+                "labels": torch.zeros((0,), dtype=torch.int64)}
+    
+    # Collect all bounding boxes across slices
+    all_boxes = []  # list of (xmin, ymin, xmax, ymax, class_label)
+    for xml_path in xml_files:
+        try:
+            tree = ET.parse(xml_path)
+            root = tree.getroot()
+            for obj in root.findall("object"):
+                name_elem = obj.find("name")
+                if name_elem is None:
+                    continue
+                class_letter = name_elem.text.strip()
+                if class_letter not in class_map:
+                    continue  # skip classes we don't care about (e.g. E)
+                class_idx = class_map[class_letter]
+                bbox = obj.find("bndbox")
+                if bbox is None:
+                    continue
+                xmin = float(bbox.find("xmin").text)
+                ymin = float(bbox.find("ymin").text)
+                xmax = float(bbox.find("xmax").text)
+                ymax = float(bbox.find("ymax").text)
+                all_boxes.append((xmin, ymin, xmax, ymax, class_idx))
+        except (ET.ParseError, AttributeError):
+            continue
+    
+    if not all_boxes:
+        return {"boxes": torch.zeros((0, 4), dtype=torch.float32),
+                "labels": torch.zeros((0,), dtype=torch.int64)}
+    
+    # Compute union bounding box across all slices (tumor spans multiple slices)
+    all_xmin = min(b[0] for b in all_boxes)
+    all_ymin = min(b[1] for b in all_boxes)
+    all_xmax = max(b[2] for b in all_boxes)
+    all_ymax = max(b[3] for b in all_boxes)
+    # Use the most common class label
+    class_labels = [b[4] for b in all_boxes]
+    most_common_label = max(set(class_labels), key=class_labels.count)
+    
+    # Scale from original annotation space (512x512) to target size (224x224)
+    scale = target_size / orig_size
+    scaled_box = torch.tensor(
+        [[all_xmin * scale, all_ymin * scale, all_xmax * scale, all_ymax * scale]],
+        dtype=torch.float32
+    )
+    # Clamp to valid range
+    scaled_box = scaled_box.clamp(min=0, max=target_size)
+    
+    # Detection labels are 1-indexed (0 = background for Faster R-CNN)
+    det_label = torch.tensor([most_common_label + 1], dtype=torch.int64)
+    
+    return {"boxes": scaled_box, "labels": det_label}
+
+
 def get_data_list(
     data_path: str, 
     split: str = "train", 
     val_frac: float = 0.1, 
     test_frac: float = 0.1, 
-    seed: int = 42
+    seed: int = 42,
+    annotation_dir: str = ""
 ) -> List[Dict[str, Any]]:
     """Create a list of data dictionaries for MONAI dataset with patient-level splitting.
     
@@ -73,6 +161,8 @@ def get_data_list(
         val_frac: Fraction of patients to use for validation.
         test_frac: Fraction of patients to use for testing.
         seed: Random seed for reproducibility.
+        annotation_dir: Path to annotation directory (e.g. /home/data/Annotation).
+            If provided, bounding boxes will be loaded from XML files.
         
     Returns:
         List of dictionaries with 'image' key pointing to file paths.
@@ -96,8 +186,8 @@ def get_data_list(
             f"Supported formats: {valid_extensions}"
         )
     
-    # A: Adenocarcinoma (0), B: Small Cell Carcinoma (1), E: Large Cell Carcinoma (2), G: Squamous Cell Carcinoma (3)
-    class_map = {'A': 0, 'B': 1, 'E': 2, 'G': 3}
+    # A: Adenocarcinoma (0), B: Small Cell Carcinoma (1), G: Squamous Cell Carcinoma (2)
+    class_map = {'A': 0, 'B': 1, 'G': 2}
 
     # Filename format: Lung_Dx-A0126_1.3.6.1... -> Patient ID: Lung_Dx-A0126
     patient_files = {}
@@ -129,13 +219,16 @@ def get_data_list(
     elif split == 'test':
         selected_patients = set(all_patients[n_train+n_val:])
     else:
-        # Fallback to all if split name is unknown (e.g. for legacy behavior)
+        # Fallback to all if split name is unknown
         selected_patients = set(all_patients)
 
     print(f"Data Split '{split}': {len(selected_patients)} patients.")
 
     # Create list of dictionaries for MONAI
     data_list = []
+    
+    # Cache annotation lookups per patient short ID
+    annotation_cache = {}
     
     for pid in selected_patients:
         files = patient_files.get(pid, [])
@@ -149,12 +242,31 @@ def get_data_list(
             
             # Adds to data list with image path and class label
             if label != -1:
-                data_list.append({
+                entry = {
                     "image": os.path.join(data_path, f),
                     "scan_label": label
-                })
+                }
+                
+                # Load bounding box annotations if annotation_dir is provided
+                if annotation_dir and os.path.isdir(annotation_dir):
+                    # Extract short patient ID: "Lung_Dx-A0001" -> "A0001"
+                    short_id = pid.split("-")[-1] if "-" in pid else pid
+                    if short_id not in annotation_cache:
+                        annotation_cache[short_id] = load_patient_annotations(
+                            annotation_dir, short_id, class_map
+                        )
+                    annot = annotation_cache[short_id]
+                    entry["boxes"] = annot["boxes"]
+                    entry["labels"] = annot["labels"]
+                
+                data_list.append(entry)
     
-    print(f"  -> {len(data_list)} images found for split '{split}'.")
+    # Log annotation statistics
+    if annotation_dir:
+        n_with_boxes = sum(1 for d in data_list if d.get("boxes") is not None and d["boxes"].shape[0] > 0)
+        print(f"  -> {len(data_list)} images found for split '{split}' ({n_with_boxes} with annotations).")
+    else:
+        print(f"  -> {len(data_list)} images found for split '{split}'.")
     return data_list
 
 
@@ -165,7 +277,8 @@ def create_dataset(
     convert_to_rgb: bool = True,
     use_multichannel_windowing: bool = False,
     cache_rate: float = 1.0,
-    num_workers: int = 4
+    num_workers: int = 4,
+    annotation_dir: str = ""
 ) -> CacheDataset:
     """Create a MONAI CacheDataset.
     
@@ -177,11 +290,12 @@ def create_dataset(
         use_multichannel_windowing: Whether to use multi-channel CT windowing.
         cache_rate: Fraction of data to cache (0.0 to 1.0).
         num_workers: Number of workers for caching.
+        annotation_dir: Path to annotation directory for bounding box loading.
         
     Returns:
         CacheDataset configured for the specified split.
     """
-    data_list = get_data_list(data_path, split=split)
+    data_list = get_data_list(data_path, split=split, annotation_dir=annotation_dir)
     
     if split == "train":
         transforms = get_train_transforms(
@@ -240,8 +354,8 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
         else:
             loss_detection = torch.zeros((), device=device)
         
-        # Weighted sum
-        total_loss = loss_detection + 0.5 * global_loss
+        # Weighted sum - global classification is the primary task
+        total_loss = loss_detection + 1.0 * global_loss
         
         # Backward pass
         optimizer.zero_grad()
@@ -308,7 +422,7 @@ def validate_epoch(model, data_loader, device, phase="val"):
         else:
             loss_detection = torch.zeros((), device=device)
             
-        total_loss = loss_detection + 0.5 * global_loss
+        total_loss = loss_detection + 1.0 * global_loss
         
         running_loss += total_loss.item()
         running_det_loss += loss_detection.item()

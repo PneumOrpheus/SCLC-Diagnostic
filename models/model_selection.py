@@ -193,11 +193,14 @@ class DualHeadSCLCModel(nn.Module):
                             to train only the backbone as a baseline.
     """
     def __init__(self, backbone_type: str, checkpoint_path: str = "", config: Optional[Any] = None, 
-                 num_detection_classes: int = 5, num_global_classes: int = 4, 
+                 num_detection_classes: int = 4, num_global_classes: int = 3, 
                  train_backbone_only: bool = False, logger: Optional[logging.Logger] = None):
         super(DualHeadSCLCModel, self).__init__()
         
         self._train_backbone_only = train_backbone_only
+        
+        # Class weights for weighted CE loss
+        self.register_buffer('class_weights', None)
         
         # Map simple names to timm model names
         backbone_map = {
@@ -295,6 +298,15 @@ class DualHeadSCLCModel(nn.Module):
             self._freeze_non_backbone_params()
         else:
             self._unfreeze_all_params()
+
+    def set_class_weights(self, class_weights: torch.Tensor) -> None:
+        """Set class weights for weighted cross-entropy loss.
+        
+        Args:
+            class_weights: Tensor of shape (num_classes,) with per-class weights.
+                          Higher weight = more emphasis on that class.
+        """
+        self.class_weights = class_weights
         
     def forward(self, scans: List[torch.Tensor], targets: Optional[List[Dict]] = None) -> Union[Dict[str, torch.Tensor], Tuple[List[Dict], torch.Tensor]]:
         # Internal transform for normalization
@@ -343,7 +355,11 @@ class DualHeadSCLCModel(nn.Module):
                     f"{missing_labels}"
                 )
             gt_labels = torch.stack([t["scan_label"] for t in targets_transformed])
-            global_loss = F.cross_entropy(global_logits, gt_labels)
+            global_loss = F.cross_entropy(
+                global_logits, gt_labels,
+                weight=self.class_weights,
+                label_smoothing=0.1
+            )
             losses['global_classification_loss'] = global_loss
             return losses
         else:
@@ -353,8 +369,8 @@ class DualHeadSCLCModel(nn.Module):
 def get_sclc_model(
     backbone_type: str = "swinv2",
     checkpoint_path: str = "",
-    num_detection_classes: int = 5,
-    num_global_classes: int = 4,
+    num_detection_classes: int = 4,
+    num_global_classes: int = 3,
     train_backbone_only: bool = False,
     config: Optional[Any] = None,
     logger: Optional[logging.Logger] = None
@@ -366,9 +382,9 @@ def get_sclc_model(
         backbone_type: One of 'swin', 'swinv2', 'resnet', 'densenet'
         checkpoint_path: Path to pretrained weights (.pth file)
         num_detection_classes: Number of detection classes (including background).
-            Default 5: background + A(Adenocarcinoma) + B(Small Cell) + E(Large Cell) + G(Squamous Cell)
+            Default 4: background + A(Adenocarcinoma) + B(Small Cell) + G(Squamous Cell)
         num_global_classes: Number of global classification classes.
-            Default 4: A(Adenocarcinoma), B(Small Cell), E(Large Cell), G(Squamous Cell)
+            Default 3: A(Adenocarcinoma), B(Small Cell), G(Squamous Cell)
         train_backbone_only: If True, freezes FPN and heads to train only backbone
         config: Optional Microsoft-style yacs config object. If provided,
                 will use config.MODEL.PRETRAINED for checkpoint_path and
