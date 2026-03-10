@@ -92,12 +92,14 @@ class FlexibleBackbone(nn.Module):
         
         self._use_custom_swin = False
 
-        if config is not None and checkpoint_path != "":
+        if config is not None:
             if logger is not None:
                 logger.info(f"Creating model from config file:{config.MODEL.TYPE}/{config.MODEL.NAME}")
-                logger.info(f"=> Path to pretrained weights: '{config.MODEL.PRETRAINED}'")
             swin_model = build_model(config)
-            load_pretrained(config, swin_model, logger)
+            if checkpoint_path != "":
+                if logger is not None:
+                    logger.info(f"=> Path to pretrained weights: '{config.MODEL.PRETRAINED}'")
+                load_pretrained(config, swin_model, logger)
             
             # Wrap custom Swin model to extract multi-scale features
             self.body = SwinFeatureExtractor(swin_model)
