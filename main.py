@@ -13,7 +13,6 @@ from collections import Counter
 from models.model_selection import get_sclc_model
 from models.config import get_config
 from training.train import (
-    create_dataset,
     sclc_collate_fn,
     train_epoch,
     validate_epoch
@@ -21,6 +20,9 @@ from training.train import (
 from data.biglunge_loader import (
     create_biglunge_dataset,
     CLASS_NAMES
+)
+from data.lung_pet_ct_dx_loader import (
+    create_lung_pet_ct_dataset,
 )
 from logger import create_logger
 
@@ -201,9 +203,6 @@ def create_dataloaders(
     csv_path: str = "",
     convert_to_rgb: bool = True,
     num_workers: int = 4,
-    cache_rate_train: float = 1.0,
-    cache_rate_val: float = 1.0,
-    cache_rate_test: float = 0.5,
     annotation_dir: str = "",
     use_multichannel_windowing: bool = False
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
@@ -216,7 +215,6 @@ def create_dataloaders(
             split="train",
             convert_to_rgb=convert_to_rgb,
             use_multichannel_windowing=use_multichannel_windowing,
-            cache_rate=cache_rate_train,
             num_workers=num_workers,
         )
         val_dataset = create_biglunge_dataset(
@@ -225,7 +223,6 @@ def create_dataloaders(
             split="val",
             convert_to_rgb=convert_to_rgb,
             use_multichannel_windowing=use_multichannel_windowing,
-            cache_rate=cache_rate_val,
             num_workers=num_workers,
         )
         test_dataset = create_biglunge_dataset(
@@ -234,34 +231,29 @@ def create_dataloaders(
             split="test",
             convert_to_rgb=convert_to_rgb,
             use_multichannel_windowing=use_multichannel_windowing,
-            cache_rate=cache_rate_test,
             num_workers=num_workers,
         )
     else:  # lung_pet_ct
-        train_dataset = create_dataset(
+        train_dataset = create_lung_pet_ct_dataset(
             data_path=data_path,
             split="train",
             convert_to_rgb=convert_to_rgb,
             use_multichannel_windowing=use_multichannel_windowing,
-            cache_rate=cache_rate_train,
             num_workers=num_workers,
             annotation_dir=annotation_dir,
         )
-        val_dataset = create_dataset(
+        val_dataset = create_lung_pet_ct_dataset(
             data_path=data_path,
             split="val",
             convert_to_rgb=convert_to_rgb,
             use_multichannel_windowing=use_multichannel_windowing,
-            cache_rate=cache_rate_val,
             num_workers=num_workers,
             annotation_dir=annotation_dir,
         )
-        test_dataset = create_dataset(
+        test_dataset = create_lung_pet_ct_dataset(
             data_path=data_path,
             split="test",
             convert_to_rgb=convert_to_rgb,
-            use_multichannel_windowing=use_multichannel_windowing,
-            cache_rate=cache_rate_test,
             num_workers=num_workers,
             annotation_dir=annotation_dir,
         )
