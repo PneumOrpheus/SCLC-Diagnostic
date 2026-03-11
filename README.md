@@ -289,6 +289,27 @@ python main.py --mode inference \
 | `--output-dir` | str | `output` | Output directory for logs and results |
 | `--checkpoint-dir` | str | `/home/data/trained_models` | Directory for saving model checkpoints |
 
+
+### Tmux
+````
+    tmux 
+    conda activate /home/hansstem/anaconda3/envs/sclc
+    python main.py \
+    --backbone swinv2 \
+    --config /path/to/rin_config.yaml \
+    --checkpoint /path/to/rin_swintf.pth \
+    --data-path /path/to/training/data \
+    --epochs 20
+
+````
+Then you can detach from the session by Ctrl + B , D
+To attach to the session again
+````
+    tmux ls
+    tmux attach -t 0
+````
+
+
 ## 📦 Dependencies
 
 ### Core Dependencies
