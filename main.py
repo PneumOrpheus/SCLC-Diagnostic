@@ -22,6 +22,9 @@ from data.biglunge_loader import (
     create_biglunge_dataset,
     CLASS_NAMES
 )
+from data.lung_pet_ct_dx_loader import (
+    create_lung_pet_ct_dataset,
+)
 from logger import create_logger
 
 """
@@ -234,27 +237,24 @@ def create_dataloaders(
             num_workers=num_workers,
         )
     else:  # lung_pet_ct
-        train_dataset = create_dataset(
+        train_dataset = create_lung_pet_ct_dataset(
             data_path=data_path,
             split="train",
             convert_to_rgb=convert_to_rgb,
-            cache_rate=cache_rate_train,
             num_workers=num_workers,
             annotation_dir=annotation_dir,
         )
-        val_dataset = create_dataset(
+        val_dataset = create_lung_pet_ct_dataset(
             data_path=data_path,
             split="val",
             convert_to_rgb=convert_to_rgb,
-            cache_rate=cache_rate_val,
             num_workers=num_workers,
             annotation_dir=annotation_dir,
         )
-        test_dataset = create_dataset(
+        test_dataset = create_lung_pet_ct_dataset(
             data_path=data_path,
             split="test",
             convert_to_rgb=convert_to_rgb,
-            cache_rate=cache_rate_test,
             num_workers=num_workers,
             annotation_dir=annotation_dir,
         )

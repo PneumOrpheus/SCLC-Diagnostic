@@ -29,6 +29,13 @@ from .biglunge_loader import (
     NORWEGIAN_CLASS_MAP,
 )
 
+from .lung_pet_ct_dx_loader import (
+    create_lung_pet_ct_dataset,
+    get_data_list as get_lung_pet_ct_data_list,
+    load_patient_annotations,
+    CLASS_MAP as LUNG_PET_CT_CLASS_MAP,
+)
+
 __all__ = [
     # Data preprocessing
     "load_nifti_volume",
@@ -51,4 +58,9 @@ __all__ = [
     "get_num_classes",
     "CLASS_NAMES",
     "NORWEGIAN_CLASS_MAP",
+    # Lung-PET-CT-Dx dataset
+    "create_lung_pet_ct_dataset",
+    "get_lung_pet_ct_data_list",
+    "load_patient_annotations",
+    "LUNG_PET_CT_CLASS_MAP",
 ]
