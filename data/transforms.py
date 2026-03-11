@@ -125,6 +125,62 @@ class ExtractMiddleSliced(MapTransform):
         return d
 
 
+class ExtractMultiSliced(MapTransform):
+    """Extract multiple adjacent slices from a 3D volume and aggregate via projection.
+    
+    Takes N slices centered around the middle of the volume and applies
+    max-intensity projection (MIP) to produce a single representative 2D slice.
+    MIP captures more diagnostic information than a single middle slice,
+    as tumors may span multiple slices.
+    """
+    
+    def __init__(
+        self,
+        keys: KeysCollection,
+        num_slices: int = 5,
+        aggregation: str = "max",
+        allow_missing_keys: bool = False
+    ) -> None:
+        super().__init__(keys, allow_missing_keys)
+        self.num_slices = num_slices
+        self.aggregation = aggregation
+    
+    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
+        d: Dict[Hashable, Any] = dict(data)
+        for key in self.key_iterator(d):
+            volume = d[key]
+            if hasattr(volume, 'ndim') and volume.ndim >= 3:
+                if volume.ndim == 4:
+                    depth_axis = 3
+                elif volume.ndim == 3:
+                    depth_axis = 2
+                else:
+                    depth_axis = -1
+                
+                num_available = volume.shape[depth_axis]
+                mid = num_available // 2
+                half = self.num_slices // 2
+                
+                start = max(0, mid - half)
+                end = min(num_available, start + self.num_slices)
+                start = max(0, end - self.num_slices)
+                
+                if isinstance(volume, np.ndarray):
+                    indices = list(range(start, end))
+                    slices = np.take(volume, indices, axis=depth_axis)
+                    if self.aggregation == "max":
+                        d[key] = np.max(slices, axis=depth_axis)
+                    else:
+                        d[key] = np.mean(slices, axis=depth_axis)
+                else:
+                    slices = volume.narrow(depth_axis, start, end - start)
+                    if self.aggregation == "max":
+                        d[key] = slices.max(dim=depth_axis)[0]
+                    else:
+                        d[key] = slices.mean(dim=depth_axis)
+        return d
+
+
 class ApplyWindowingd(MapTransform):
     """Apply CT windowing to enhance contrast for specific tissues.
     
@@ -296,8 +352,8 @@ def get_train_transforms(
             )
         )
     
-    # Extract middle slice for 3D volumes (result is already channel-first)
-    transforms.append(ExtractMiddleSliced(keys=["image"]))
+    # Extract multiple slices and max-project for richer 2D representation
+    transforms.append(ExtractMultiSliced(keys=["image"], num_slices=5, aggregation="max"))
     
     # Convert to RGB if needed (also ensures 3 channels)
     if convert_to_rgb and not use_multichannel_windowing:
@@ -383,7 +439,7 @@ def get_val_transforms(
             )
         )
     
-    transforms.append(ExtractMiddleSliced(keys=["image"]))
+    transforms.append(ExtractMultiSliced(keys=["image"], num_slices=5, aggregation="max"))
     
     if convert_to_rgb and not use_multichannel_windowing:
         transforms.append(EnsureRGBd(keys=["image"]))
