@@ -13,14 +13,13 @@ from timm.layers import DropPath, to_2tuple, trunc_normal_
 try:
     import os, sys
 
-    kernel_path = os.path.abspath(os.path.join('..'))
+    kernel_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
     sys.path.append(kernel_path)
     from kernels.window_process.window_process import WindowProcess, WindowProcessReverse
 
-except:
+except ImportError:
     WindowProcess = None
     WindowProcessReverse = None
-    print("[Warning] Fused window process have not been installed. Please refer to get_started.md for installation.")
 
 
 class Mlp(nn.Module):
@@ -104,7 +103,7 @@ class WindowAttention(nn.Module):
         # get pair-wise relative position index for each token inside the window
         coords_h = torch.arange(self.window_size[0])
         coords_w = torch.arange(self.window_size[1])
-        coords = torch.stack(torch.meshgrid([coords_h, coords_w]))  # 2, Wh, Ww
+        coords = torch.stack(torch.meshgrid([coords_h, coords_w], indexing='ij'))  # 2, Wh, Ww
         coords_flatten = torch.flatten(coords, 1)  # 2, Wh*Ww
         relative_coords = coords_flatten[:, :, None] - coords_flatten[:, None, :]  # 2, Wh*Ww, Wh*Ww
         relative_coords = relative_coords.permute(1, 2, 0).contiguous()  # Wh*Ww, Wh*Ww, 2

@@ -10,6 +10,17 @@ from monai.data import DataLoader, list_data_collate  # type: ignore[attr-define
 from monai.transforms import Compose  # type: ignore[attr-defined]
 
 from data.transforms import get_train_transforms, get_val_transforms
+from models.model_selection import focal_loss
+
+"""
+SCLC Diagnostic System Training
+-------------------------------
+Implements the training pipeline for the SCLC diagnostic system with support for:
+- Backbone model selection
+- Resuming from checkpoints for fine-tuning
+- Multi-task loss aggregation
+- MONAI CacheDataset for efficient data loading
+"""
 
 
 def sclc_collate_fn(batch: List[Dict[str, Any]]) -> tuple:
@@ -47,7 +58,20 @@ def sclc_collate_fn(batch: List[Dict[str, Any]]) -> tuple:
     return tuple(scans), tuple(targets)
 
 
-def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
+def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10,
+                use_mixup=False, mixup_alpha=0.2):
+    """Train one epoch with optional Mixup augmentation.
+    
+    Args:
+        model: The model to train.
+        optimizer: Optimizer.
+        data_loader: Training data loader.
+        device: Device to train on.
+        epoch: Current epoch number.
+        print_freq: Print frequency.
+        use_mixup: Whether to apply Mixup data augmentation.
+        mixup_alpha: Beta distribution parameter for Mixup.
+    """
     model.train()
     running_loss = 0.0
     running_det_loss = 0.0
@@ -62,11 +86,35 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
         scans = list(scan.to(device) for scan in scans)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         
-        # Forward pass
-        loss_dict = model(scans, targets)
+        batch_size = len(scans)
+        apply_mixup = use_mixup and batch_size > 1 and np.random.random() < 0.5
         
-        # Loss aggregation
-        global_loss = loss_dict.pop("global_classification_loss")
+        if apply_mixup:
+            # Blend pairs of images and compute mixed loss
+            lam = np.random.beta(mixup_alpha, mixup_alpha)
+            index = torch.randperm(batch_size)
+            
+            mixed_scans = [lam * scans[j] + (1 - lam) * scans[index[j]] for j in range(batch_size)]
+            
+            # Forward with mixed images, request logits for proper mixup loss
+            loss_dict = model(mixed_scans, targets, return_logits=True)
+            
+            global_logits = loss_dict.pop("global_logits")
+            _ = loss_dict.pop("global_classification_loss")
+            
+            # Compute proper mixup focal loss
+            gt_a = torch.stack([targets[j]["scan_label"] for j in range(batch_size)])
+            gt_b = torch.stack([targets[index[j]]["scan_label"] for j in range(batch_size)])
+            
+            class_w = model.class_weights if hasattr(model, 'class_weights') else None
+            global_loss = (
+                lam * focal_loss(global_logits, gt_a, alpha=class_w) +
+                (1 - lam) * focal_loss(global_logits, gt_b, alpha=class_w)
+            )
+        else:
+            # Standard forward pass
+            loss_dict = model(scans, targets)
+            global_loss = loss_dict.pop("global_classification_loss")
 
         # Ensure detection loss is always a tensor on the correct device
         if loss_dict:
@@ -81,14 +129,14 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
             loss_detection = torch.zeros((), device=device)
         
         # Weighted sum - global classification is the primary task
-        total_loss = loss_detection + 1.0 * global_loss
+        total_loss = loss_detection + global_loss
         
         # Backward pass
         optimizer.zero_grad()
         total_loss.backward()
         
         # Gradient clipping
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         
         optimizer.step()
         
@@ -98,7 +146,8 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10):
         running_global_loss += global_loss.item()
         
         if i % print_freq == 0:
-            print(f"Epoch [{epoch}], Iteration [{i}/{len(data_loader)}], "
+            extra = " [mixup]" if apply_mixup else ""
+            print(f"Epoch [{epoch}], Iteration [{i}/{len(data_loader)}]{extra}, "
                   f"Total loss: {total_loss.item():.4f}, "
                   f"Detection loss: {loss_detection.item():.4f}, "
                   f"Global loss: {global_loss.item():.4f}")

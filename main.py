@@ -92,7 +92,7 @@ Examples:
         "--backbone",
         type=str,
         default="swinv2",
-        choices=["swin", "swinv2", "resnet50", "densenet121"],
+        choices=["swin", "swinv2", "resnet", "densenet"],
         help="Backbone model architecture"
     )
     parser.add_argument(
@@ -145,20 +145,20 @@ Examples:
     )
 
     # Training hyperparameters - DAPT phase
-    parser.add_argument("--dapt-epochs", type=int, default=30,
+    parser.add_argument("--dapt-epochs", type=int, default=50,
                         help="Number of epochs for DAPT (backbone pre-training)")
     parser.add_argument("--dapt-lr", type=float, default=1e-4,
                         help="Learning rate for DAPT phase")
 
     # Training hyperparameters - Fine-tuning phase
-    parser.add_argument("--finetune-epochs", type=int, default=50,
+    parser.add_argument("--finetune-epochs", type=int, default=100,
                         help="Number of epochs for fine-tuning")
-    parser.add_argument("--finetune-lr", type=float, default=5e-5,
-                        help="Learning rate for fine-tuning (typically lower than DAPT)")
+    parser.add_argument("--finetune-lr", type=float, default=3e-5,
+                        help="Learning rate for fine-tuning")
 
     # Common hyperparameters
-    parser.add_argument("--batch-size", type=int, default=8, help="Batch size")
-    parser.add_argument("--weight-decay", type=float, default=0.05, help="Weight decay")
+    parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
+    parser.add_argument("--weight-decay", type=float, default=0.02, help="Weight decay")
     parser.add_argument("--num-workers", type=int, default=4, help="Number of data loading workers")
 
     # Output directories
@@ -166,7 +166,7 @@ Examples:
     parser.add_argument("--checkpoint-dir", type=str, default="/home/data/trained_models", help="Checkpoint directory")
 
     # Early stopping
-    parser.add_argument("--patience", type=int, default=10,
+    parser.add_argument("--patience", type=int, default=15,
                         help="Early stopping patience (epochs without improvement)")
 
     # Annotation directory for bounding boxes (Lung-PET-CT-Dx)
@@ -204,10 +204,8 @@ def create_dataloaders(
     csv_path: str = "",
     convert_to_rgb: bool = True,
     num_workers: int = 4,
-    cache_rate_train: float = 1.0,
-    cache_rate_val: float = 1.0,
-    cache_rate_test: float = 0.5,
-    annotation_dir: str = ""
+    annotation_dir: str = "",
+    use_multichannel_windowing: bool = False
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Create train, val, test dataloaders for specified dataset."""
 
@@ -217,7 +215,7 @@ def create_dataloaders(
             csv_path=csv_path,
             split="train",
             convert_to_rgb=convert_to_rgb,
-            cache_rate=cache_rate_train,
+            use_multichannel_windowing=use_multichannel_windowing,
             num_workers=num_workers,
         )
         val_dataset = create_biglunge_dataset(
@@ -225,7 +223,7 @@ def create_dataloaders(
             csv_path=csv_path,
             split="val",
             convert_to_rgb=convert_to_rgb,
-            cache_rate=cache_rate_val,
+            use_multichannel_windowing=use_multichannel_windowing,
             num_workers=num_workers,
         )
         test_dataset = create_biglunge_dataset(
@@ -233,7 +231,7 @@ def create_dataloaders(
             csv_path=csv_path,
             split="test",
             convert_to_rgb=convert_to_rgb,
-            cache_rate=cache_rate_test,
+            use_multichannel_windowing=use_multichannel_windowing,
             num_workers=num_workers,
         )
     else:  # lung_pet_ct
@@ -241,6 +239,7 @@ def create_dataloaders(
             data_path=data_path,
             split="train",
             convert_to_rgb=convert_to_rgb,
+            use_multichannel_windowing=use_multichannel_windowing,
             num_workers=num_workers,
             annotation_dir=annotation_dir,
         )
@@ -248,6 +247,7 @@ def create_dataloaders(
             data_path=data_path,
             split="val",
             convert_to_rgb=convert_to_rgb,
+            use_multichannel_windowing=use_multichannel_windowing,
             num_workers=num_workers,
             annotation_dir=annotation_dir,
         )
@@ -316,14 +316,12 @@ def run_dapt_phase(
     logger.info("PHASE 1: Domain-Adaptive Pre-Training (DAPT)")
     logger.info("-" * 70)
     logger.info(f"Epochs: {epochs}, Learning Rate: {lr}, Patience: {patience}")
-    logger.info("Mode: Backbone + FPN + Detection training (global classifier frozen)")
+    logger.info("Mode: Backbone-only training (FPN, detection, classifier frozen)")
 
-    # Unfreeze all, then freeze only global classifier
-    model.set_train_backbone_only(False)
-    for param in model.global_classifier.parameters():
-        param.requires_grad = False
+    # Freeze everything except backbone for stable pre-training
+    model.set_train_backbone_only(True)
 
-    # Optimize backbone + FPN + detection parameters
+    # Optimize backbone parameters only
     params = [p for p in model.parameters() if p.requires_grad]
     logger.info(f"Trainable parameters: {sum(p.numel() for p in params):,}")
 
@@ -422,12 +420,12 @@ def run_finetune_phase(
     logger.info("-" * 70)
     logger.info(f"Epochs: {epochs}, Base Learning Rate: {lr}, Patience: {patience}")
     logger.info("Mode: Full model training (all layers unfrozen)")
-    logger.info("Using differential LR: backbone=0.1x, FPN/heads=1x")
+    logger.info("Using differential LR: backbone=0.2x, FPN/heads=1x")
 
     # Unfreeze all layers for fine-tuning
     model.set_train_backbone_only(False)
 
-    # Backbone gets 10x lower LR than heads
+    # Backbone gets 5x lower LR than heads
     backbone_params = []
     head_params = []
     for name, param in model.named_parameters():
@@ -439,11 +437,11 @@ def run_finetune_phase(
             head_params.append(param)
     
     param_groups = [
-        {"params": backbone_params, "lr": lr * 0.1},   # backbone: lower LR
-        {"params": head_params, "lr": lr},               # FPN + heads: full LR
+        {"params": backbone_params, "lr": lr * 0.2},
+        {"params": head_params, "lr": lr},
     ]
     
-    logger.info(f"Backbone params: {sum(p.numel() for p in backbone_params):,} (LR: {lr * 0.1:.2e})")
+    logger.info(f"Backbone params: {sum(p.numel() for p in backbone_params):,} (LR: {lr * 0.2:.2e})")
     logger.info(f"Head params: {sum(p.numel() for p in head_params):,} (LR: {lr:.2e})")
     logger.info(f"Total trainable: {sum(p.numel() for p in backbone_params) + sum(p.numel() for p in head_params):,}")
 
@@ -470,8 +468,8 @@ def run_finetune_phase(
         current_lr_head = optimizer.param_groups[1]['lr']
         logger.info(f"\n--- Fine-tune Epoch {epoch+1}/{epochs} (LR backbone: {current_lr_backbone:.2e}, head: {current_lr_head:.2e}) ---")
 
-        # Train
-        train_metrics = train_epoch(model, optimizer, train_loader, device, epoch + 1)
+        # Train with mixup augmentation
+        train_metrics = train_epoch(model, optimizer, train_loader, device, epoch + 1, use_mixup=True, mixup_alpha=0.2)
 
         # Validation
         val_metrics = validate_epoch(model, val_loader, device, phase="val")
@@ -743,13 +741,13 @@ def main():
             dataset_type="lung_pet_ct",
             convert_to_rgb=uses_timm_model,
             num_workers=args.num_workers,
-            annotation_dir=args.annotation_dir
+            annotation_dir=args.annotation_dir,
+            use_multichannel_windowing=True
         )
 
-        # Compute class weights for DAPT dataset
-        dapt_class_weights = compute_class_weights(dapt_train_loader, num_classes=3, device=device)
-        model.set_class_weights(dapt_class_weights)
-        logger.info(f"DAPT class weights: {dapt_class_weights.cpu().numpy()}")
+        # No class weights for DAPT - uniform weighting for stable backbone pre-training
+        model.set_class_weights(None)
+        logger.info("DAPT: Using uniform class weights (no weighting)")
 
         # Run DAPT phase
         dapt_checkpoint = run_dapt_phase(
@@ -816,7 +814,8 @@ def main():
             dataset_type="biglunge",
             csv_path=args.fine_tuning_csv,
             convert_to_rgb=uses_timm_model,
-            num_workers=args.num_workers
+            num_workers=args.num_workers,
+            use_multichannel_windowing=True
         )
 
         # Compute class weights for BigLunge training set

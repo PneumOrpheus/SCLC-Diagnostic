@@ -7,9 +7,6 @@
 
 from models.swin_transformer import SwinTransformer
 from models.swin_transformer_v2 import SwinTransformerV2
-from models.swin_transformer_moe import SwinTransformerMoE
-from models.swin_mlp import SwinMLP
-from models.simmim import build_simmim
 
 
 def build_model(config, is_pretrain=False):
@@ -26,10 +23,6 @@ def build_model(config, is_pretrain=False):
     else:
         import torch.nn as nn
         layernorm = nn.LayerNorm
-
-    if is_pretrain:
-        model = build_simmim(config)
-        return model
 
     if model_type == 'swin':
         model = SwinTransformer(img_size=config.DATA.IMG_SIZE,
@@ -100,21 +93,6 @@ def build_model(config, is_pretrain=False):
     #                                cosine_router_init_t=config.MODEL.SWIN_MOE.COSINE_ROUTER_INIT_T,
     #                                moe_drop=config.MODEL.SWIN_MOE.MOE_DROP,
     #                                aux_loss_weight=config.MODEL.SWIN_MOE.AUX_LOSS_WEIGHT)
-    elif model_type == 'swin_mlp':
-        model = SwinMLP(img_size=config.DATA.IMG_SIZE,
-                        patch_size=config.MODEL.SWIN_MLP.PATCH_SIZE,
-                        in_chans=config.MODEL.SWIN_MLP.IN_CHANS,
-                        num_classes=config.MODEL.NUM_CLASSES,
-                        embed_dim=config.MODEL.SWIN_MLP.EMBED_DIM,
-                        depths=config.MODEL.SWIN_MLP.DEPTHS,
-                        num_heads=config.MODEL.SWIN_MLP.NUM_HEADS,
-                        window_size=config.MODEL.SWIN_MLP.WINDOW_SIZE,
-                        mlp_ratio=config.MODEL.SWIN_MLP.MLP_RATIO,
-                        drop_rate=config.MODEL.DROP_RATE,
-                        drop_path_rate=config.MODEL.DROP_PATH_RATE,
-                        ape=config.MODEL.SWIN_MLP.APE,
-                        patch_norm=config.MODEL.SWIN_MLP.PATCH_NORM,
-                        use_checkpoint=config.TRAIN.USE_CHECKPOINT)
     else:
         raise NotImplementedError(f"Unkown model: {model_type}")
 
