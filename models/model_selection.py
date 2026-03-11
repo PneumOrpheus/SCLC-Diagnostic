@@ -162,25 +162,78 @@ class BackboneWithFPN(nn.Module):
         # Pass through FPN
         fpn_out = self.fpn(x_dict)
         return fpn_out
+
+
+def focal_loss(
+    logits: torch.Tensor,
+    targets: torch.Tensor,
+    alpha: Optional[torch.Tensor] = None,
+    gamma: float = 2.0,
+    label_smoothing: float = 0.1,
+    reduction: str = 'mean'
+) -> torch.Tensor:
+    """Focal loss for multi-class classification with optional label smoothing.
+    
+    FL(p_t) = -alpha_t * (1 - p_t)^gamma * log(p_t)
+    
+    Args:
+        logits: Raw predictions [B, C].
+        targets: Integer class labels [B].
+        alpha: Per-class weights [C] (optional).
+        gamma: Focusing parameter to down-weight easy examples.
+        label_smoothing: Label smoothing factor.
+        reduction: 'mean' or 'sum'.
+    """
+    num_classes = logits.shape[1]
+    
+    with torch.no_grad():
+        smooth_targets = torch.zeros_like(logits)
+        smooth_targets.fill_(label_smoothing / (num_classes - 1))
+        smooth_targets.scatter_(1, targets.unsqueeze(1), 1.0 - label_smoothing)
+    
+    log_probs = F.log_softmax(logits, dim=1)
+    probs = torch.exp(log_probs)
+    
+    focal_weight = (1 - probs) ** gamma
+    
+    if alpha is not None:
+        focal_weight = focal_weight * alpha.unsqueeze(0)
+    
+    loss = -focal_weight * smooth_targets * log_probs
+    loss = loss.sum(dim=1)
+    
+    if reduction == 'mean':
+        return loss.mean()
+    elif reduction == 'sum':
+        return loss.sum()
+    return loss
+
     
 class GlobalClassificationHead(nn.Module):
     """
-    Global Classification Head for image-level classification.
+    Global Classification Head with multi-scale feature aggregation.
+    Concatenates pooled features from all FPN levels for richer representation.
     """
-    def __init__(self, in_channels: int, num_classes: int):
+    def __init__(self, in_channels: int, num_classes: int, num_levels: int = 4):
         super(GlobalClassificationHead, self).__init__()
         self.avgpool = nn.AdaptiveAvgPool2d(1)
+        concat_channels = in_channels * num_levels
         self.fc = nn.Sequential(
-            nn.Linear(in_channels, 512),
-            nn.LayerNorm(512),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(512, num_classes)
+            nn.Linear(concat_channels, 256),
+            nn.LayerNorm(256),
+            nn.GELU(),
+            nn.Dropout(0.3),
+            nn.Linear(256, num_classes)
         )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.avgpool(x)
-        x = torch.flatten(x, 1)
+    def forward(self, features_dict: Dict[str, torch.Tensor], attention_masks: Optional[Dict[str, torch.Tensor]] = None) -> torch.Tensor:
+        pooled = []
+        for key, feat in features_dict.items():
+            if attention_masks is not None and key in attention_masks:
+                feat = feat * attention_masks[key]
+            p = self.avgpool(feat)
+            pooled.append(torch.flatten(p, 1))
+        x = torch.cat(pooled, dim=1)
         x = self.fc(x)
         return x
     
@@ -256,9 +309,11 @@ class DualHeadSCLCModel(nn.Module):
         )
         
         # Initialize Global Classification Head
+        num_feature_levels = len(self.backbone.in_channels_list)
         self.global_classifier = GlobalClassificationHead(
             in_channels=fpn_out_channels,
-            num_classes=num_global_classes
+            num_classes=num_global_classes,
+            num_levels=num_feature_levels
         )
         
         # Apply backbone-only training mode if requested
@@ -299,7 +354,7 @@ class DualHeadSCLCModel(nn.Module):
         else:
             self._unfreeze_all_params()
 
-    def set_class_weights(self, class_weights: torch.Tensor) -> None:
+    def set_class_weights(self, class_weights: Optional[torch.Tensor]) -> None:
         """Set class weights for weighted cross-entropy loss.
         
         Args:
@@ -307,16 +362,53 @@ class DualHeadSCLCModel(nn.Module):
                           Higher weight = more emphasis on that class.
         """
         self.class_weights = class_weights
-        
-    def forward(self, scans: List[torch.Tensor], targets: Optional[List[Dict]] = None) -> Union[Dict[str, torch.Tensor], Tuple[List[Dict], torch.Tensor]]:
-        # Internal transform for normalization
 
+    def _build_proposal_attention(
+        self,
+        proposals: List[torch.Tensor],
+        image_sizes: List[Tuple[int, int]],
+        features: Dict[str, torch.Tensor]
+    ) -> Dict[str, torch.Tensor]:
+        """Build spatial attention masks from RPN proposals.
+        
+        Proposals indicate regions of interest detected by the RPN.
+        These are converted to soft attention masks that guide the global
+        classifier to focus on diagnostically relevant regions.
+        """
+        attention_masks = {}
+        for key, feat in features.items():
+            B, C, H, W = feat.shape
+            masks = torch.ones(B, 1, H, W, device=feat.device) * 0.5
+            
+            for i, boxes in enumerate(proposals):
+                if len(boxes) == 0:
+                    masks[i] = 1.0
+                    continue
+                
+                ih, iw = image_sizes[i]
+                scale_h = H / ih
+                scale_w = W / iw
+                
+                top_k = min(16, len(boxes))
+                for box in boxes[:top_k]:
+                    x1, y1, x2, y2 = box.detach()
+                    fx1 = max(0, int(x1.item() * scale_w))
+                    fy1 = max(0, int(y1.item() * scale_h))
+                    fx2 = min(W, max(fx1 + 1, int(x2.item() * scale_w)))
+                    fy2 = min(H, max(fy1 + 1, int(y2.item() * scale_h)))
+                    masks[i, :, fy1:fy2, fx1:fx2] = 1.0
+            
+            attention_masks[key] = masks
+        return attention_masks
+        
+    def forward(self, scans: List[torch.Tensor], targets: Optional[List[Dict]] = None,
+                return_logits: bool = False) -> Union[Dict[str, torch.Tensor], Tuple[List[Dict], torch.Tensor]]:
         scans_transformed, targets_transformed = self.detector.transform(scans, targets)
         
-        # Backbone forward pass
+        # Backbone + FPN forward pass
         features = self.backbone(scans_transformed.tensors)
         
-        # Detection head
+        # Detection head - generates proposals and computes detection losses
         if self.training:
             proposals, proposals_losses = self.detector.rpn(
                 scans_transformed, features, targets_transformed
@@ -337,9 +429,11 @@ class DualHeadSCLCModel(nn.Module):
             )
             losses = {}
         
-        # Global classification head
-        global_features = list(features.values())[-1]
-        global_logits = self.global_classifier(global_features)
+        # Proposal-guided attention for classification
+        attention_masks = self._build_proposal_attention(
+            proposals, scans_transformed.image_sizes, features
+        )
+        global_logits = self.global_classifier(features, attention_masks=attention_masks)
         
         if self.training:
             if targets_transformed is None:
@@ -347,20 +441,13 @@ class DualHeadSCLCModel(nn.Module):
                     "DualHeadSCLCModel.forward expected 'targets' with 'scan_label' "
                     "for each sample during training, but got None."
                 )
-            missing_labels = [idx for idx, t in enumerate(targets_transformed) if "scan_label" not in t]
-            if missing_labels:
-                raise ValueError(
-                    "DualHeadSCLCModel.forward expected each target to contain a "
-                    "'scan_label' key during training, but it is missing for indices: "
-                    f"{missing_labels}"
-                )
             gt_labels = torch.stack([t["scan_label"] for t in targets_transformed])
-            global_loss = F.cross_entropy(
-                global_logits, gt_labels,
-                weight=self.class_weights,
-                label_smoothing=0.1
+            global_loss = focal_loss(
+                global_logits, gt_labels, alpha=self.class_weights
             )
             losses['global_classification_loss'] = global_loss
+            if return_logits:
+                losses['global_logits'] = global_logits
             return losses
         else:
             global_probabilities = F.softmax(global_logits, dim=1)
