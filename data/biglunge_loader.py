@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from monai.data import PersistentDataset  # type: ignore[attr-defined]
 from monai.transforms import Compose  # type: ignore[attr-defined]
+from tqdm import tqdm
 
 from data.transforms import get_train_transforms, get_val_transforms
 
@@ -133,7 +134,13 @@ def create_biglunge_dataset(
     os.makedirs(cache_dir, exist_ok=True)
     print(f"PersistentDataset cache_dir='{cache_dir}'")
 
-    return PersistentDataset(data=data_list, transform=transforms, cache_dir=cache_dir)
+    ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=cache_dir)
+
+    # Warm cache with progress bar (no-op for already-cached items)
+    for i in tqdm(range(len(ds)), desc=f"Caching BigLunge [{split}]", unit="img"):
+        ds[i]
+
+    return ds
 
 
 def get_class_names() -> List[str]:

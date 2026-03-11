@@ -13,7 +13,6 @@ from collections import Counter
 from models.model_selection import get_sclc_model
 from models.config import get_config
 from training.train import (
-    create_dataset,
     sclc_collate_fn,
     train_epoch,
     validate_epoch
