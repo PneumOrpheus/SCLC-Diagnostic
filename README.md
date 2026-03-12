@@ -205,7 +205,7 @@ Runs the complete training pipeline: domain-adaptive pre-training on Lung-PET-CT
 python main.py --mode full \
     --backbone swinv2 \
     --dapt-backbone-dataset /path/to/Lung-PET-CT-Dx \
-    --fine-tuning-dataset /path/to/BigLunge/data \
+    --fine-tuning-dataset /path/to/BigLunge \
     --fine-tuning-csv /path/to/BigLunge/patients_parameters.csv \
     --annotation-dir /path/to/Annotation
 ```
