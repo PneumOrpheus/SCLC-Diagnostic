@@ -1,7 +1,10 @@
 import sys
+import random
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
+import torch.backends.cudnn as cudnn
+from torch.amp import GradScaler
 from monai.data.dataloader import DataLoader
 import numpy as np
 import os
@@ -91,7 +94,7 @@ Examples:
         "--backbone",
         type=str,
         default="swinv2",
-        choices=["swin", "swinv2", "resnet", "densenet"],
+        choices=["swin", "swinv2", "swin3d", "swinv2_3d", "resnet", "densenet"],
         help="Backbone model architecture"
     )
     parser.add_argument(
@@ -172,6 +175,21 @@ Examples:
     parser.add_argument("--annotation-dir", type=str, default="/home/data/Annotation",
                         help="Path to annotation directory with per-patient XML bounding boxes")
 
+    # Performance / acceleration
+    parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility")
+    parser.add_argument("--disable-amp", action="store_true",
+                        help="Disable automatic mixed precision (AMP) training")
+    parser.add_argument("--accumulation-steps", type=int, default=1,
+                        help="Gradient accumulation steps (effective batch = batch-size * accumulation-steps)")
+    parser.add_argument("--label-smoothing", type=float, default=0.1,
+                        help="Label smoothing factor (0.0 = disabled)")
+    parser.add_argument("--clip-grad", type=float, default=1.0,
+                        help="Max gradient norm for clipping (0 = disabled)")
+
+    # 3D backbone options
+    parser.add_argument("--depth-size", type=int, default=16,
+                        help="Number of depth slices for 3D backbone models")
+
     return parser.parse_args()
 
 
@@ -204,7 +222,9 @@ def create_dataloaders(
     convert_to_rgb: bool = True,
     num_workers: int = 4,
     annotation_dir: str = "",
-    use_multichannel_windowing: bool = False
+    use_multichannel_windowing: bool = False,
+    use_3d: bool = False,
+    depth_size: int = 16
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Create train, val, test dataloaders for specified dataset."""
 
@@ -216,6 +236,8 @@ def create_dataloaders(
             convert_to_rgb=convert_to_rgb,
             use_multichannel_windowing=use_multichannel_windowing,
             num_workers=num_workers,
+            use_3d=use_3d,
+            depth_size=depth_size,
         )
         val_dataset = create_biglunge_dataset(
             data_path=data_path,
@@ -224,6 +246,8 @@ def create_dataloaders(
             convert_to_rgb=convert_to_rgb,
             use_multichannel_windowing=use_multichannel_windowing,
             num_workers=num_workers,
+            use_3d=use_3d,
+            depth_size=depth_size,
         )
         test_dataset = create_biglunge_dataset(
             data_path=data_path,
@@ -232,6 +256,8 @@ def create_dataloaders(
             convert_to_rgb=convert_to_rgb,
             use_multichannel_windowing=use_multichannel_windowing,
             num_workers=num_workers,
+            use_3d=use_3d,
+            depth_size=depth_size,
         )
     else:  # lung_pet_ct
         train_dataset = create_lung_pet_ct_dataset(
@@ -241,6 +267,8 @@ def create_dataloaders(
             use_multichannel_windowing=use_multichannel_windowing,
             num_workers=num_workers,
             annotation_dir=annotation_dir,
+            use_3d=use_3d,
+            depth_size=depth_size,
         )
         val_dataset = create_lung_pet_ct_dataset(
             data_path=data_path,
@@ -249,6 +277,8 @@ def create_dataloaders(
             use_multichannel_windowing=use_multichannel_windowing,
             num_workers=num_workers,
             annotation_dir=annotation_dir,
+            use_3d=use_3d,
+            depth_size=depth_size,
         )
         test_dataset = create_lung_pet_ct_dataset(
             data_path=data_path,
@@ -256,6 +286,8 @@ def create_dataloaders(
             convert_to_rgb=convert_to_rgb,
             num_workers=num_workers,
             annotation_dir=annotation_dir,
+            use_3d=use_3d,
+            depth_size=depth_size,
         )
 
     train_loader = DataLoader(
@@ -299,7 +331,11 @@ def run_dapt_phase(
     checkpoint_dir: str,
     logger,
     backbone_type: str,
-    patience: int = 10
+    patience: int = 10,
+    scaler: Optional[GradScaler] = None,
+    accumulation_steps: int = 1,
+    clip_grad: float = 1.0,
+    label_smoothing: float = 0.0,
 ) -> str:
     """
     Phase 1: Domain-Adaptive Pre-Training (DAPT)
@@ -346,7 +382,11 @@ def run_dapt_phase(
         logger.info(f"\n--- DAPT Epoch {epoch+1}/{epochs} (LR: {optimizer.param_groups[0]['lr']:.2e}) ---")
 
         # Train
-        train_metrics = train_epoch(model, optimizer, train_loader, device, epoch + 1)
+        train_metrics = train_epoch(
+            model, optimizer, train_loader, device, epoch + 1,
+            scaler=scaler, accumulation_steps=accumulation_steps,
+            clip_grad=clip_grad, label_smoothing=label_smoothing,
+        )
 
         # Validation
         val_metrics = validate_epoch(model, val_loader, device, phase="val")
@@ -355,7 +395,8 @@ def run_dapt_phase(
 
         logger.info(
             f"Epoch {epoch+1}: Train Loss: {train_metrics['loss']:.4f}, "
-            f"Val Loss: {val_metrics['loss']:.4f}"
+            f"Val Loss: {val_metrics['loss']:.4f}, "
+            f"Grad Norm: {train_metrics.get('grad_norm', 0):.4f}"
         )
 
         # Save best model
@@ -378,14 +419,17 @@ def run_dapt_phase(
             checkpoint_path = os.path.join(
                 checkpoint_dir, f"dapt_{backbone_type}_epoch_{epoch+1}.pth"
             )
-            torch.save({
+            save_dict = {
                 "epoch": epoch + 1,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": scheduler.state_dict(),
                 "best_val_loss": best_val_loss,
                 "phase": "dapt"
-            }, checkpoint_path)
+            }
+            if scaler is not None:
+                save_dict["scaler_state_dict"] = scaler.state_dict()
+            torch.save(save_dict, checkpoint_path)
             logger.info(f"Saved DAPT checkpoint: {checkpoint_path}")
 
     logger.info(f"\nDAPT Phase complete. Best checkpoint: {best_checkpoint_path}")
@@ -403,7 +447,11 @@ def run_finetune_phase(
     checkpoint_dir: str,
     logger,
     backbone_type: str,
-    patience: int = 10
+    patience: int = 10,
+    scaler: Optional[GradScaler] = None,
+    accumulation_steps: int = 1,
+    clip_grad: float = 1.0,
+    label_smoothing: float = 0.0,
 ) -> str:
     """
     Phase 2: Fine-tuning on BigLunge Dataset
@@ -468,7 +516,12 @@ def run_finetune_phase(
         logger.info(f"\n--- Fine-tune Epoch {epoch+1}/{epochs} (LR backbone: {current_lr_backbone:.2e}, head: {current_lr_head:.2e}) ---")
 
         # Train with mixup augmentation
-        train_metrics = train_epoch(model, optimizer, train_loader, device, epoch + 1, use_mixup=True, mixup_alpha=0.2)
+        train_metrics = train_epoch(
+            model, optimizer, train_loader, device, epoch + 1,
+            use_mixup=True, mixup_alpha=0.2,
+            scaler=scaler, accumulation_steps=accumulation_steps,
+            clip_grad=clip_grad, label_smoothing=label_smoothing,
+        )
 
         # Validation
         val_metrics = validate_epoch(model, val_loader, device, phase="val")
@@ -479,7 +532,8 @@ def run_finetune_phase(
             f"Epoch {epoch+1}: Train Loss: {train_metrics['loss']:.4f}, "
             f"Val Loss: {val_metrics['loss']:.4f}, "
             f"Det Loss: {val_metrics['det_loss']:.4f}, "
-            f"Global Loss: {val_metrics['global_loss']:.4f}"
+            f"Global Loss: {val_metrics['global_loss']:.4f}, "
+            f"Grad Norm: {train_metrics.get('grad_norm', 0):.4f}"
         )
 
         # Save best model
@@ -502,14 +556,17 @@ def run_finetune_phase(
             checkpoint_path = os.path.join(
                 checkpoint_dir, f"finetune_{backbone_type}_epoch_{epoch+1}.pth"
             )
-            torch.save({
+            save_dict = {
                 "epoch": epoch + 1,
                 "model_state_dict": model.state_dict(),
                 "optimizer_state_dict": optimizer.state_dict(),
                 "scheduler_state_dict": scheduler.state_dict(),
                 "best_val_loss": best_val_loss,
                 "phase": "finetune"
-            }, checkpoint_path)
+            }
+            if scaler is not None:
+                save_dict["scaler_state_dict"] = scaler.state_dict()
+            torch.save(save_dict, checkpoint_path)
             logger.info(f"Saved fine-tune checkpoint: {checkpoint_path}")
 
     logger.info(f"\nFine-tuning complete. Best checkpoint: {best_checkpoint_path}")
@@ -654,8 +711,22 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(args.checkpoint_dir, exist_ok=True)
 
+    # Reproducibility seeding
+    seed = args.seed
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+
+    # cuDNN auto-tuner
+    cudnn.benchmark = True
+
     # Setup device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # AMP setup
+    amp_enabled = (not args.disable_amp) and (device.type == "cuda")
+    scaler = GradScaler(enabled=amp_enabled)
 
     # Setup logger
     logger = create_logger(
@@ -670,6 +741,11 @@ def main():
     logger.info(f"Mode: {args.mode}")
     logger.info(f"Backbone: {args.backbone}")
     logger.info(f"Device: {device}")
+    logger.info(f"Seed: {seed}")
+    logger.info(f"AMP (mixed precision): {amp_enabled}")
+    logger.info(f"Gradient accumulation steps: {args.accumulation_steps}")
+    logger.info(f"Label smoothing: {args.label_smoothing}")
+    logger.info(f"Gradient clipping max norm: {args.clip_grad}")
     logger.info(f"DAPT Dataset: {args.dapt_backbone_dataset}")
     logger.info(f"Fine-tuning Dataset: {args.fine_tuning_dataset}")
     logger.info(f"Output Directory: {args.output_dir}")
@@ -697,6 +773,7 @@ def main():
         model.to(device)
 
         # Create test dataloader for BigLunge
+        use_3d = args.backbone in ("swin3d", "swinv2_3d")
         _, _, test_loader = create_dataloaders(
             data_path=args.fine_tuning_dataset,
             batch_size=args.batch_size,
@@ -704,7 +781,9 @@ def main():
             dataset_type="biglunge",
             csv_path=args.fine_tuning_csv,
             convert_to_rgb=uses_timm_model,
-            num_workers=args.num_workers
+            num_workers=args.num_workers,
+            use_3d=use_3d,
+            depth_size=args.depth_size
         )
 
         metrics = run_inference(model, test_loader, device, logger, args.output_dir)
@@ -733,6 +812,7 @@ def main():
         # Create DAPT dataloaders (with annotation bounding boxes)
         logger.info(f"\nLoading DAPT dataset from: {args.dapt_backbone_dataset}")
         logger.info(f"Annotation directory: {args.annotation_dir}")
+        use_3d = args.backbone in ("swin3d", "swinv2_3d")
         dapt_train_loader, dapt_val_loader, _ = create_dataloaders(
             data_path=args.dapt_backbone_dataset,
             batch_size=args.batch_size,
@@ -741,7 +821,9 @@ def main():
             convert_to_rgb=uses_timm_model,
             num_workers=args.num_workers,
             annotation_dir=args.annotation_dir,
-            use_multichannel_windowing=True
+            use_multichannel_windowing=True,
+            use_3d=use_3d,
+            depth_size=args.depth_size
         )
 
         # No class weights for DAPT - uniform weighting for stable backbone pre-training
@@ -760,7 +842,11 @@ def main():
             checkpoint_dir=args.checkpoint_dir,
             logger=logger,
             backbone_type=args.backbone,
-            patience=args.patience
+            patience=args.patience,
+            scaler=scaler,
+            accumulation_steps=args.accumulation_steps,
+            clip_grad=args.clip_grad,
+            label_smoothing=args.label_smoothing,
         )
 
         if args.mode == "dapt":
@@ -806,6 +892,7 @@ def main():
 
         # Create BigLunge dataloaders
         logger.info(f"\nLoading fine-tuning dataset from: {args.fine_tuning_dataset}")
+        use_3d = args.backbone in ("swin3d", "swinv2_3d")
         finetune_train_loader, finetune_val_loader, test_loader = create_dataloaders(
             data_path=args.fine_tuning_dataset,
             batch_size=args.batch_size,
@@ -814,7 +901,9 @@ def main():
             csv_path=args.fine_tuning_csv,
             convert_to_rgb=uses_timm_model,
             num_workers=args.num_workers,
-            use_multichannel_windowing=True
+            use_multichannel_windowing=True,
+            use_3d=use_3d,
+            depth_size=args.depth_size
         )
 
         # Compute class weights for BigLunge training set
@@ -834,7 +923,11 @@ def main():
             checkpoint_dir=args.checkpoint_dir,
             logger=logger,
             backbone_type=args.backbone,
-            patience=args.patience
+            patience=args.patience,
+            scaler=scaler,
+            accumulation_steps=args.accumulation_steps,
+            clip_grad=args.clip_grad,
+            label_smoothing=args.label_smoothing,
         )
 
         # Load best model for testing

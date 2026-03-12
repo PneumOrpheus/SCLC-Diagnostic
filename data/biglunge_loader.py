@@ -8,7 +8,7 @@ from monai.data import PersistentDataset  # type: ignore[attr-defined]
 from monai.transforms import Compose  # type: ignore[attr-defined]
 from tqdm import tqdm
 
-from data.transforms import get_train_transforms, get_val_transforms
+from data.transforms import get_train_transforms, get_val_transforms, get_train_transforms_3d, get_val_transforms_3d
 
 """
 BigLunge Dataset Loader — uses MONAI PersistentDataset for disk-cached transforms.
@@ -114,6 +114,8 @@ def create_biglunge_dataset(
     val_frac: float = 0.1,
     test_frac: float = 0.1,
     seed: int = 42,
+    use_3d: bool = False,
+    depth_size: int = 16,
     **kwargs: Any,
 ) -> PersistentDataset:
     """Create a PersistentDataset for BigLunge (disk-cached transforms)."""
@@ -122,12 +124,24 @@ def create_biglunge_dataset(
         split=split, val_frac=val_frac, test_frac=test_frac, seed=seed,
     )
 
-    get_transforms = get_train_transforms if split == "train" else get_val_transforms
-    transforms = get_transforms(
-        img_size=img_size,
-        convert_to_rgb=convert_to_rgb,
-        use_multichannel_windowing=use_multichannel_windowing,
-    )
+    if use_3d:
+        if split == "train":
+            transforms = get_train_transforms_3d(img_size=img_size, depth_size=depth_size)
+        else:
+            transforms = get_val_transforms_3d(img_size=img_size, depth_size=depth_size)
+    else:
+        if split == "train":
+            transforms = get_train_transforms(
+                img_size=img_size,
+                convert_to_rgb=convert_to_rgb,
+                use_multichannel_windowing=use_multichannel_windowing
+            )
+        else:
+            transforms = get_val_transforms(
+                img_size=img_size,
+                convert_to_rgb=convert_to_rgb,
+                use_multichannel_windowing=use_multichannel_windowing
+            )
 
     if cache_dir is None:
         cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "monai_biglunge", split)

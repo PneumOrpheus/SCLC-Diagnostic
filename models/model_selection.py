@@ -79,6 +79,67 @@ class SwinFeatureExtractor(nn.Module):
         return features
 
 
+class SwinFeatureExtractor3D(nn.Module):
+    """
+    Wrapper for 3D SwinTransformer models that extracts intermediate features
+    from each stage and collapses the depth dimension via adaptive average pooling
+    to produce 2D feature maps (NCHW) compatible with FPN.
+    """
+    patch_embed: nn.Module
+    pos_drop: nn.Module
+    layers: nn.ModuleList
+    ape: bool
+    absolute_pos_embed: torch.Tensor
+    num_features: List[int]
+    patches_resolution: Tuple[int, int, int]
+
+    def __init__(self, swin_model: nn.Module):
+        super(SwinFeatureExtractor3D, self).__init__()
+        self.patch_embed = swin_model.patch_embed  # type: ignore[attr-defined]
+        self.pos_drop = swin_model.pos_drop  # type: ignore[attr-defined]
+        self.layers = swin_model.layers  # type: ignore[attr-defined]
+        self.ape = swin_model.ape  # type: ignore[attr-defined]
+        if self.ape:
+            self.absolute_pos_embed = swin_model.absolute_pos_embed  # type: ignore[attr-defined]
+
+        self.num_features = [int(getattr(layer, "dim")) for layer in self.layers]
+        self.patches_resolution = swin_model.patches_resolution  # type: ignore[attr-defined]
+
+    def forward(self, x: torch.Tensor) -> List[torch.Tensor]:
+        """Extract multi-scale features, collapsing depth to 2D for FPN.
+
+        Args:
+            x: (B, C, D, H, W) 5D volume tensor.
+
+        Returns:
+            List of (B, C_i, H_i, W_i) 2D feature maps per stage.
+        """
+        x = self.patch_embed(x)
+        if self.ape:
+            x = x + self.absolute_pos_embed
+        x = self.pos_drop(x)
+
+        features = []
+        for i, layer in enumerate(self.layers):
+            blocks: nn.ModuleList = layer.blocks  # type: ignore[assignment]
+            for block in blocks:
+                x = block(x)
+
+            B, L, C = x.shape
+            D, H, W = layer.input_resolution  # type: ignore[union-attr]
+            # Reshape to 5D: (B, D, H, W, C) -> (B, C, D, H, W)
+            feat_5d = x.view(B, int(D), int(H), int(W), int(C)).permute(0, 4, 1, 2, 3).contiguous()
+            # Collapse depth via adaptive average pooling -> (B, C, 1, H, W) -> (B, C, H, W)
+            feat_2d = F.adaptive_avg_pool3d(feat_5d, (1, int(H), int(W))).squeeze(2)
+            features.append(feat_2d)
+
+            downsample: Optional[nn.Module] = layer.downsample  # type: ignore[assignment]
+            if downsample is not None:
+                x = downsample(x)
+
+        return features
+
+
 class FlexibleBackbone(nn.Module):
     """
     Pure backbone wrapper for timm/custom Swin models.
@@ -91,6 +152,7 @@ class FlexibleBackbone(nn.Module):
         print(f"Initializing Backbone: {model_name}")
         
         self._use_custom_swin = False
+        self._is_3d = False
 
         if config is not None:
             if logger is not None:
@@ -102,7 +164,11 @@ class FlexibleBackbone(nn.Module):
                 load_pretrained(config, swin_model, logger)
             
             # Wrap custom Swin model to extract multi-scale features
-            self.body = SwinFeatureExtractor(swin_model)
+            if config.MODEL.TYPE in ('swin3d', 'swinv2_3d'):
+                self.body = SwinFeatureExtractor3D(swin_model)
+                self._is_3d = True
+            else:
+                self.body = SwinFeatureExtractor(swin_model)
             self._use_custom_swin = True
         else:
             import timm
@@ -253,6 +319,7 @@ class DualHeadSCLCModel(nn.Module):
         super(DualHeadSCLCModel, self).__init__()
         
         self._train_backbone_only = train_backbone_only
+        self._is_3d = backbone_type in ("swin3d", "swinv2_3d")
         
         # Class weights for weighted CE loss
         self.register_buffer('class_weights', None)
@@ -261,6 +328,8 @@ class DualHeadSCLCModel(nn.Module):
         backbone_map = {
             "swin": "swin_base_patch4_window7_224",
             "swinv2": "swinv2_base_window12to24_192to384",
+            "swin3d": "swin3d_base_patch4_window7_224",
+            "swinv2_3d": "swinv2_3d_base_patch4_window7_224",
             "resnet": "resnet50",
             "densenet": "densenet121"
         }
@@ -405,10 +474,26 @@ class DualHeadSCLCModel(nn.Module):
         
     def forward(self, scans: List[torch.Tensor], targets: Optional[List[Dict]] = None,
                 return_logits: bool = False) -> Union[Dict[str, torch.Tensor], Tuple[List[Dict], torch.Tensor]]:
-        scans_transformed, targets_transformed = self.detector.transform(scans, targets)
-        
-        # Backbone + FPN forward pass
-        features = self.backbone(scans_transformed.tensors)
+        if self._is_3d:
+            # 3D path: scans are (C, H, W, D) tensors from MONAI 3D transforms.
+            # Stack into (B, C, H, W, D) then permute to (B, C, D, H, W) for Conv3d.
+            batch_5d = torch.stack(scans, dim=0)  # (B, C, H, W, D)
+            batch_5d = batch_5d.permute(0, 1, 4, 2, 3).contiguous()  # (B, C, D, H, W)
+            features = self.backbone(batch_5d)
+            # Build ImageList with 2D spatial sizes (H, W) for RPN/ROI heads
+            _, _, _, sH, sW = batch_5d.shape
+            image_sizes = [(sH, sW)] * len(scans)
+            # Create a dummy 2D tensor view for ImageList (RPN needs .tensors attribute)
+            # Use any 2D FPN feature to infer the batched tensor shape expected
+            first_feat = next(iter(features.values()))
+            B = first_feat.shape[0]
+            scans_transformed = ImageList(
+                torch.zeros(B, 1, sH, sW, device=batch_5d.device), image_sizes
+            )
+            targets_transformed = targets
+        else:
+            scans_transformed, targets_transformed = self.detector.transform(scans, targets)
+            features = self.backbone(scans_transformed.tensors)
         
         # Detection head - generates proposals and computes detection losses
         if self.training:
