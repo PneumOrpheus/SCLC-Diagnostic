@@ -248,6 +248,7 @@ def create_dataloaders(
     img_size: int = 224,
     prefetch_factor: int = 2,
     persistent_workers: bool = True,
+    testing: bool = False,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Create train, val, test dataloaders for specified dataset."""
 
@@ -268,21 +269,21 @@ def create_dataloaders(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        **loader_kwargs,
+        collate_fn=sclc_collate_fn,
     )
 
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         shuffle=False,
-        **loader_kwargs,
+        collate_fn=sclc_collate_fn,
     )
 
     test_loader = DataLoader(
         test_dataset,
         batch_size=batch_size,
         shuffle=False,
-        **loader_kwargs,
+        collate_fn=sclc_collate_fn,
     )
 
     return train_loader, val_loader, test_loader
@@ -774,10 +775,11 @@ def main():
             use_3d=use_3d,
             testing=args.testing,
             img_size=args.img_size,      
-            depth_size=args.depth_size
+            depth_size=args.depth_size,
             warm_cache=args.warm_cache,
             prefetch_factor=args.prefetch_factor,
             persistent_workers=(not args.disable_persistent_workers),
+
         )
 
         metrics = run_inference(model, test_loader, device, logger, args.output_dir)
