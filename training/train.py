@@ -91,8 +91,8 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10,
     optimizer.zero_grad()
 
     for i, (scans, targets) in enumerate(data_loader):
-        scans = list(scan.to(device) for scan in scans)
-        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        scans = [scan.to(device, non_blocking=True) for scan in scans]
+        targets = [{k: v.to(device, non_blocking=True) for k, v in t.items()} for t in targets]
         
         batch_size = len(scans)
         apply_mixup = use_mixup and batch_size > 1 and np.random.random() < 0.5
@@ -235,8 +235,8 @@ def validate_epoch(model, data_loader, device, phase="val"):
     print(f"Starting {phase} evaluation...")
     
     for scans, targets in data_loader:
-        scans = list(scan.to(device) for scan in scans)
-        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
+        scans = [scan.to(device, non_blocking=True) for scan in scans]
+        targets = [{k: v.to(device, non_blocking=True) for k, v in t.items()} for t in targets]
         
         loss_dict = model(scans, targets)
         

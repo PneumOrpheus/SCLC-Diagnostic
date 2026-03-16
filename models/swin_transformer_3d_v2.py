@@ -615,7 +615,6 @@ class SwinTransformerV2_3D(nn.Module):
             )
 
             # Ensure input resolution is divisible by window size
-            # Pad if necessary by adjusting window size down
             for dim_idx in range(3):
                 res = [D_i, H_i, W_i][dim_idx]
                 ws = layer_window_size[dim_idx]

@@ -367,6 +367,25 @@ def update_config(config, args):
     if _check_args('optim'):
         config.TRAIN.OPTIMIZER.NAME = args.optim
 
+    # Pipeline-specific CLI overrides
+    if hasattr(args, 'backbone'):
+        backbone_to_type = {
+            'swin': ('swin', 'swin_tiny_patch4_window7_224'),
+            'swinv2': ('swinv2', 'swinv2_tiny_patch4_window8_256'),
+            'swin3d': ('swin3d', 'swin3d_base_patch4_window7_224'),
+            'swinv2_3d': ('swinv2_3d', 'swinv2_3d_base_patch4_window7_224'),
+        }
+        if args.backbone in backbone_to_type:
+            model_type, model_name = backbone_to_type[args.backbone]
+            config.MODEL.TYPE = model_type
+            config.MODEL.NAME = model_name
+
+    if hasattr(args, 'depth_size') and args.depth_size:
+        if hasattr(config.MODEL, 'SWIN3D'):
+            config.MODEL.SWIN3D.DEPTH_SIZE = args.depth_size
+        if hasattr(config.MODEL, 'SWINV2_3D'):
+            config.MODEL.SWINV2_3D.DEPTH_SIZE = args.depth_size
+
     # set local rank for distributed training
     if PYTORCH_MAJOR_VERSION == 1:
         config.LOCAL_RANK = args.local_rank

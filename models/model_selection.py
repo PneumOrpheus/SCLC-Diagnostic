@@ -310,8 +310,8 @@ class DualHeadSCLCModel(nn.Module):
     Composite model wrapping Faster R-CNN and Global Classifier.
     
     Args:
-        train_backbone_only: If True, freezes FPN, detection head, and global classifier
-                            to train only the backbone as a baseline.
+        train_backbone_only: If True, freezes only detection branches (RPN + ROI heads)
+                            and optimizes backbone + FPN + global classifier.
     """
     def __init__(self, backbone_type: str, checkpoint_path: str = "", config: Optional[Any] = None, 
                  num_detection_classes: int = 4, num_global_classes: int = 3, 
@@ -392,19 +392,11 @@ class DualHeadSCLCModel(nn.Module):
             self._freeze_non_backbone_params()
     
     def _freeze_non_backbone_params(self) -> None:
-        """Freeze all parameters except the backbone for baseline training."""
-        # Freeze FPN
-        for param in self.backbone.fpn.parameters():
-            param.requires_grad = False
-        
+        """Freeze detector branches while keeping classification path trainable."""
         # Freeze detection head (RPN and ROI heads)
         for param in self.detector.rpn.parameters():
             param.requires_grad = False
         for param in self.detector.roi_heads.parameters():
-            param.requires_grad = False
-        
-        # Freeze global classifier
-        for param in self.global_classifier.parameters():
             param.requires_grad = False
     
     def _unfreeze_all_params(self) -> None:
@@ -417,7 +409,7 @@ class DualHeadSCLCModel(nn.Module):
         Toggle backbone-only training mode.
         
         Args:
-            enable: If True, freezes non-backbone params. If False, unfreezes all.
+            enable: If True, freezes detector branches (RPN/ROI). If False, unfreezes all.
         """
         self._train_backbone_only = enable
         if enable:
@@ -495,18 +487,27 @@ class DualHeadSCLCModel(nn.Module):
             scans_transformed, targets_transformed = self.detector.transform(scans, targets)
             features = self.backbone(scans_transformed.tensors)
         
-        # Detection head - generates proposals and computes detection losses
-        if self.training:
+        # Detection head - generates proposals and computes detection losses.
+        # In backbone-only mode, skip detector losses to avoid noisy gradients from frozen branches.
+        if self.training and self._train_backbone_only:
+            losses = {}
+            detections = []
+            proposals = []
+            attention_masks = None
+        elif self.training:
             proposals, proposals_losses = self.detector.rpn(
                 scans_transformed, features, targets_transformed
             )
             detections, detector_losses = self.detector.roi_heads(
                 features, proposals, scans_transformed.image_sizes, targets_transformed
             )
-            
+
             losses = {}
             losses.update(proposals_losses)
             losses.update(detector_losses)
+            attention_masks = self._build_proposal_attention(
+                proposals, scans_transformed.image_sizes, features
+            )
         else:
             proposals, _ = self.detector.rpn(
                 scans_transformed, features, None
@@ -515,11 +516,11 @@ class DualHeadSCLCModel(nn.Module):
                 features, proposals, scans_transformed.image_sizes, None
             )
             losses = {}
-        
-        # Proposal-guided attention for classification
-        attention_masks = self._build_proposal_attention(
-            proposals, scans_transformed.image_sizes, features
-        )
+
+            # Proposal-guided attention for inference/global prediction
+            attention_masks = self._build_proposal_attention(
+                proposals, scans_transformed.image_sizes, features
+            )
         global_logits = self.global_classifier(features, attention_masks=attention_masks)
         
         if self.training:
@@ -559,7 +560,8 @@ def get_sclc_model(
             Default 4: background + A(Adenocarcinoma) + B(Small Cell) + G(Squamous Cell)
         num_global_classes: Number of global classification classes.
             Default 3: A(Adenocarcinoma), B(Small Cell), G(Squamous Cell)
-        train_backbone_only: If True, freezes FPN and heads to train only backbone
+        train_backbone_only: If True, freezes detector branches and trains
+            backbone/FPN/global-classification pathway.
         config: Optional Microsoft-style yacs config object. If provided,
                 will use config.MODEL.PRETRAINED for checkpoint_path and
                 config.MODEL.NUM_CLASSES for num_global_classes.
