@@ -94,19 +94,19 @@ Examples:
         "--backbone",
         type=str,
         default="swinv2",
-        choices=["swin", "swinv2", "swin3d", "swinv2_3d", "resnet", "densenet"],
+        choices=["swin", "swinv2", "swin3d", "swinv2_3d", "resnet", "densenet", "swinunetr"],
         help="Backbone model architecture"
     )
     parser.add_argument(
         "--config",
         type=str,
-        default="/home/data/RadImageNet/RadImageNet_swin/rin_config.yaml",
+        # default="/home/data/RadImageNet/RadImageNet_swin/rin_config.yaml",
         help="Path to model config file"
     )
     parser.add_argument(
         "--initial-checkpoint",
         type=str,
-        default="/home/data/RadImageNet/RadImageNet_swin/rin_swintf.pth",
+        # default="/home/data/RadImageNet/RadImageNet_swin/rin_swintf.pth",
         help="Path to initial backbone checkpoint (RadImageNet weights)"
     )
 
@@ -147,13 +147,13 @@ Examples:
     )
 
     # Training hyperparameters - DAPT phase
-    parser.add_argument("--dapt-epochs", type=int, default=50,
+    parser.add_argument("--dapt-epochs", type=int, default=40,
                         help="Number of epochs for DAPT (backbone pre-training)")
     parser.add_argument("--dapt-lr", type=float, default=1e-4,
                         help="Learning rate for DAPT phase")
 
     # Training hyperparameters - Fine-tuning phase
-    parser.add_argument("--finetune-epochs", type=int, default=100,
+    parser.add_argument("--finetune-epochs", type=int, default=40,
                         help="Number of epochs for fine-tuning")
     parser.add_argument("--finetune-lr", type=float, default=3e-5,
                         help="Learning rate for fine-tuning")
@@ -187,8 +187,14 @@ Examples:
                         help="Max gradient norm for clipping (0 = disabled)")
 
     # 3D backbone options
-    parser.add_argument("--depth-size", type=int, default=16,
-                        help="Number of depth slices for 3D backbone models")
+    parser.add_argument("--img-size", type=int, default=224, help="Target spatial size (H and W)")
+
+    parser.add_argument("--depth-size", type=int, default=64, help="Number of depth slices in the CT images")
+
+    # Testing flag
+    parser.add_argument("--testing", action="store_true", default=False,
+                        help="Use a tiny subset of the dataset for testing the pipeline")
+
 
     return parser.parse_args()
 
@@ -224,70 +230,23 @@ def create_dataloaders(
     annotation_dir: str = "",
     use_multichannel_windowing: bool = False,
     use_3d: bool = False,
-    depth_size: int = 16
+    testing: bool = False,
+    img_size: int = 224,
+    depth_size: int = 64,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Create train, val, test dataloaders for specified dataset."""
 
     if dataset_type == "biglunge":
-        train_dataset = create_biglunge_dataset(
-            data_path=data_path,
-            csv_path=csv_path,
-            split="train",
-            convert_to_rgb=convert_to_rgb,
-            use_multichannel_windowing=use_multichannel_windowing,
-            num_workers=num_workers,
-            use_3d=use_3d,
-            depth_size=depth_size,
-        )
-        val_dataset = create_biglunge_dataset(
-            data_path=data_path,
-            csv_path=csv_path,
-            split="val",
-            convert_to_rgb=convert_to_rgb,
-            use_multichannel_windowing=use_multichannel_windowing,
-            num_workers=num_workers,
-            use_3d=use_3d,
-            depth_size=depth_size,
-        )
-        test_dataset = create_biglunge_dataset(
-            data_path=data_path,
-            csv_path=csv_path,
-            split="test",
-            convert_to_rgb=convert_to_rgb,
-            use_multichannel_windowing=use_multichannel_windowing,
-            num_workers=num_workers,
-            use_3d=use_3d,
-            depth_size=depth_size,
+        train_dataset, val_dataset, test_dataset = create_biglunge_dataset(
+            data_path=data_path, csv_path=csv_path, img_size=img_size, depth_size=depth_size,
+            convert_to_rgb=convert_to_rgb, use_multichannel_windowing=use_multichannel_windowing,
+            num_workers=num_workers, use_3d=use_3d, testing=testing,
         )
     else:  # lung_pet_ct
-        train_dataset = create_lung_pet_ct_dataset(
-            data_path=data_path,
-            split="train",
-            convert_to_rgb=convert_to_rgb,
-            use_multichannel_windowing=use_multichannel_windowing,
-            num_workers=num_workers,
-            annotation_dir=annotation_dir,
-            use_3d=use_3d,
-            depth_size=depth_size,
-        )
-        val_dataset = create_lung_pet_ct_dataset(
-            data_path=data_path,
-            split="val",
-            convert_to_rgb=convert_to_rgb,
-            use_multichannel_windowing=use_multichannel_windowing,
-            num_workers=num_workers,
-            annotation_dir=annotation_dir,
-            use_3d=use_3d,
-            depth_size=depth_size,
-        )
-        test_dataset = create_lung_pet_ct_dataset(
-            data_path=data_path,
-            split="test",
-            convert_to_rgb=convert_to_rgb,
-            num_workers=num_workers,
-            annotation_dir=annotation_dir,
-            use_3d=use_3d,
-            depth_size=depth_size,
+        train_dataset, val_dataset, test_dataset = create_lung_pet_ct_dataset(
+            data_path=data_path, img_size=img_size, depth_size=depth_size,
+            convert_to_rgb=convert_to_rgb, use_multichannel_windowing=use_multichannel_windowing,
+            num_workers=num_workers, annotation_dir=annotation_dir, use_3d=use_3d, testing=testing,
         )
 
     train_loader = DataLoader(
@@ -351,10 +310,9 @@ def run_dapt_phase(
     logger.info("PHASE 1: Domain-Adaptive Pre-Training (DAPT)")
     logger.info("-" * 70)
     logger.info(f"Epochs: {epochs}, Learning Rate: {lr}, Patience: {patience}")
-    logger.info("Mode: Backbone-only training (FPN, detection, classifier frozen)")
-
-    # Freeze everything except backbone for stable pre-training
-    model.set_train_backbone_only(True)
+    
+    logger.info("Mode: DAPT training (global classifier frozen, backbone + FPN + detection heads active)")
+    model.freeze_global_classifier_only()
 
     # Optimize backbone parameters only
     params = [p for p in model.parameters() if p.requires_grad]
@@ -381,14 +339,12 @@ def run_dapt_phase(
     for epoch in range(epochs):
         logger.info(f"\n--- DAPT Epoch {epoch+1}/{epochs} (LR: {optimizer.param_groups[0]['lr']:.2e}) ---")
 
-        # Train
         train_metrics = train_epoch(
             model, optimizer, train_loader, device, epoch + 1,
             scaler=scaler, accumulation_steps=accumulation_steps,
             clip_grad=clip_grad, label_smoothing=label_smoothing,
         )
 
-        # Validation
         val_metrics = validate_epoch(model, val_loader, device, phase="val")
 
         scheduler.step()
@@ -752,8 +708,12 @@ def main():
     logger.info(f"Checkpoint Directory: {args.checkpoint_dir}")
 
     # Determine if using timm model (for RGB conversion)
-    uses_timm_model = not (args.initial_checkpoint and args.config)
+    uses_timm_model = (
+    not (args.initial_checkpoint and args.config)
+    and args.backbone not in ("swin3d", "swinv2_3d", "swinunetr")
+    ) 
 
+    use_3d = args.backbone in ("swin3d", "swinv2_3d", "swinunetr")
     # --------------
     # Inference Mode
     # --------------
@@ -769,11 +729,11 @@ def main():
             train_backbone_only=False,
             logger=logger
         )
-        model.load_state_dict(torch.load(args.model_checkpoint, map_location=device))
+        model.load_state_dict(torch.load(args.model_checkpoint, map_location=device, weights_only= False))
         model.to(device)
 
         # Create test dataloader for BigLunge
-        use_3d = args.backbone in ("swin3d", "swinv2_3d")
+        
         _, _, test_loader = create_dataloaders(
             data_path=args.fine_tuning_dataset,
             batch_size=args.batch_size,
@@ -783,6 +743,8 @@ def main():
             convert_to_rgb=uses_timm_model,
             num_workers=args.num_workers,
             use_3d=use_3d,
+            testing=args.testing,
+            img_size=args.img_size,      
             depth_size=args.depth_size
         )
 
@@ -794,10 +756,11 @@ def main():
     # Full or Dapt Mode - Initialize model with RadImageNet weights
     # -------------------------------------------------------------
     if args.mode in ["full", "dapt"]:
-        logger.info(f"\nInitializing model with RadImageNet weights: {args.initial_checkpoint}")
+        
         
         config = None
         if args.config and os.path.exists(args.config):
+            logger.info(f"\nInitializing model from config: {args.initial_checkpoint}")
             config = get_config(args)
 
         model = get_sclc_model(
@@ -812,7 +775,7 @@ def main():
         # Create DAPT dataloaders (with annotation bounding boxes)
         logger.info(f"\nLoading DAPT dataset from: {args.dapt_backbone_dataset}")
         logger.info(f"Annotation directory: {args.annotation_dir}")
-        use_3d = args.backbone in ("swin3d", "swinv2_3d")
+
         dapt_train_loader, dapt_val_loader, _ = create_dataloaders(
             data_path=args.dapt_backbone_dataset,
             batch_size=args.batch_size,
@@ -823,6 +786,8 @@ def main():
             annotation_dir=args.annotation_dir,
             use_multichannel_windowing=True,
             use_3d=use_3d,
+            testing=args.testing,
+            img_size=args.img_size,      
             depth_size=args.depth_size
         )
 
@@ -892,7 +857,6 @@ def main():
 
         # Create BigLunge dataloaders
         logger.info(f"\nLoading fine-tuning dataset from: {args.fine_tuning_dataset}")
-        use_3d = args.backbone in ("swin3d", "swinv2_3d")
         finetune_train_loader, finetune_val_loader, test_loader = create_dataloaders(
             data_path=args.fine_tuning_dataset,
             batch_size=args.batch_size,
@@ -903,6 +867,8 @@ def main():
             num_workers=args.num_workers,
             use_multichannel_windowing=True,
             use_3d=use_3d,
+            testing=args.testing,
+            img_size=args.img_size,      
             depth_size=args.depth_size
         )
 

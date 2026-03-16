@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from monai.data import PersistentDataset  # type: ignore[attr-defined]
 from monai.transforms import Compose  # type: ignore[attr-defined]
@@ -41,12 +41,12 @@ def load_patient_labels(csv_path: str) -> Dict[int, int]:
 def get_biglunge_data_list(
     data_path: str,
     csv_path: str,
-    split: str = "train",
     val_frac: float = 0.1,
     test_frac: float = 0.1,
     seed: int = 42,
-) -> List[Dict[str, Any]]:
-    """Build list of {image, scan_label, patient_id} dicts with patient-level splitting."""
+    testing: bool = False,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Build {split: data_list} dict with patient-level splitting."""
     if not os.path.isdir(data_path):
         raise ValueError(f"Data path '{data_path}' does not exist or is not a directory.")
     if not os.path.isfile(csv_path):
@@ -73,39 +73,41 @@ def get_biglunge_data_list(
     n_val = int(n_total * val_frac)
     n_train = n_total - n_test - n_val
 
-    if split == "train":
-        selected = patient_folders[:n_train]
-    elif split == "val":
-        selected = patient_folders[n_train:n_train + n_val]
-    elif split == "test":
-        selected = patient_folders[n_train + n_val:]
-    else:
-        selected = patient_folders
+    split_patients = {
+        "train": patient_folders[:n_train],
+        "val": patient_folders[n_train:n_train + n_val],
+        "test": patient_folders[n_train + n_val:],
+    }
 
-    print(f"Split '{split}': {len(selected)} patients.")
+    result: Dict[str, List[Dict[str, Any]]] = {}
+    for split, selected in split_patients.items():
+        print(f"Split '{split}': {len(selected)} patients.")
+        data_list = []
+        for pid in selected:
+            patient_dir = data_root / str(pid)
+            if not patient_dir.is_dir():
+                continue
+            label = patient_labels[pid]
+            for nii in patient_dir.glob("*.nii*"):
+                if "_label_Lungs_auto" not in nii.name:
+                    data_list.append({"image": str(nii), "scan_label": label, "patient_id": pid})
+                    if testing and len(data_list) >= 2:
+                        break
+            if testing and len(data_list) >= 2:
+                break
 
-    data_list = []
-    for pid in selected:
-        patient_dir = data_root / str(pid)
-        if not patient_dir.is_dir():
-            continue
-        label = patient_labels[pid]
-        for nii in patient_dir.glob("*.nii*"):
-            if "_label_Lungs_auto" not in nii.name:
-                data_list.append({"image": str(nii), "scan_label": label, "patient_id": pid})
+        class_counts: Dict[int, int] = {}
+        for item in data_list:
+            class_counts[item["scan_label"]] = class_counts.get(item["scan_label"], 0) + 1
+        print(f"  {len(data_list)} images, class distribution: {class_counts}")
+        result[split] = data_list
 
-    class_counts: Dict[int, int] = {}
-    for item in data_list:
-        class_counts[item["scan_label"]] = class_counts.get(item["scan_label"], 0) + 1
-    print(f"  {len(data_list)} images, class distribution: {class_counts}")
-
-    return data_list
+    return result
 
 
 def create_biglunge_dataset(
     data_path: str,
     csv_path: str,
-    split: str = "train",
     img_size: int = 224,
     convert_to_rgb: bool = True,
     use_multichannel_windowing: bool = False,
@@ -115,46 +117,55 @@ def create_biglunge_dataset(
     test_frac: float = 0.1,
     seed: int = 42,
     use_3d: bool = False,
-    depth_size: int = 16,
+    testing: bool = False,
     **kwargs: Any,
-) -> PersistentDataset:
-    """Create a PersistentDataset for BigLunge (disk-cached transforms)."""
-    data_list = get_biglunge_data_list(
+) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
+    """Create train/val/test PersistentDatasets for BigLunge (disk-cached transforms)."""
+    all_splits = get_biglunge_data_list(
         data_path=data_path, csv_path=csv_path,
-        split=split, val_frac=val_frac, test_frac=test_frac, seed=seed,
+        val_frac=val_frac, test_frac=test_frac, seed=seed,
+        testing=testing,
     )
 
-    if use_3d:
-        if split == "train":
-            transforms = get_train_transforms_3d(img_size=img_size, depth_size=depth_size)
+    datasets = []
+    for split in ("train", "val", "test"):
+        data_list = all_splits[split]
+
+        if use_3d:
+            if split == "train":
+                transforms = get_train_transforms_3d(img_size=img_size)
+            else:
+                transforms = get_val_transforms_3d(img_size=img_size)
         else:
-            transforms = get_val_transforms_3d(img_size=img_size, depth_size=depth_size)
-    else:
-        if split == "train":
-            transforms = get_train_transforms(
-                img_size=img_size,
-                convert_to_rgb=convert_to_rgb,
-                use_multichannel_windowing=use_multichannel_windowing
-            )
+            if split == "train":
+                transforms = get_train_transforms(
+                    img_size=img_size,
+                    convert_to_rgb=convert_to_rgb,
+                    use_multichannel_windowing=use_multichannel_windowing
+                )
+            else:
+                transforms = get_val_transforms(
+                    img_size=img_size,
+                    convert_to_rgb=convert_to_rgb,
+                    use_multichannel_windowing=use_multichannel_windowing
+                )
+
+        split_cache_dir = cache_dir
+        if split_cache_dir is None:
+            split_cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "monai_biglunge", split)
         else:
-            transforms = get_val_transforms(
-                img_size=img_size,
-                convert_to_rgb=convert_to_rgb,
-                use_multichannel_windowing=use_multichannel_windowing
-            )
+            split_cache_dir = os.path.join(cache_dir, split)
+        os.makedirs(split_cache_dir, exist_ok=True)
+        print(f"PersistentDataset cache_dir='{split_cache_dir}'")
 
-    if cache_dir is None:
-        cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "monai_biglunge", split)
-    os.makedirs(cache_dir, exist_ok=True)
-    print(f"PersistentDataset cache_dir='{cache_dir}'")
+        ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=split_cache_dir)
 
-    ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=cache_dir)
+        for i in tqdm(range(len(ds)), desc=f"Caching BigLunge [{split}]", unit="img"):
+            ds[i]
 
-    # Warm cache with progress bar (no-op for already-cached items)
-    for i in tqdm(range(len(ds)), desc=f"Caching BigLunge [{split}]", unit="img"):
-        ds[i]
+        datasets.append(ds)
 
-    return ds
+    return datasets[0], datasets[1], datasets[2]
 
 
 def get_class_names() -> List[str]:

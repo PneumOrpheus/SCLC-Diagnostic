@@ -90,126 +90,6 @@ class LoadNiftiWithRGBSupportd(MapTransform):
         return d
 
 
-class ExtractMiddleSliced(MapTransform):
-    """Extract the middle 2D slice from a 3D volume along the slice axis.
-    
-    For NIfTI volumes with shape (C, X, Y, Z), extracts middle slice along Z
-    to get (C, X, Y). NIfTI stores axial CT slices along the last spatial axis.
-    """
-    
-    def __init__(
-        self, 
-        keys: KeysCollection,
-        allow_missing_keys: bool = False
-    ) -> None:
-        super().__init__(keys, allow_missing_keys)
-    
-    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
-        d: Dict[Hashable, Any] = dict(data)
-        for key in self.key_iterator(d):
-            volume = d[key]
-            if hasattr(volume, 'ndim') and volume.ndim >= 3:
-                # NIfTI data is (C, X, Y, Z) - slices are along the last axis
-                if volume.ndim == 4:
-                    depth_axis = 3
-                elif volume.ndim == 3:
-                    depth_axis = 2
-                else:
-                    depth_axis = -1
-                    
-                mid_idx = volume.shape[depth_axis] // 2
-                if isinstance(volume, np.ndarray):
-                    d[key] = np.take(volume, mid_idx, axis=depth_axis)
-                else:
-                    d[key] = volume.select(depth_axis, mid_idx)
-        return d
-
-
-class ExtractMultiSliced(MapTransform):
-    """Extract multiple adjacent slices from a 3D volume and aggregate via projection.
-    
-    Takes N slices centered around the middle of the volume and applies
-    max-intensity projection (MIP) to produce a single representative 2D slice.
-    MIP captures more diagnostic information than a single middle slice,
-    as tumors may span multiple slices.
-    """
-    
-    def __init__(
-        self,
-        keys: KeysCollection,
-        num_slices: int = 5,
-        aggregation: str = "max",
-        allow_missing_keys: bool = False
-    ) -> None:
-        super().__init__(keys, allow_missing_keys)
-        self.num_slices = num_slices
-        self.aggregation = aggregation
-    
-    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
-        d: Dict[Hashable, Any] = dict(data)
-        for key in self.key_iterator(d):
-            volume = d[key]
-            if hasattr(volume, 'ndim') and volume.ndim >= 3:
-                if volume.ndim == 4:
-                    depth_axis = 3
-                elif volume.ndim == 3:
-                    depth_axis = 2
-                else:
-                    depth_axis = -1
-                
-                num_available = volume.shape[depth_axis]
-                mid = num_available // 2
-                half = self.num_slices // 2
-                
-                start = max(0, mid - half)
-                end = min(num_available, start + self.num_slices)
-                start = max(0, end - self.num_slices)
-                
-                if isinstance(volume, np.ndarray):
-                    indices = list(range(start, end))
-                    slices = np.take(volume, indices, axis=depth_axis)
-                    if self.aggregation == "max":
-                        d[key] = np.max(slices, axis=depth_axis)
-                    else:
-                        d[key] = np.mean(slices, axis=depth_axis)
-                else:
-                    slices = volume.narrow(depth_axis, start, end - start)
-                    if self.aggregation == "max":
-                        d[key] = slices.max(dim=depth_axis)[0]
-                    else:
-                        d[key] = slices.mean(dim=depth_axis)
-        return d
-
-
-class ApplyWindowingd(MapTransform):
-    """Apply CT windowing to enhance contrast for specific tissues.
-    
-    Windowing formula maps HU values to [0, 1] range based on window center and width.
-    """
-    
-    def __init__(
-        self,
-        keys: KeysCollection,
-        window_center: float,
-        window_width: float,
-        allow_missing_keys: bool = False
-    ) -> None:
-        super().__init__(keys, allow_missing_keys)
-        self.window_center = window_center
-        self.window_width = window_width
-    
-    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
-        d: Dict[Hashable, Any] = dict(data)
-        for key in self.key_iterator(d):
-            volume = d[key]
-            img_min = self.window_center - (self.window_width / 2)
-            img_max = self.window_center + (self.window_width / 2)
-            
-            windowed = np.clip(volume, img_min, img_max)
-            d[key] = ((windowed - img_min) / (img_max - img_min)).astype(np.float32)
-        return d
-
-
 class CreateMultiChannelCTd(MapTransform):
     """Create a 3-channel representation using different CT windows.
     
@@ -405,8 +285,6 @@ def get_train_transforms(
             )
         )
     
-    # Extract multiple slices and max-project for richer 2D representation
-    transforms.append(ExtractMultiSliced(keys=["image"], num_slices=5, aggregation="max"))
     
     # Convert to RGB if needed (also ensures 3 channels)
     if convert_to_rgb and not use_multichannel_windowing:
@@ -511,34 +389,17 @@ def get_val_transforms(
 
 def get_train_transforms_3d(
     img_size: int = 224,
-    depth_size: int = 16,
+    depth_size: int = 64,
 ) -> Compose:
     """Get the 3D training transforms pipeline for volumetric models.
 
     Keeps the volume as (C, D, H, W) for 3D Swin Transformer input.
-    Uses single-channel grayscale (no RGB conversion).
-
-    Args:
-        img_size: Target spatial size (H, W).
-        depth_size: Number of depth slices to extract.
-
-    Returns:
-        Composed MONAI transforms for 3D training.
+    Uses single-channel grayscale (no RGB conversion) on the FULL scan depth.
     """
     transforms = [
         LoadNiftiWithRGBSupportd(keys=["image"]),
 
-        # Clip to valid HU range
-        ScaleIntensityRanged(
-            keys=["image"],
-            a_min=-1024,
-            a_max=3071,
-            b_min=-1024,
-            b_max=3071,
-            clip=True,
-        ),
-
-        # Scale intensity to [0, 1]
+        # Scale intensity to [0, 1] AND clip outliers dynamically
         ScaleIntensityRanged(
             keys=["image"],
             a_min=-1024,
@@ -548,19 +409,9 @@ def get_train_transforms_3d(
             clip=True,
         ),
 
-        # Extract sub-volume of fixed depth from center
-        ExtractSubVolumed(keys=["image"], num_slices=depth_size),
-
-        # Resize spatial dimensions (keeps depth intact)
-        # Input is (C, X, Y, Z) = (1, X, Y, depth_size)
-        # We resize X and Y to img_size
+        # SHRINKS The massive raw volumes into workable RAM limits
         Resized(keys=["image"], spatial_size=(img_size, img_size, depth_size), mode="trilinear"),
-
-        # --- 3D Data Augmentation ---
-        RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
-        RandFlipd(keys=["image"], prob=0.5, spatial_axis=1),
-        RandFlipd(keys=["image"], prob=0.3, spatial_axis=2),
-
+        
         # Intensity augmentation
         RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
         RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
@@ -570,35 +421,18 @@ def get_train_transforms_3d(
         AddPlaceholderTargetsd(keys=["image"]),
         ToTensord(keys=["image"]),
     ]
-
     return Compose(transforms)
 
 
 def get_val_transforms_3d(
     img_size: int = 224,
-    depth_size: int = 16,
+    depth_size: int = 64,
 ) -> Compose:
-    """Get the 3D validation/test transforms pipeline (no augmentation).
-
-    Args:
-        img_size: Target spatial size (H, W).
-        depth_size: Number of depth slices.
-
-    Returns:
-        Composed MONAI transforms for 3D validation/test.
-    """
+    """Get the 3D validation/test transforms pipeline for volumetric models."""
     transforms = [
         LoadNiftiWithRGBSupportd(keys=["image"]),
 
-        ScaleIntensityRanged(
-            keys=["image"],
-            a_min=-1024,
-            a_max=3071,
-            b_min=-1024,
-            b_max=3071,
-            clip=True,
-        ),
-
+        # Scale intensity and clip outliers dynamically
         ScaleIntensityRanged(
             keys=["image"],
             a_min=-1024,
@@ -608,11 +442,9 @@ def get_val_transforms_3d(
             clip=True,
         ),
 
-        ExtractSubVolumed(keys=["image"], num_slices=depth_size),
         Resized(keys=["image"], spatial_size=(img_size, img_size, depth_size), mode="trilinear"),
-
+        
         AddPlaceholderTargetsd(keys=["image"]),
         ToTensord(keys=["image"]),
     ]
-
     return Compose(transforms)

@@ -4,11 +4,12 @@ import numpy as np
 import torch
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from monai.data import PersistentDataset  # type: ignore[attr-defined]
 from monai.transforms import Compose  # type: ignore[attr-defined]
 from tqdm import tqdm
+import torchvision
 
 from data.transforms import get_train_transforms, get_val_transforms, get_train_transforms_3d, get_val_transforms_3d
 
@@ -26,11 +27,12 @@ def load_patient_annotations(
     annotation_dir: str,
     patient_short_id: str,
     orig_size: int = 512,
-    target_size: int = 224,
+    target_size: int = 512,  # CHANGED: Default is now 512 to match 3D raw scale
 ) -> Dict[str, torch.Tensor]:
     """Load and aggregate bounding box annotations from per-slice XML files.
 
-    Computes a union bounding box across all slices and scales to target_size.
+    Uses Non-Maximum Suppression (NMS) to merge overlapping slices of the same tumor
+    while preserving separate bounding boxes for physically distinct tumors.
     """
     patient_annot_dir = os.path.join(annotation_dir, patient_short_id)
     empty = {
@@ -71,34 +73,43 @@ def load_patient_annotations(
     if not all_boxes:
         return empty
 
-    # Union bounding box + most common class label
-    all_xmin = min(b[0] for b in all_boxes)
-    all_ymin = min(b[1] for b in all_boxes)
-    all_xmax = max(b[2] for b in all_boxes)
-    all_ymax = max(b[3] for b in all_boxes)
-    class_labels = [b[4] for b in all_boxes]
-    most_common = max(set(class_labels), key=class_labels.count)
-
+    # Scale the coordinates (since target_size = orig_size = 512, scale will be 1.0)
     scale = target_size / orig_size
-    scaled_box = torch.tensor(
-        [[all_xmin * scale, all_ymin * scale, all_xmax * scale, all_ymax * scale]],
-        dtype=torch.float32,
-    ).clamp(min=0, max=target_size)
+    scaled_boxes = []
+    labels_list = []
 
-    # Detection labels are 1-indexed (0 = background for Faster R-CNN)
-    det_label = torch.tensor([most_common + 1], dtype=torch.int64)
-    return {"boxes": scaled_box, "labels": det_label}
+    for b in all_boxes:
+        xmin, ymin, xmax, ymax, class_id = b
+        scaled_boxes.append([xmin * scale, ymin * scale, xmax * scale, ymax * scale])
+        labels_list.append(class_id + 1) # Detection labels are 1-indexed (0 = background)
+
+    # Convert to tensors
+    boxes_tensor = torch.tensor(scaled_boxes, dtype=torch.float32).clamp(min=0, max=target_size)
+    labels_tensor = torch.tensor(labels_list, dtype=torch.int64)
+
+    # Calculate area of each bounding box for NMS scoring
+    areas = (boxes_tensor[:, 2] - boxes_tensor[:, 0]) * (boxes_tensor[:, 3] - boxes_tensor[:, 1])
+    
+    # NMS merges boxes that have > 20% spatial overlap.
+    # It prefers keeping the boxes with the highest area (largest tumor slice representation).
+    keep_indices = torchvision.ops.nms(boxes_tensor, areas, iou_threshold=0.2)
+
+    return {
+        "boxes": boxes_tensor[keep_indices], 
+        "labels": labels_tensor[keep_indices]
+    }
 
 
 def get_data_list(
     data_path: str,
-    split: str = "train",
     val_frac: float = 0.1,
     test_frac: float = 0.1,
     seed: int = 42,
     annotation_dir: str = "",
-) -> List[Dict[str, Any]]:
-    """Build list of {image, scan_label, ...} dicts with patient-level splitting."""
+    testing: bool = False,
+    img_size: int = 224,    
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Build {split: data_list} dict with patient-level splitting."""
     if not os.path.isdir(data_path):
         raise ValueError(f"Data path '{data_path}' does not exist or is not a directory.")
 
@@ -112,7 +123,6 @@ def get_data_list(
     if not samples:
         raise ValueError(f"No valid data files found in '{data_path}'. Supported: {valid_extensions}")
 
-    # Filename format: Lung_Dx-A0126_1.3.6.1... -> Patient ID: Lung_Dx-A0126
     patient_files: Dict[str, List[str]] = {}
     for f in samples:
         parts = f.split("_")
@@ -130,95 +140,110 @@ def get_data_list(
     n_val = int(n_total * val_frac)
     n_train = n_total - n_test - n_val
 
-    if split == "train":
-        selected = set(all_patients[:n_train])
-    elif split == "val":
-        selected = set(all_patients[n_train:n_train + n_val])
-    elif split == "test":
-        selected = set(all_patients[n_train + n_val:])
-    else:
-        selected = set(all_patients)
+    split_patients = {
+        "train": set(all_patients[:n_train]),
+        "val": set(all_patients[n_train:n_train + n_val]),
+        "test": set(all_patients[n_train + n_val:]),
+    }
 
-    print(f"Split '{split}': {len(selected)} patients.")
-
-    data_list = []
     annotation_cache: Dict[str, Dict[str, torch.Tensor]] = {}
 
-    for pid in selected:
-        for f in patient_files.get(pid, []):
-            label = -1
-            for key, val in CLASS_MAP.items():
-                if f"-{key}" in f:
-                    label = val
+    result: Dict[str, List[Dict[str, Any]]] = {}
+    for split, selected in split_patients.items():
+        print(f"Split '{split}': {len(selected)} patients.")
+
+        data_list = []
+        for pid in selected:
+            for f in patient_files.get(pid, []):
+                label = -1
+                for key, val in CLASS_MAP.items():
+                    if f"-{key}" in f:
+                        label = val
+                        break
+                if label == -1:
+                    continue
+
+                entry: Dict[str, Any] = {
+                    "image": str(data_root / f),
+                    "scan_label": label,
+                }
+
+                if annotation_dir and os.path.isdir(annotation_dir):
+                    short_id = pid.split("-")[-1] if "-" in pid else pid
+                    if short_id not in annotation_cache:
+                        annotation_cache[short_id] = load_patient_annotations(
+                            annotation_dir, short_id, orig_size=512, target_size=img_size
+                        )
+                    annot = annotation_cache[short_id]
+                    entry["boxes"] = annot["boxes"]
+                    entry["labels"] = annot["labels"]
+
+                data_list.append(entry)
+                if testing and len(data_list) >= 2:
                     break
-            if label == -1:
-                continue
+            if testing and len(data_list) >= 2:
+                break
 
-            entry: Dict[str, Any] = {
-                "image": str(data_root / f),
-                "scan_label": label,
-            }
+        if annotation_dir:
+            n_with = sum(1 for d in data_list if d.get("boxes") is not None and d["boxes"].shape[0] > 0)
+            print(f"  {len(data_list)} images ({n_with} with annotations).")
+        else:
+            print(f"  {len(data_list)} images.")
 
-            if annotation_dir and os.path.isdir(annotation_dir):
-                short_id = pid.split("-")[-1] if "-" in pid else pid
-                if short_id not in annotation_cache:
-                    annotation_cache[short_id] = load_patient_annotations(annotation_dir, short_id)
-                annot = annotation_cache[short_id]
-                entry["boxes"] = annot["boxes"]
-                entry["labels"] = annot["labels"]
+        result[split] = data_list
 
-            data_list.append(entry)
-
-    if annotation_dir:
-        n_with = sum(1 for d in data_list if d.get("boxes") is not None and d["boxes"].shape[0] > 0)
-        print(f"  {len(data_list)} images ({n_with} with annotations).")
-    else:
-        print(f"  {len(data_list)} images.")
-
-    return data_list
+    return result
 
 
 def create_lung_pet_ct_dataset(
     data_path: str,
-    split: str = "train",
     img_size: int = 224,
+    depth_size: int = 64,   
     convert_to_rgb: bool = True,
     use_multichannel_windowing: bool = False,
     cache_dir: Optional[str] = None,
     num_workers: int = 4,
     annotation_dir: str = "",
     use_3d: bool = False,
-    depth_size: int = 16,
+    testing: bool = False,
     **kwargs: Any,
-) -> PersistentDataset:
-    """Create a PersistentDataset for Lung-PET-CT-Dx (disk-cached transforms)."""
-    data_list = get_data_list(data_path, split=split, annotation_dir=annotation_dir)
+) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
+    """Create train/val/test PersistentDatasets for Lung-PET-CT-Dx (disk-cached transforms)."""
+    all_splits = get_data_list(data_path, annotation_dir=annotation_dir, testing=testing, img_size=img_size)
 
-    if use_3d:
-        if split == "train":
-            transforms = get_train_transforms_3d(img_size=img_size, depth_size=depth_size)
+    datasets = []
+    for split in ("train", "val", "test"):
+        data_list = all_splits[split]
+
+        if use_3d:
+            if split == "train":
+                transforms = get_train_transforms_3d(img_size=img_size, depth_size=depth_size)
+            else:
+                transforms = get_val_transforms_3d(img_size=img_size, depth_size=depth_size)
         else:
-            transforms = get_val_transforms_3d(img_size=img_size, depth_size=depth_size)
-    else:
-        get_transforms = get_train_transforms if split == "train" else get_val_transforms
-        transforms = get_transforms(
-            img_size=img_size,
-            convert_to_rgb=convert_to_rgb,
-            use_multichannel_windowing=use_multichannel_windowing,
-        )
+            get_transforms = get_train_transforms if split == "train" else get_val_transforms
+            transforms = get_transforms(
+                img_size=img_size,
+                convert_to_rgb=convert_to_rgb,
+                use_multichannel_windowing=use_multichannel_windowing,
+            )
 
-    if cache_dir is None:
-        cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "monai_lung_pet_ct", split)
-    os.makedirs(cache_dir, exist_ok=True)
-    print(f"PersistentDataset cache_dir='{cache_dir}'")
+        split_cache_dir = cache_dir
+        if split_cache_dir is None:
+            split_cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "monai_lung_pet_ct", split)
+        else:
+            split_cache_dir = os.path.join(cache_dir, split)
+        os.makedirs(split_cache_dir, exist_ok=True)
+        print(f"PersistentDataset cache_dir='{split_cache_dir}'")
 
-    ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=cache_dir)
+        ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=split_cache_dir)
 
-    # Warm cache with progress bar (no-op for already-cached items)
-    for i in tqdm(range(len(ds)), desc=f"Caching Lung-PET-CT-Dx [{split}]", unit="img"):
-        ds[i]
+        for i in tqdm(range(len(ds)), desc=f"Caching Lung-PET-CT-Dx [{split}]", unit="img"):
+            ds[i]
 
-    return ds
+        datasets.append(ds)
+
+    return datasets[0], datasets[1], datasets[2]
 
 
 def get_class_names() -> List[str]:
@@ -244,23 +269,21 @@ if __name__ == "__main__":
     parser.add_argument("--img-size", type=int, default=224)
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--num-workers", type=int, default=4)
-    parser.add_argument("--splits", type=str, nargs="+", default=["train", "val", "test"])
     args = parser.parse_args()
 
     print(f"{'=' * 60}")
     print(f"Benchmark | img={args.img_size} batch={args.batch_size} workers={args.num_workers}")
     print(f"{'=' * 60}")
 
-    for split in args.splits:
-        print(f"\n--- {split} ---")
+    train_ds, val_ds, test_ds = create_lung_pet_ct_dataset(
+        data_path=args.data_path, img_size=args.img_size,
+        cache_dir=args.cache_dir, num_workers=args.num_workers,
+        annotation_dir=args.annotation_dir,
+    )
 
-        t0 = time.perf_counter()
-        ds = create_lung_pet_ct_dataset(
-            data_path=args.data_path, split=split, img_size=args.img_size,
-            cache_dir=args.cache_dir, num_workers=args.num_workers,
-            annotation_dir=args.annotation_dir,
-        )
-        print(f"  Creation     : {time.perf_counter() - t0:.2f}s  ({len(ds)} samples)")
+    for split, ds in [("train", train_ds), ("val", val_ds), ("test", test_ds)]:
+        print(f"\n--- {split} ---")
+        print(f"  Samples: {len(ds)}")
 
         t0 = time.perf_counter()
         _ = ds[0]
