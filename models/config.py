@@ -97,6 +97,38 @@ _C.MODEL.SWINV2.APE = False
 _C.MODEL.SWINV2.PATCH_NORM = True
 _C.MODEL.SWINV2.PRETRAINED_WINDOW_SIZES = [0, 0, 0, 0]
 
+# Swin Transformer 3D parameters (V1)
+_C.MODEL.SWIN3D = CN()
+_C.MODEL.SWIN3D.PATCH_SIZE = 4
+_C.MODEL.SWIN3D.DEPTH_PATCH_SIZE = 2
+_C.MODEL.SWIN3D.IN_CHANS = 1
+_C.MODEL.SWIN3D.DEPTH_SIZE = 16
+_C.MODEL.SWIN3D.EMBED_DIM = 96
+_C.MODEL.SWIN3D.DEPTHS = [2, 2, 6, 2]
+_C.MODEL.SWIN3D.NUM_HEADS = [3, 6, 12, 24]
+_C.MODEL.SWIN3D.WINDOW_SIZE = [2, 7, 7]
+_C.MODEL.SWIN3D.MLP_RATIO = 4.
+_C.MODEL.SWIN3D.QKV_BIAS = True
+_C.MODEL.SWIN3D.QK_SCALE = None
+_C.MODEL.SWIN3D.APE = False
+_C.MODEL.SWIN3D.PATCH_NORM = True
+
+# Swin Transformer V2 3D parameters
+_C.MODEL.SWINV2_3D = CN()
+_C.MODEL.SWINV2_3D.PATCH_SIZE = 4
+_C.MODEL.SWINV2_3D.DEPTH_PATCH_SIZE = 2
+_C.MODEL.SWINV2_3D.IN_CHANS = 1
+_C.MODEL.SWINV2_3D.DEPTH_SIZE = 16
+_C.MODEL.SWINV2_3D.EMBED_DIM = 96
+_C.MODEL.SWINV2_3D.DEPTHS = [2, 2, 6, 2]
+_C.MODEL.SWINV2_3D.NUM_HEADS = [3, 6, 12, 24]
+_C.MODEL.SWINV2_3D.WINDOW_SIZE = [2, 7, 7]
+_C.MODEL.SWINV2_3D.MLP_RATIO = 4.
+_C.MODEL.SWINV2_3D.QKV_BIAS = True
+_C.MODEL.SWINV2_3D.APE = False
+_C.MODEL.SWINV2_3D.PATCH_NORM = True
+_C.MODEL.SWINV2_3D.PRETRAINED_WINDOW_SIZES = [0, 0, 0, 0]
+
 # Swin Transformer MoE parameters
 _C.MODEL.SWIN_MOE = CN()
 _C.MODEL.SWIN_MOE.PATCH_SIZE = 4
@@ -334,6 +366,25 @@ def update_config(config, args):
     ## Overwrite optimizer if not None, currently we use it for [fused_adam, fused_lamb]
     if _check_args('optim'):
         config.TRAIN.OPTIMIZER.NAME = args.optim
+
+    # Pipeline-specific CLI overrides
+    if hasattr(args, 'backbone'):
+        backbone_to_type = {
+            'swin': ('swin', 'swin_tiny_patch4_window7_224'),
+            'swinv2': ('swinv2', 'swinv2_tiny_patch4_window8_256'),
+            'swin3d': ('swin3d', 'swin3d_base_patch4_window7_224'),
+            'swinv2_3d': ('swinv2_3d', 'swinv2_3d_base_patch4_window7_224'),
+        }
+        if args.backbone in backbone_to_type:
+            model_type, model_name = backbone_to_type[args.backbone]
+            config.MODEL.TYPE = model_type
+            config.MODEL.NAME = model_name
+
+    if hasattr(args, 'depth_size') and args.depth_size:
+        if hasattr(config.MODEL, 'SWIN3D'):
+            config.MODEL.SWIN3D.DEPTH_SIZE = args.depth_size
+        if hasattr(config.MODEL, 'SWINV2_3D'):
+            config.MODEL.SWINV2_3D.DEPTH_SIZE = args.depth_size
 
     # set local rank for distributed training
     if PYTORCH_MAJOR_VERSION == 1:

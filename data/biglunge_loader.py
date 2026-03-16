@@ -8,7 +8,7 @@ from monai.data import PersistentDataset  # type: ignore[attr-defined]
 from monai.transforms import Compose  # type: ignore[attr-defined]
 from tqdm import tqdm
 
-from data.transforms import get_train_transforms, get_val_transforms
+from data.transforms import get_train_transforms, get_val_transforms, get_train_transforms_3d, get_val_transforms_3d
 
 """
 BigLunge Dataset Loader — uses MONAI PersistentDataset for disk-cached transforms.
@@ -114,6 +114,9 @@ def create_biglunge_dataset(
     val_frac: float = 0.1,
     test_frac: float = 0.1,
     seed: int = 42,
+    use_3d: bool = False,
+    depth_size: int = 16,
+    warm_cache: bool = False,
     **kwargs: Any,
 ) -> PersistentDataset:
     """Create a PersistentDataset for BigLunge (disk-cached transforms)."""
@@ -122,23 +125,43 @@ def create_biglunge_dataset(
         split=split, val_frac=val_frac, test_frac=test_frac, seed=seed,
     )
 
-    get_transforms = get_train_transforms if split == "train" else get_val_transforms
-    transforms = get_transforms(
-        img_size=img_size,
-        convert_to_rgb=convert_to_rgb,
-        use_multichannel_windowing=use_multichannel_windowing,
-    )
+    if use_3d:
+        if split == "train":
+            transforms = get_train_transforms_3d(img_size=img_size, depth_size=depth_size)
+        else:
+            transforms = get_val_transforms_3d(img_size=img_size, depth_size=depth_size)
+    else:
+        if split == "train":
+            transforms = get_train_transforms(
+                img_size=img_size,
+                convert_to_rgb=convert_to_rgb,
+                use_multichannel_windowing=use_multichannel_windowing
+            )
+        else:
+            transforms = get_val_transforms(
+                img_size=img_size,
+                convert_to_rgb=convert_to_rgb,
+                use_multichannel_windowing=use_multichannel_windowing
+            )
 
     if cache_dir is None:
-        cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "monai_biglunge", split)
+        mode_key = "3d" if use_3d else "2d"
+        cache_dir = os.path.join(
+            os.path.expanduser("~"),
+            ".cache",
+            "monai_biglunge",
+            f"{mode_key}_img{img_size}_d{depth_size}",
+            split,
+        )
     os.makedirs(cache_dir, exist_ok=True)
     print(f"PersistentDataset cache_dir='{cache_dir}'")
 
     ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=cache_dir)
 
-    # Warm cache with progress bar (no-op for already-cached items)
-    for i in tqdm(range(len(ds)), desc=f"Caching BigLunge [{split}]", unit="img"):
-        ds[i]
+    # Optional eager warm cache (off by default to avoid long startup).
+    if warm_cache:
+        for i in tqdm(range(len(ds)), desc=f"Caching BigLunge [{split}]", unit="img"):
+            ds[i]
 
     return ds
 
@@ -165,9 +188,9 @@ if __name__ == "__main__":
     parser.add_argument("--splits", type=str, nargs="+", default=["train", "val", "test"])
     args = parser.parse_args()
 
-    print(f"{'=' * 60}")
+    print(f"{'-' * 60}")
     print(f"Benchmark | img={args.img_size} batch={args.batch_size} workers={args.num_workers}")
-    print(f"{'=' * 60}")
+    print(f"{'-' * 60}")
 
     for split in args.splits:
         print(f"\n--- {split} ---")
@@ -199,6 +222,6 @@ if __name__ == "__main__":
         sample = ds[0]
         print(f"  Shape        : {tuple(sample['image'].shape)}, dtype={sample['image'].dtype}")
 
-    print(f"\n{'=' * 60}\nDone.")
+    print(f"\n{'-' * 60}\nDone.")
 
 # python -m data.biglunge_loader --data-path /home/data/BigLunge/pre_formatting_ws_iso1.0mm_croplungs_bb/1 --csv-path /home/data/BigLunge/patients_parameters.csv

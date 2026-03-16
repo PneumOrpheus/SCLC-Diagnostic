@@ -7,6 +7,8 @@
 
 from models.swin_transformer import SwinTransformer
 from models.swin_transformer_v2 import SwinTransformerV2
+from models.swin_transformer_3d import SwinTransformer3D
+from models.swin_transformer_3d_v2 import SwinTransformerV2_3D
 
 
 def build_model(config, is_pretrain=False):
@@ -60,6 +62,44 @@ def build_model(config, is_pretrain=False):
                                   patch_norm=config.MODEL.SWINV2.PATCH_NORM,
                                   use_checkpoint=config.TRAIN.USE_CHECKPOINT,
                                   pretrained_window_sizes=config.MODEL.SWINV2.PRETRAINED_WINDOW_SIZES)
+    elif model_type == 'swin3d':
+        model = SwinTransformer3D(img_size=config.DATA.IMG_SIZE,
+                                  depth_size=config.MODEL.SWIN3D.DEPTH_SIZE,
+                                  patch_size=config.MODEL.SWIN3D.PATCH_SIZE,
+                                  depth_patch_size=config.MODEL.SWIN3D.DEPTH_PATCH_SIZE,
+                                  in_chans=config.MODEL.SWIN3D.IN_CHANS,
+                                  num_classes=config.MODEL.NUM_CLASSES,
+                                  embed_dim=config.MODEL.SWIN3D.EMBED_DIM,
+                                  depths=config.MODEL.SWIN3D.DEPTHS,
+                                  num_heads=config.MODEL.SWIN3D.NUM_HEADS,
+                                  window_size=tuple(config.MODEL.SWIN3D.WINDOW_SIZE),
+                                  mlp_ratio=config.MODEL.SWIN3D.MLP_RATIO,
+                                  qkv_bias=config.MODEL.SWIN3D.QKV_BIAS,
+                                  qk_scale=config.MODEL.SWIN3D.QK_SCALE,
+                                  drop_rate=config.MODEL.DROP_RATE,
+                                  drop_path_rate=config.MODEL.DROP_PATH_RATE,
+                                  ape=config.MODEL.SWIN3D.APE,
+                                  patch_norm=config.MODEL.SWIN3D.PATCH_NORM,
+                                  use_checkpoint=config.TRAIN.USE_CHECKPOINT)
+    elif model_type == 'swinv2_3d':
+        model = SwinTransformerV2_3D(img_size=config.DATA.IMG_SIZE,
+                                     depth_size=config.MODEL.SWINV2_3D.DEPTH_SIZE,
+                                     patch_size=config.MODEL.SWINV2_3D.PATCH_SIZE,
+                                     depth_patch_size=config.MODEL.SWINV2_3D.DEPTH_PATCH_SIZE,
+                                     in_chans=config.MODEL.SWINV2_3D.IN_CHANS,
+                                     num_classes=config.MODEL.NUM_CLASSES,
+                                     embed_dim=config.MODEL.SWINV2_3D.EMBED_DIM,
+                                     depths=config.MODEL.SWINV2_3D.DEPTHS,
+                                     num_heads=config.MODEL.SWINV2_3D.NUM_HEADS,
+                                     window_size=tuple(config.MODEL.SWINV2_3D.WINDOW_SIZE),
+                                     mlp_ratio=config.MODEL.SWINV2_3D.MLP_RATIO,
+                                     qkv_bias=config.MODEL.SWINV2_3D.QKV_BIAS,
+                                     drop_rate=config.MODEL.DROP_RATE,
+                                     drop_path_rate=config.MODEL.DROP_PATH_RATE,
+                                     ape=config.MODEL.SWINV2_3D.APE,
+                                     patch_norm=config.MODEL.SWINV2_3D.PATCH_NORM,
+                                     use_checkpoint=config.TRAIN.USE_CHECKPOINT,
+                                     pretrained_window_sizes=config.MODEL.SWINV2_3D.PRETRAINED_WINDOW_SIZES)
     # elif model_type == 'swin_moe':
     #     model = SwinTransformerMoE(img_size=config.DATA.IMG_SIZE,
     #                                patch_size=config.MODEL.SWIN_MOE.PATCH_SIZE,

@@ -10,7 +10,7 @@ from monai.data import PersistentDataset  # type: ignore[attr-defined]
 from monai.transforms import Compose  # type: ignore[attr-defined]
 from tqdm import tqdm
 
-from data.transforms import get_train_transforms, get_val_transforms
+from data.transforms import get_train_transforms, get_val_transforms, get_train_transforms_3d, get_val_transforms_3d
 
 """
 Lung-PET-CT-Dx Dataset Loader — uses MONAI PersistentDataset for disk-cached transforms.
@@ -187,28 +187,45 @@ def create_lung_pet_ct_dataset(
     cache_dir: Optional[str] = None,
     num_workers: int = 4,
     annotation_dir: str = "",
+    use_3d: bool = False,
+    depth_size: int = 16,
+    warm_cache: bool = False,
     **kwargs: Any,
 ) -> PersistentDataset:
     """Create a PersistentDataset for Lung-PET-CT-Dx (disk-cached transforms)."""
     data_list = get_data_list(data_path, split=split, annotation_dir=annotation_dir)
 
-    get_transforms = get_train_transforms if split == "train" else get_val_transforms
-    transforms = get_transforms(
-        img_size=img_size,
-        convert_to_rgb=convert_to_rgb,
-        use_multichannel_windowing=use_multichannel_windowing,
-    )
+    if use_3d:
+        if split == "train":
+            transforms = get_train_transforms_3d(img_size=img_size, depth_size=depth_size)
+        else:
+            transforms = get_val_transforms_3d(img_size=img_size, depth_size=depth_size)
+    else:
+        get_transforms = get_train_transforms if split == "train" else get_val_transforms
+        transforms = get_transforms(
+            img_size=img_size,
+            convert_to_rgb=convert_to_rgb,
+            use_multichannel_windowing=use_multichannel_windowing,
+        )
 
     if cache_dir is None:
-        cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "monai_lung_pet_ct", split)
+        mode_key = "3d" if use_3d else "2d"
+        cache_dir = os.path.join(
+            os.path.expanduser("~"),
+            ".cache",
+            "monai_lung_pet_ct",
+            f"{mode_key}_img{img_size}_d{depth_size}",
+            split,
+        )
     os.makedirs(cache_dir, exist_ok=True)
     print(f"PersistentDataset cache_dir='{cache_dir}'")
 
     ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=cache_dir)
 
-    # Warm cache with progress bar (no-op for already-cached items)
-    for i in tqdm(range(len(ds)), desc=f"Caching Lung-PET-CT-Dx [{split}]", unit="img"):
-        ds[i]
+    # Optional eager warm cache (off by default to avoid long startup).
+    if warm_cache:
+        for i in tqdm(range(len(ds)), desc=f"Caching Lung-PET-CT-Dx [{split}]", unit="img"):
+            ds[i]
 
     return ds
 

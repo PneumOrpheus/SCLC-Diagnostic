@@ -305,6 +305,59 @@ class AddPlaceholderTargetsd(MapTransform):
         return d
 
 
+class ExtractSubVolumed(MapTransform):
+    """Extract a fixed number of slices from the center of a 3D volume.
+
+    For 3D models, keeps the volume as (C, D, H, W) instead of collapsing to 2D.
+    Selects `num_slices` centered slices along the depth (last spatial) axis.
+    """
+
+    def __init__(
+        self,
+        keys: KeysCollection,
+        num_slices: int = 16,
+        allow_missing_keys: bool = False
+    ) -> None:
+        super().__init__(keys, allow_missing_keys)
+        self.num_slices = num_slices
+
+    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
+        d: Dict[Hashable, Any] = dict(data)
+        for key in self.key_iterator(d):
+            volume = d[key]
+            if not hasattr(volume, 'ndim') or volume.ndim < 4:
+                continue
+
+            # volume is (C, X, Y, Z) — depth is along the last axis
+            depth = volume.shape[-1]
+            target = self.num_slices
+
+            if depth >= target:
+                mid = depth // 2
+                half = target // 2
+                start = max(0, mid - half)
+                end = start + target
+                if end > depth:
+                    end = depth
+                    start = end - target
+                if isinstance(volume, np.ndarray):
+                    d[key] = volume[..., start:end]
+                else:
+                    d[key] = volume[..., start:end]
+            else:
+                # Pad with zeros if not enough slices
+                pad_total = target - depth
+                pad_before = pad_total // 2
+                pad_after = pad_total - pad_before
+                if isinstance(volume, np.ndarray):
+                    pad_widths = [(0, 0)] * (volume.ndim - 1) + [(pad_before, pad_after)]
+                    d[key] = np.pad(volume, pad_widths, mode='constant', constant_values=0)
+                else:
+                    # PyTorch: pad last dimension
+                    d[key] = torch.nn.functional.pad(volume, (pad_before, pad_after), mode='constant', value=0)
+        return d
+
+
 def get_train_transforms(
     img_size: int = 224,
     convert_to_rgb: bool = True,
@@ -453,4 +506,113 @@ def get_val_transforms(
     transforms.append(AddPlaceholderTargetsd(keys=["image"]))
     transforms.append(ToTensord(keys=["image"]))
     
+    return Compose(transforms)
+
+
+def get_train_transforms_3d(
+    img_size: int = 224,
+    depth_size: int = 16,
+) -> Compose:
+    """Get the 3D training transforms pipeline for volumetric models.
+
+    Keeps the volume as (C, D, H, W) for 3D Swin Transformer input.
+    Uses single-channel grayscale (no RGB conversion).
+
+    Args:
+        img_size: Target spatial size (H, W).
+        depth_size: Number of depth slices to extract.
+
+    Returns:
+        Composed MONAI transforms for 3D training.
+    """
+    transforms = [
+        LoadNiftiWithRGBSupportd(keys=["image"]),
+
+        # Clip to valid HU range
+        ScaleIntensityRanged(
+            keys=["image"],
+            a_min=-1024,
+            a_max=3071,
+            b_min=-1024,
+            b_max=3071,
+            clip=True,
+        ),
+
+        # Scale intensity to [0, 1]
+        ScaleIntensityRanged(
+            keys=["image"],
+            a_min=-1024,
+            a_max=3071,
+            b_min=0,
+            b_max=1,
+            clip=True,
+        ),
+
+        # Extract sub-volume of fixed depth from center
+        ExtractSubVolumed(keys=["image"], num_slices=depth_size),
+
+        # Resize spatial dimensions (keeps depth intact)
+        # Input is (C, X, Y, Z) = (1, X, Y, depth_size)
+        # We resize X and Y to img_size
+        Resized(keys=["image"], spatial_size=(img_size, img_size, depth_size), mode="trilinear"),
+
+        # --- 3D Data Augmentation ---
+        RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
+        RandFlipd(keys=["image"], prob=0.5, spatial_axis=1),
+        RandFlipd(keys=["image"], prob=0.3, spatial_axis=2),
+
+        # Intensity augmentation
+        RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
+        RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
+        RandGaussianNoised(keys=["image"], prob=0.2, mean=0.0, std=0.02),
+        RandAdjustContrastd(keys=["image"], prob=0.3, gamma=(0.8, 1.2)),
+
+        AddPlaceholderTargetsd(keys=["image"]),
+        ToTensord(keys=["image"]),
+    ]
+
+    return Compose(transforms)
+
+
+def get_val_transforms_3d(
+    img_size: int = 224,
+    depth_size: int = 16,
+) -> Compose:
+    """Get the 3D validation/test transforms pipeline (no augmentation).
+
+    Args:
+        img_size: Target spatial size (H, W).
+        depth_size: Number of depth slices.
+
+    Returns:
+        Composed MONAI transforms for 3D validation/test.
+    """
+    transforms = [
+        LoadNiftiWithRGBSupportd(keys=["image"]),
+
+        ScaleIntensityRanged(
+            keys=["image"],
+            a_min=-1024,
+            a_max=3071,
+            b_min=-1024,
+            b_max=3071,
+            clip=True,
+        ),
+
+        ScaleIntensityRanged(
+            keys=["image"],
+            a_min=-1024,
+            a_max=3071,
+            b_min=0,
+            b_max=1,
+            clip=True,
+        ),
+
+        ExtractSubVolumed(keys=["image"], num_slices=depth_size),
+        Resized(keys=["image"], spatial_size=(img_size, img_size, depth_size), mode="trilinear"),
+
+        AddPlaceholderTargetsd(keys=["image"]),
+        ToTensord(keys=["image"]),
+    ]
+
     return Compose(transforms)
