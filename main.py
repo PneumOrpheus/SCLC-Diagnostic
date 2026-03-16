@@ -162,6 +162,10 @@ Examples:
     parser.add_argument("--batch-size", type=int, default=4, help="Batch size")
     parser.add_argument("--weight-decay", type=float, default=0.02, help="Weight decay")
     parser.add_argument("--num-workers", type=int, default=4, help="Number of data loading workers")
+    parser.add_argument("--prefetch-factor", type=int, default=2,
+                        help="Number of samples loaded in advance by each worker")
+    parser.add_argument("--disable-persistent-workers", action="store_true",
+                        help="Disable persistent DataLoader workers")
 
     # Output directories
     parser.add_argument("--output-dir", type=str, default="output", help="Output directory for logs")
@@ -194,6 +198,8 @@ Examples:
     # Testing flag
     parser.add_argument("--testing", action="store_true", default=False,
                         help="Use a tiny subset of the dataset for testing the pipeline")
+    parser.add_argument("--warm-cache", action="store_true",
+                        help="Eagerly warm MONAI PersistentDataset cache before training")
 
 
     return parser.parse_args()
@@ -206,10 +212,17 @@ def compute_class_weights(data_loader: DataLoader, num_classes: int, device: tor
         Tensor of shape (num_classes,) with weights inversely proportional to class frequency.
     """
     class_counts = Counter()
-    for _, targets in data_loader:
-        for t in targets:
-            label = t["scan_label"].item() if isinstance(t["scan_label"], torch.Tensor) else t["scan_label"]
-            class_counts[label] += 1
+
+    dataset = getattr(data_loader, "dataset", None)
+    metadata = getattr(dataset, "data", None)
+    if isinstance(metadata, list) and len(metadata) > 0 and "scan_label" in metadata[0]:
+        for item in metadata:
+            class_counts[int(item["scan_label"])] += 1
+    else:
+        for _, targets in data_loader:
+            for t in targets:
+                label = t["scan_label"].item() if isinstance(t["scan_label"], torch.Tensor) else t["scan_label"]
+                class_counts[label] += 1
     
     total = sum(class_counts.values())
     weights = torch.zeros(num_classes, dtype=torch.float32)
@@ -230,9 +243,11 @@ def create_dataloaders(
     annotation_dir: str = "",
     use_multichannel_windowing: bool = False,
     use_3d: bool = False,
-    testing: bool = False,
+    depth_size: int = 16,
+    warm_cache: bool = False,
     img_size: int = 224,
-    depth_size: int = 64,
+    prefetch_factor: int = 2,
+    persistent_workers: bool = True,
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Create train, val, test dataloaders for specified dataset."""
 
@@ -240,40 +255,34 @@ def create_dataloaders(
         train_dataset, val_dataset, test_dataset = create_biglunge_dataset(
             data_path=data_path, csv_path=csv_path, img_size=img_size, depth_size=depth_size,
             convert_to_rgb=convert_to_rgb, use_multichannel_windowing=use_multichannel_windowing,
-            num_workers=num_workers, use_3d=use_3d, testing=testing,
+            num_workers=num_workers, use_3d=use_3d, testing=testing, warm_cache=warm_cache,
         )
     else:  # lung_pet_ct
         train_dataset, val_dataset, test_dataset = create_lung_pet_ct_dataset(
             data_path=data_path, img_size=img_size, depth_size=depth_size,
             convert_to_rgb=convert_to_rgb, use_multichannel_windowing=use_multichannel_windowing,
-            num_workers=num_workers, annotation_dir=annotation_dir, use_3d=use_3d, testing=testing,
+            num_workers=num_workers, annotation_dir=annotation_dir, use_3d=use_3d, testing=testing, warm_cache=warm_cache,
         )
 
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=num_workers,
-        collate_fn=sclc_collate_fn,
-        pin_memory=(device.type == "cuda"),
+        **loader_kwargs,
     )
 
     val_loader = DataLoader(
         val_dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=num_workers,
-        collate_fn=sclc_collate_fn,
-        pin_memory=(device.type == "cuda"),
+        **loader_kwargs,
     )
 
     test_loader = DataLoader(
         test_dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=num_workers,
-        collate_fn=sclc_collate_fn,
-        pin_memory=(device.type == "cuda"),
+        **loader_kwargs,
     )
 
     return train_loader, val_loader, test_loader
@@ -299,9 +308,9 @@ def run_dapt_phase(
     """
     Phase 1: Domain-Adaptive Pre-Training (DAPT)
     
-    Pre-trains the backbone, FPN, and detection head on Lung-PET-CT-Dx dataset
-    using bounding box annotations. Only the global classifier is frozen.
-    This helps the backbone learn lung CT-specific spatial features.
+    Domain adaptation stage on Lung-PET-CT-Dx where detector branches are frozen
+    and the backbone/FPN/global-classifier path is optimized using scan-level labels.
+    This helps the backbone learn lung CT-specific discriminative features.
     
     Returns:
         Path to best checkpoint.
@@ -318,7 +327,17 @@ def run_dapt_phase(
     params = [p for p in model.parameters() if p.requires_grad]
     logger.info(f"Trainable parameters: {sum(p.numel() for p in params):,}")
 
-    optimizer = optim.AdamW(params, lr=lr, weight_decay=weight_decay)
+    optimizer_kwargs = {
+        "lr": lr,
+        "weight_decay": weight_decay,
+    }
+    if device.type == "cuda":
+        try:
+            optimizer = optim.AdamW(params, fused=True, **optimizer_kwargs)
+        except TypeError:
+            optimizer = optim.AdamW(params, **optimizer_kwargs)
+    else:
+        optimizer = optim.AdamW(params, **optimizer_kwargs)
     
     # LR schedule - linear warmup for 5 epochs then cosine decay
     warmup_epochs = min(5, epochs // 4)
@@ -448,7 +467,14 @@ def run_finetune_phase(
     logger.info(f"Head params: {sum(p.numel() for p in head_params):,} (LR: {lr:.2e})")
     logger.info(f"Total trainable: {sum(p.numel() for p in backbone_params) + sum(p.numel() for p in head_params):,}")
 
-    optimizer = optim.AdamW(param_groups, weight_decay=weight_decay)
+    optimizer_kwargs = {"weight_decay": weight_decay}
+    if device.type == "cuda":
+        try:
+            optimizer = optim.AdamW(param_groups, fused=True, **optimizer_kwargs)
+        except TypeError:
+            optimizer = optim.AdamW(param_groups, **optimizer_kwargs)
+    else:
+        optimizer = optim.AdamW(param_groups, **optimizer_kwargs)
     
     # LR schedule - linear warmup for 5 epochs then cosine decay
     warmup_epochs = min(5, epochs // 4)
@@ -702,6 +728,9 @@ def main():
     logger.info(f"Gradient accumulation steps: {args.accumulation_steps}")
     logger.info(f"Label smoothing: {args.label_smoothing}")
     logger.info(f"Gradient clipping max norm: {args.clip_grad}")
+    logger.info(f"DataLoader workers: {args.num_workers}, prefetch_factor: {args.prefetch_factor}")
+    logger.info(f"Persistent workers: {not args.disable_persistent_workers}")
+    logger.info(f"Cache warmup enabled: {args.warm_cache}")
     logger.info(f"DAPT Dataset: {args.dapt_backbone_dataset}")
     logger.info(f"Fine-tuning Dataset: {args.fine_tuning_dataset}")
     logger.info(f"Output Directory: {args.output_dir}")
@@ -746,6 +775,9 @@ def main():
             testing=args.testing,
             img_size=args.img_size,      
             depth_size=args.depth_size
+            warm_cache=args.warm_cache,
+            prefetch_factor=args.prefetch_factor,
+            persistent_workers=(not args.disable_persistent_workers),
         )
 
         metrics = run_inference(model, test_loader, device, logger, args.output_dir)
@@ -788,12 +820,16 @@ def main():
             use_3d=use_3d,
             testing=args.testing,
             img_size=args.img_size,      
-            depth_size=args.depth_size
+            depth_size=args.depth_size,
+            warm_cache=args.warm_cache,
+            prefetch_factor=args.prefetch_factor,
+            persistent_workers=(not args.disable_persistent_workers),
         )
 
-        # No class weights for DAPT - uniform weighting for stable backbone pre-training
-        model.set_class_weights(None)
-        logger.info("DAPT: Using uniform class weights (no weighting)")
+        # Use class-balanced weighting for DAPT classification objective
+        dapt_class_weights = compute_class_weights(dapt_train_loader, num_classes=3, device=device)
+        model.set_class_weights(dapt_class_weights)
+        logger.info(f"DAPT class weights: {dapt_class_weights.cpu().numpy()}")
 
         # Run DAPT phase
         dapt_checkpoint = run_dapt_phase(
@@ -811,7 +847,7 @@ def main():
             scaler=scaler,
             accumulation_steps=args.accumulation_steps,
             clip_grad=args.clip_grad,
-            label_smoothing=args.label_smoothing,
+            label_smoothing=0.0,
         )
 
         if args.mode == "dapt":
@@ -869,7 +905,10 @@ def main():
             use_3d=use_3d,
             testing=args.testing,
             img_size=args.img_size,      
-            depth_size=args.depth_size
+            depth_size=args.depth_size,
+            warm_cache=args.warm_cache,
+            prefetch_factor=args.prefetch_factor,
+            persistent_workers=(not args.disable_persistent_workers),
         )
 
         # Compute class weights for BigLunge training set
