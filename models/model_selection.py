@@ -10,6 +10,7 @@ from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision.models.detection.image_list import ImageList
 from torchvision.models.detection.transform import GeneralizedRCNNTransform
 from collections import OrderedDict
+from monai.losses import DiceFocalLoss
 
 from models.build import build_model
 from models.utils import load_pretrained
@@ -235,52 +236,6 @@ class BackboneWithFPN(nn.Module):
         # Pass through FPN
         fpn_out = self.fpn(x_dict)
         return fpn_out
-
-
-def focal_loss(
-    logits: torch.Tensor,
-    targets: torch.Tensor,
-    alpha: Optional[torch.Tensor] = None,
-    gamma: float = 2.0,
-    label_smoothing: float = 0.1,
-    reduction: str = 'mean'
-) -> torch.Tensor:
-    """Focal loss for multi-class classification with optional label smoothing.
-    
-    FL(p_t) = -alpha_t * (1 - p_t)^gamma * log(p_t)
-    
-    Args:
-        logits: Raw predictions [B, C].
-        targets: Integer class labels [B].
-        alpha: Per-class weights [C] (optional).
-        gamma: Focusing parameter to down-weight easy examples.
-        label_smoothing: Label smoothing factor.
-        reduction: 'mean' or 'sum'.
-    """
-    num_classes = logits.shape[1]
-    
-    with torch.no_grad():
-        smooth_targets = torch.zeros_like(logits)
-        smooth_targets.fill_(label_smoothing / (num_classes - 1))
-        smooth_targets.scatter_(1, targets.unsqueeze(1), 1.0 - label_smoothing)
-    
-    log_probs = F.log_softmax(logits, dim=1)
-    probs = torch.exp(log_probs)
-    
-    focal_weight = (1 - probs) ** gamma
-    
-    if alpha is not None:
-        focal_weight = focal_weight * alpha.unsqueeze(0)
-    
-    loss = -focal_weight * smooth_targets * log_probs
-    loss = loss.sum(dim=1)
-    
-    if reduction == 'mean':
-        return loss.mean()
-    elif reduction == 'sum':
-        return loss.sum()
-    return loss
-
     
 class GlobalClassificationHead(nn.Module):
     """
@@ -309,6 +264,7 @@ class GlobalClassificationHead(nn.Module):
         x = torch.cat(pooled, dim=1)
         x = self.fc(x)
         return x
+
     
 class DualHeadSCLCModel(nn.Module):
     """
@@ -485,7 +441,6 @@ class DualHeadSCLCModel(nn.Module):
         
         # --- 1. Fix for Variable Depth Tensor Stacking (Issue 2) ---
         if self._is_3d:
-            print("Processing input as 3D volumes.")
             max_x = max(scan.shape[-3] for scan in scans)
             max_y = max(scan.shape[-2] for scan in scans)
             max_d = max(scan.shape[-1] for scan in scans)
@@ -578,9 +533,14 @@ class DualHeadSCLCModel(nn.Module):
                     "for each sample during training, but got None."
                 )
             gt_labels = torch.stack([t["scan_label"] for t in targets_transformed])
-            global_loss = focal_loss(
-                global_logits, gt_labels, alpha=self.class_weights
+            # Use MONAI DiceFocalLoss
+            loss_func = DiceFocalLoss(
+                to_onehot_y=True,
+                softmax=True,
+                weight=self.class_weights
             )
+            global_loss = loss_func(global_logits.unsqueeze(-1), gt_labels.view(-1, 1, 1))
+            
             losses['global_classification_loss'] = global_loss
             if return_logits:
                 losses['global_logits'] = global_logits

@@ -185,8 +185,6 @@ Examples:
                         help="Disable automatic mixed precision (AMP) training")
     parser.add_argument("--accumulation-steps", type=int, default=1,
                         help="Gradient accumulation steps (effective batch = batch-size * accumulation-steps)")
-    parser.add_argument("--label-smoothing", type=float, default=0.1,
-                        help="Label smoothing factor (0.0 = disabled)")
     parser.add_argument("--clip-grad", type=float, default=1.0,
                         help="Max gradient norm for clipping (0 = disabled)")
 
@@ -304,7 +302,7 @@ def run_dapt_phase(
     scaler: Optional[GradScaler] = None,
     accumulation_steps: int = 1,
     clip_grad: float = 1.0,
-    label_smoothing: float = 0.0,
+
 ) -> str:
     """
     Phase 1: Domain-Adaptive Pre-Training (DAPT)
@@ -362,10 +360,10 @@ def run_dapt_phase(
         train_metrics = train_epoch(
             model, optimizer, train_loader, device, epoch + 1,
             scaler=scaler, accumulation_steps=accumulation_steps,
-            clip_grad=clip_grad, label_smoothing=label_smoothing,
+            clip_grad=clip_grad,
         )
 
-        val_metrics = validate_epoch(model, val_loader, device, phase="val")
+        val_metrics = validate_epoch(model, val_loader, device, epoch=epoch + 1, phase="val")
 
         scheduler.step()
 
@@ -427,7 +425,7 @@ def run_finetune_phase(
     scaler: Optional[GradScaler] = None,
     accumulation_steps: int = 1,
     clip_grad: float = 1.0,
-    label_smoothing: float = 0.0,
+
 ) -> str:
     """
     Phase 2: Fine-tuning on BigLunge Dataset
@@ -503,11 +501,11 @@ def run_finetune_phase(
             model, optimizer, train_loader, device, epoch + 1,
             use_mixup=True, mixup_alpha=0.2,
             scaler=scaler, accumulation_steps=accumulation_steps,
-            clip_grad=clip_grad, label_smoothing=label_smoothing,
+            clip_grad=clip_grad,
         )
 
         # Validation
-        val_metrics = validate_epoch(model, val_loader, device, phase="val")
+        val_metrics = validate_epoch(model, val_loader, device, epoch=epoch + 1, phase="val")
 
         scheduler.step()
 
@@ -727,7 +725,6 @@ def main():
     logger.info(f"Seed: {seed}")
     logger.info(f"AMP (mixed precision): {amp_enabled}")
     logger.info(f"Gradient accumulation steps: {args.accumulation_steps}")
-    logger.info(f"Label smoothing: {args.label_smoothing}")
     logger.info(f"Gradient clipping max norm: {args.clip_grad}")
     logger.info(f"DataLoader workers: {args.num_workers}, prefetch_factor: {args.prefetch_factor}")
     logger.info(f"Persistent workers: {not args.disable_persistent_workers}")
@@ -849,7 +846,7 @@ def main():
             scaler=scaler,
             accumulation_steps=args.accumulation_steps,
             clip_grad=args.clip_grad,
-            label_smoothing=0.0,
+
         )
 
         if args.mode == "dapt":
@@ -934,7 +931,7 @@ def main():
             scaler=scaler,
             accumulation_steps=args.accumulation_steps,
             clip_grad=args.clip_grad,
-            label_smoothing=args.label_smoothing,
+
         )
 
         # Load best model for testing

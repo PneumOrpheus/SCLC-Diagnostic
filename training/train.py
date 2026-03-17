@@ -7,7 +7,6 @@ import os
 from typing import Any, Dict, List, Sequence, Optional
 
 # MONAI transforms for preprocessing
-from models.model_selection import focal_loss
 
 """
 SCLC Diagnostic System Training
@@ -56,8 +55,7 @@ def sclc_collate_fn(batch: List[Dict[str, Any]]) -> tuple:
 
 def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10,
                 use_mixup=False, mixup_alpha=0.2,
-                scaler=None, accumulation_steps=1, clip_grad=1.0,
-                label_smoothing=0.0):
+                scaler=None, accumulation_steps=1, clip_grad=1.0):
     """Train one epoch with AMP, and gradient accumulation.
     (Note: Mixup is disabled as it is structurally incompatible with Object Detection bounded targets)
     """
@@ -86,25 +84,9 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10,
         
         with torch.amp.autocast(enabled=amp_enabled, device_type=device.type):
             
-            # Request logits when label smoothing is needed
-            need_logits = label_smoothing > 0.0
-            loss_dict = model(scans, targets, return_logits=need_logits)
+            loss_dict = model(scans, targets)
             
-            if need_logits:
-                global_logits = loss_dict.pop("global_logits")
-                _ = loss_dict.pop("global_classification_loss")
-                
-                # Compute label-smoothed loss via cross-entropy
-                gt_labels = torch.stack([t["scan_label"] for t in targets])
-                num_classes = global_logits.size(-1)
-                log_probs = torch.log_softmax(global_logits, dim=-1)
-                
-                # One-hot targets blended with uniform distribution
-                one_hot = torch.zeros_like(log_probs).scatter_(1, gt_labels.unsqueeze(1), 1.0)
-                smooth_targets = (1.0 - label_smoothing) * one_hot + label_smoothing / num_classes
-                global_loss = -(smooth_targets * log_probs).sum(dim=-1).mean()
-            else:
-                global_loss = loss_dict.pop("global_classification_loss")
+            global_loss = loss_dict.pop("global_classification_loss")
 
             # Ensure detection loss is always a tensor on the correct device
             if loss_dict:
@@ -118,12 +100,14 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10,
             else:
                 loss_detection = torch.zeros((), device=device)
             
-            # --- RE-WEIGHTING LOSSES ---
-            # Scale down detection (which naturally sums to 2.0-5.0)
-            # Scale up classification focal loss (which naturally sits around 0.1-0.5)
-            # This ensures the global label isn't drowned out.
+            # --- DYNAMIC RE-WEIGHTING LOSSES ---
+            # Warmup Schedule: start with 0 for classification and gradually increase
+            # to let the detector learn spatial representation first.
+            warmup_epochs = 5
+            ramp_factor = (epoch - 1) / warmup_epochs if epoch <= warmup_epochs else 1.0
+            
             det_weight = 0.25
-            cls_weight = 2.0
+            cls_weight = 2.0 * ramp_factor
             
             total_loss = (det_weight * loss_detection) + (cls_weight * global_loss)
             
@@ -182,7 +166,7 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10,
 
 
 @torch.no_grad()
-def validate_epoch(model, data_loader, device, phase="val"):
+def validate_epoch(model, data_loader, device, epoch=None, phase="val"):
     """
     Computes validation loss. 
     NOTE: Sets model to train() mode with no_grad() because standard torchvision 
@@ -219,7 +203,10 @@ def validate_epoch(model, data_loader, device, phase="val"):
             loss_detection = torch.zeros((), device=device)
             
         # Match training weights so eval metrics align
-        total_loss = (0.25 * loss_detection) + (2.0 * global_loss)
+        warmup_epochs = 5
+        ramp_factor = (epoch - 1) / warmup_epochs if epoch is not None and epoch <= warmup_epochs else 1.0
+        
+        total_loss = (0.25 * loss_detection) + (2.0 * ramp_factor * global_loss)
         
         running_loss += total_loss.item()
         running_det_loss += loss_detection.item()

@@ -409,8 +409,11 @@ def get_train_transforms_3d(
             clip=True,
         ),
 
-        # SHRINKS The massive raw volumes into workable RAM limits
-        Resized(keys=["image"], spatial_size=(img_size, img_size, depth_size), mode="trilinear"),
+        # Extract a contiguous crop of depth_size from the center of the Z-axis
+        ExtractSubVolumed(keys=["image"], num_slices=depth_size),
+        
+        # Resize only X and Y down to img_size 
+        Resized(keys=["image"], spatial_size=(img_size, img_size, -1), mode="trilinear"),
         
         # Intensity augmentation
         RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
@@ -441,6 +444,8 @@ def get_val_transforms_3d(
             b_max=1,
             clip=True,
         ),
+
+        ExtractSubVolumed(keys=["image"], num_slices=depth_size),
 
         Resized(keys=["image"], spatial_size=(img_size, img_size, depth_size), mode="trilinear"),
         

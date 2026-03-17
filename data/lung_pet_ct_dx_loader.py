@@ -27,7 +27,7 @@ def load_patient_annotations(
     annotation_dir: str,
     patient_short_id: str,
     orig_size: int = 512,
-    target_size: int = 512,  # CHANGED: Default is now 512 to match 3D raw scale
+    target_size: int = 224, 
 ) -> Dict[str, torch.Tensor]:
     """Load and aggregate bounding box annotations from per-slice XML files.
 
@@ -229,24 +229,25 @@ def create_lung_pet_ct_dataset(
                 use_multichannel_windowing=use_multichannel_windowing,
             )
 
-    if cache_dir is None:
-        mode_key = "3d" if use_3d else "2d"
-        cache_dir = os.path.join(
-            os.path.expanduser("~"),
-            ".cache",
-            "monai_lung_pet_ct",
-            f"{mode_key}_img{img_size}_d{depth_size}",
-            split,
-        )
-    os.makedirs(cache_dir, exist_ok=True)
-    print(f"PersistentDataset cache_dir='{cache_dir}'")
+        if cache_dir is None:
+            mode_key = "3d" if use_3d else "2d"
+            current_cache_dir = os.path.join(
+                os.path.expanduser("~"),
+                ".cache",
+                "monai_lung_pet_ct",
+                f"{mode_key}_img{img_size}_d{depth_size}",
+                split,
+            )
+        else:
+            current_cache_dir = os.path.join(cache_dir, split)
+            
+        os.makedirs(current_cache_dir, exist_ok=True)
+        print(f"PersistentDataset cache_dir='{current_cache_dir}'")
 
-    ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=cache_dir)
+        ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=current_cache_dir)
 
-    # Optional eager warm cache (off by default to avoid long startup).
-    if warm_cache:
         for i in tqdm(range(len(ds)), desc=f"Caching Lung-PET-CT-Dx [{split}]", unit="img"):
-            ds[i]
+            _ = ds[i]
 
         datasets.append(ds)
 
