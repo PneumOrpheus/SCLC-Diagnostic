@@ -177,25 +177,25 @@ class AddPlaceholderTargetsd(MapTransform):
         d: Dict[Hashable, Any] = dict(data)
         # Add placeholder targets if not present
         if "boxes" not in d:
-            d["boxes"] = torch.zeros((0, 4), dtype=torch.float32)
+            d["boxes"] = []
         if "labels" not in d:
-            d["labels"] = torch.zeros((0,), dtype=torch.int64)
+            d["labels"] = []
         if "scan_label" not in d:
-            d["scan_label"] = torch.tensor(0, dtype=torch.int64)
+            d["scan_label"] = 0
         return d
 
 
 class ExtractSubVolumed(MapTransform):
-    """Extract a fixed number of slices from the center of a 3D volume.
-
-    For 3D models, keeps the volume as (C, D, H, W) instead of collapsing to 2D.
-    Selects `num_slices` centered slices along the depth (last spatial) axis.
+    """Extract a fixed number of slices from a 3D volume.
+    
+    If 'boxes' is present in data, centers the crop around the tumor's Z-axis.
+    Otherwise, extracts from the center of the volume.
     """
 
     def __init__(
         self,
         keys: KeysCollection,
-        num_slices: int = 16,
+        num_slices: int = 64,
         allow_missing_keys: bool = False
     ) -> None:
         super().__init__(keys, allow_missing_keys)
@@ -203,6 +203,18 @@ class ExtractSubVolumed(MapTransform):
 
     def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
         d: Dict[Hashable, Any] = dict(data)
+        
+        # Figure out the center Z coordinate from the annotations if available
+        target_z_center = None
+        if "boxes" in d and len(d["boxes"]) > 0:
+            # Boxes are [x1, y1, z1, x2, y2, z2]
+            boxes = np.array(d["boxes"])
+            # Get the overall min and max Z across all bounding boxes
+            z_min = boxes[:, 2].min()
+            z_max = boxes[:, 5].max()
+            # Calculate the middle of the tumor
+            target_z_center = int((z_min + z_max) / 2)
+
         for key in self.key_iterator(d):
             volume = d[key]
             if not hasattr(volume, 'ndim') or volume.ndim < 4:
@@ -213,28 +225,42 @@ class ExtractSubVolumed(MapTransform):
             target = self.num_slices
 
             if depth >= target:
-                mid = depth // 2
+                if target_z_center is not None:
+                    mid = target_z_center
+                else:
+                    mid = depth // 2
+                
                 half = target // 2
-                start = max(0, mid - half)
+                start = mid - half
                 end = start + target
-                if end > depth:
+                
+                # Handle edge cases to ensure we always get exactly 'target' slices
+                if start < 0:
+                    start = 0
+                    end = target
+                elif end > depth:
                     end = depth
-                    start = end - target
+                    start = depth - target
+                    
                 if isinstance(volume, np.ndarray):
                     d[key] = volume[..., start:end]
                 else:
                     d[key] = volume[..., start:end]
+                    
+                # IMPORTANT: Adjust the box Z-coordinates so they align with the new cropped volume!
+                if key == "image" and "boxes" in d and len(d["boxes"]) > 0:
+                    # Subtract the start offset from the Z-coordinates
+                    adjusted_boxes = np.array(d["boxes"], dtype=np.float32)
+                    adjusted_boxes[:, 2] -= start
+                    adjusted_boxes[:, 5] -= start
+                    
+                    # We could clamp the Z coordinates here to [0, target-1], but because 
+                    # we centered around the tumor, they should easily fit inside the 64 slices.
+                    d["boxes"] = adjusted_boxes.tolist()
             else:
-                # Pad with zeros if not enough slices
-                pad_total = target - depth
-                pad_before = pad_total // 2
-                pad_after = pad_total - pad_before
-                if isinstance(volume, np.ndarray):
-                    pad_widths = [(0, 0)] * (volume.ndim - 1) + [(pad_before, pad_after)]
-                    d[key] = np.pad(volume, pad_widths, mode='constant', constant_values=0)
-                else:
-                    # PyTorch: pad last dimension
-                    d[key] = torch.nn.functional.pad(volume, (pad_before, pad_after), mode='constant', value=0)
+                # If the volume is thinner than 64 slices, logic usually pads it earlier in the pipeline
+                raise ValueError(f"Volume depth {depth} is less than target {target} slices.")
+                
         return d
 
 

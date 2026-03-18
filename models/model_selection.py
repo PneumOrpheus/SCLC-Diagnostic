@@ -457,7 +457,7 @@ class DualHeadSCLCModel(nn.Module):
             batch_5d = torch.stack(padded_scans, dim=0)  # (B, C, H, W, D)
             batch_5d = batch_5d.permute(0, 1, 4, 2, 3).contiguous()  # (B, C, D, H, W)
             features = self.backbone(batch_5d)
-            
+            print(f"Features extracted from 3D backbone with input shape {features}.")
             _, _, _, sH, sW = batch_5d.shape
             
             # Use original H and W before padding

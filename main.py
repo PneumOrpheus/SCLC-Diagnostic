@@ -20,12 +20,9 @@ from training.train import (
     train_epoch,
     validate_epoch
 )
-from data.biglunge_loader import (
-    create_biglunge_dataset,
+from data.data_loader import (
+    create_dataset,
     CLASS_NAMES
-)
-from data.lung_pet_ct_dx_loader import (
-    create_lung_pet_ct_dataset,
 )
 from logger import create_logger
 
@@ -250,18 +247,20 @@ def create_dataloaders(
 ) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """Create train, val, test dataloaders for specified dataset."""
 
-    if dataset_type == "biglunge":
-        train_dataset, val_dataset, test_dataset = create_biglunge_dataset(
-            data_path=data_path, csv_path=csv_path, img_size=img_size, depth_size=depth_size,
-            convert_to_rgb=convert_to_rgb, use_multichannel_windowing=use_multichannel_windowing,
-            num_workers=num_workers, use_3d=use_3d, testing=testing, warm_cache=warm_cache,
-        )
-    else:  # lung_pet_ct
-        train_dataset, val_dataset, test_dataset = create_lung_pet_ct_dataset(
-            data_path=data_path, img_size=img_size, depth_size=depth_size,
-            convert_to_rgb=convert_to_rgb, use_multichannel_windowing=use_multichannel_windowing,
-            num_workers=num_workers, annotation_dir=annotation_dir, use_3d=use_3d, testing=testing, warm_cache=warm_cache,
-        )
+    train_dataset, val_dataset, test_dataset = create_dataset(
+        dataset_type=dataset_type,
+        data_path=data_path, 
+        csv_path=csv_path, 
+        img_size=img_size, 
+        depth_size=depth_size,
+        convert_to_rgb=convert_to_rgb, 
+        use_multichannel_windowing=use_multichannel_windowing,
+        num_workers=num_workers, 
+        annotation_dir=annotation_dir,
+        use_3d=use_3d, 
+        testing=testing, 
+        warm_cache=warm_cache,
+    )
 
     train_loader = DataLoader(
         train_dataset,
@@ -717,10 +716,13 @@ def main():
     )
 
     logger.info("-" * 70)
-    logger.info("SCLC Diagnostic System - Main Pipeline")
+    logger.info("SCLC Diagnostic System - Main Pipeline. Starting run with the following configuration:")
     logger.info("-" * 70)
     logger.info(f"Mode: {args.mode}")
+    logger.info(f"Batch size: {args.batch_size}")
+    logger.info(f"Testing mode: {args.testing}")
     logger.info(f"Backbone: {args.backbone}")
+    logger.info(f"Initial checkpoint: {args.initial_checkpoint}")
     logger.info(f"Device: {device}")
     logger.info(f"Seed: {seed}")
     logger.info(f"AMP (mixed precision): {amp_enabled}")
@@ -765,7 +767,7 @@ def main():
             data_path=args.fine_tuning_dataset,
             batch_size=args.batch_size,
             device=device,
-            dataset_type="biglunge",
+            dataset_type="big_lunge",
             csv_path=args.fine_tuning_csv,
             convert_to_rgb=uses_timm_model,
             num_workers=args.num_workers,
@@ -811,7 +813,7 @@ def main():
             data_path=args.dapt_backbone_dataset,
             batch_size=args.batch_size,
             device=device,
-            dataset_type="lung_pet_ct",
+            dataset_type="lung_pet_ct_dx",
             convert_to_rgb=uses_timm_model,
             num_workers=args.num_workers,
             annotation_dir=args.annotation_dir,
@@ -896,7 +898,7 @@ def main():
             data_path=args.fine_tuning_dataset,
             batch_size=args.batch_size,
             device=device,
-            dataset_type="biglunge",
+            dataset_type="big_lunge",
             csv_path=args.fine_tuning_csv,
             convert_to_rgb=uses_timm_model,
             num_workers=args.num_workers,

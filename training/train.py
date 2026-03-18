@@ -43,9 +43,17 @@ def sclc_collate_fn(batch: List[Dict[str, Any]]) -> tuple:
         if not isinstance(scan_label, torch.Tensor):
             scan_label = torch.tensor(scan_label, dtype=torch.int64)
 
+        boxes = item.get("boxes", [])
+        if not isinstance(boxes, torch.Tensor):
+            boxes = torch.tensor(boxes, dtype=torch.float32).reshape(-1, 4) if len(boxes) > 0 else torch.zeros((0, 4), dtype=torch.float32)
+
+        labels = item.get("labels", [])
+        if not isinstance(labels, torch.Tensor):
+            labels = torch.tensor(labels, dtype=torch.int64)
+
         target = {
-            "boxes": item.get("boxes", torch.zeros((0, 4), dtype=torch.float32)),
-            "labels": item.get("labels", torch.zeros((0,), dtype=torch.int64)),
+            "boxes": boxes,
+            "labels": labels,
             "scan_label": scan_label,
             "scan_id": torch.tensor(i, dtype=torch.int64),
         }

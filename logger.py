@@ -9,6 +9,7 @@ import os
 import sys
 import logging
 import functools
+import datetime 
 from termcolor import colored
 
 
@@ -35,7 +36,12 @@ def create_logger(output_dir, dist_rank=0, name=''):
     # create file handlers
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
-    file_handler = logging.FileHandler(os.path.join(output_dir, f'log_rank{dist_rank}.txt'), mode='a')
+        
+    # Create a timestamped filename
+    now_str = datetime.datetime.now().strftime('%Y-%m-%d_%H')
+    log_filename = f'{now_str}_logs.txt'
+    
+    file_handler = logging.FileHandler(os.path.join(output_dir, log_filename), mode='a')
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(fmt=fmt, datefmt='%Y-%m-%d %H:%M:%S'))
     logger.addHandler(file_handler)

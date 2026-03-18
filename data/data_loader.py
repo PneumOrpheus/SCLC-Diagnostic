@@ -1,27 +1,28 @@
 import os
 import glob
+import pandas as pd
 import numpy as np
 import torch
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from monai.data import PersistentDataset  # type: ignore[attr-defined]
-from monai.transforms import Compose  # type: ignore[attr-defined]
+from monai.data import PersistentDataset
+from monai.transforms import Compose
 from tqdm import tqdm
 import torchvision
 
 from data.transforms import get_train_transforms, get_val_transforms, get_train_transforms_3d, get_val_transforms_3d
 
-"""
-Lung-PET-CT-Dx Dataset Loader — uses MONAI PersistentDataset for disk-cached transforms.
-First run applies transforms and caches; subsequent runs load from cache instantly.
-"""
-
 # A: Adenocarcinoma (0), B: Small Cell Carcinoma (1), G: Squamous Cell Carcinoma (2)
 CLASS_MAP = {"A": 0, "B": 1, "G": 2}
 CLASS_NAMES = ["Adenocarcinoma", "Small Cell Carcinoma", "Squamous Cell Carcinoma"]
 
+NORWEGIAN_CLASS_MAP = {
+    "Adenokarsinom": 0,
+    "Småcelletkarsinom": 1,
+    "Plateepitelkarsinom": 2,
+}
 
 def load_patient_annotations(
     annotation_dir: str,
@@ -29,15 +30,11 @@ def load_patient_annotations(
     orig_size: int = 512,
     target_size: int = 224, 
 ) -> Dict[str, torch.Tensor]:
-    """Load and aggregate bounding box annotations from per-slice XML files.
-
-    Uses Non-Maximum Suppression (NMS) to merge overlapping slices of the same tumor
-    while preserving separate bounding boxes for physically distinct tumors.
-    """
+    """Load and aggregate bounding box annotations from per-slice XML files (for Lung-PET-CT-Dx)."""
     patient_annot_dir = os.path.join(annotation_dir, patient_short_id)
     empty = {
-        "boxes": torch.zeros((0, 4), dtype=torch.float32),
-        "labels": torch.zeros((0,), dtype=torch.int64),
+        "boxes": [],
+        "labels": [],
     }
 
     if not os.path.isdir(patient_annot_dir):
@@ -66,41 +63,51 @@ def load_patient_annotations(
                 ymin = float(bbox.find("ymin").text)
                 xmax = float(bbox.find("xmax").text)
                 ymax = float(bbox.find("ymax").text)
-                all_boxes.append((xmin, ymin, xmax, ymax, CLASS_MAP[letter]))
+                slice_str = xml_path.split("_slice")[-1].replace(".xml", "")
+                slice_idx = int(slice_str)
+                all_boxes.append((xmin, ymin, xmax, ymax, slice_idx, CLASS_MAP[letter]))
         except (ET.ParseError, AttributeError):
             continue
 
     if not all_boxes:
         return empty
 
-    # Scale the coordinates (since target_size = orig_size = 512, scale will be 1.0)
     scale = target_size / orig_size
     scaled_boxes = []
     labels_list = []
 
     for b in all_boxes:
-        xmin, ymin, xmax, ymax, class_id = b
-        scaled_boxes.append([xmin * scale, ymin * scale, xmax * scale, ymax * scale])
+        xmin, ymin, xmax, ymax, slice_idx, class_id = b
+        zmin, zmax = float(slice_idx), float(slice_idx + 1)
+        scaled_boxes.append([xmin * scale, ymin * scale,zmin, xmax * scale, ymax * scale, zmax])
         labels_list.append(class_id + 1) # Detection labels are 1-indexed (0 = background)
 
-    # Convert to tensors
-    boxes_tensor = torch.tensor(scaled_boxes, dtype=torch.float32).clamp(min=0, max=target_size)
+    boxes_tensor = torch.tensor(scaled_boxes, dtype=torch.float32)
     labels_tensor = torch.tensor(labels_list, dtype=torch.int64)
-
-    # Calculate area of each bounding box for NMS scoring
-    areas = (boxes_tensor[:, 2] - boxes_tensor[:, 0]) * (boxes_tensor[:, 3] - boxes_tensor[:, 1])
     
-    # NMS merges boxes that have > 20% spatial overlap.
-    # It prefers keeping the boxes with the highest area (largest tumor slice representation).
-    keep_indices = torchvision.ops.nms(boxes_tensor, areas, iou_threshold=0.2)
+    # dont clamp the z dimension since it is used for slice indexing, but clamp x and y to be within the target image size 
+    boxes_tensor[:, [0, 3]] = boxes_tensor[:, [0, 3]].clamp(min=0, max=target_size)
+    boxes_tensor[:, [1, 4]] = boxes_tensor[:, [1, 4]].clamp(min=0, max=target_size)
 
     return {
-        "boxes": boxes_tensor[keep_indices], 
-        "labels": labels_tensor[keep_indices]
+        "boxes": boxes_tensor.tolist(), 
+        "labels": labels_tensor.tolist()
     }
 
+def load_patient_labels(csv_path: str) -> Dict[int, int]:
+    """Load patient ID -> class label mapping from CSV (for BigLunge)."""
+    df = pd.read_csv(csv_path)
+    labels = {}
+    for _, row in df.iterrows():
+        pid = int(row["Patient"])
+        group = row["MorphologicalGroup"]
+        if group in NORWEGIAN_CLASS_MAP:
+            labels[pid] = NORWEGIAN_CLASS_MAP[group]
+        else:
+            print(f"Warning: Unknown morphological group '{group}' for patient {pid}")
+    return labels
 
-def get_data_list(
+def get_lung_pet_ct_dx_data_list(
     data_path: str,
     val_frac: float = 0.1,
     test_frac: float = 0.1,
@@ -109,7 +116,7 @@ def get_data_list(
     testing: bool = False,
     img_size: int = 224,    
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Build {split: data_list} dict with patient-level splitting."""
+    """Build {split: data_list} dict with patient-level splitting for Lung-PET-CT-Dx."""
     if not os.path.isdir(data_path):
         raise ValueError(f"Data path '{data_path}' does not exist or is not a directory.")
 
@@ -147,8 +154,8 @@ def get_data_list(
     }
 
     annotation_cache: Dict[str, Dict[str, torch.Tensor]] = {}
-
     result: Dict[str, List[Dict[str, Any]]] = {}
+    
     for split, selected in split_patients.items():
         print(f"Split '{split}': {len(selected)} patients.")
 
@@ -185,7 +192,7 @@ def get_data_list(
                 break
 
         if annotation_dir:
-            n_with = sum(1 for d in data_list if d.get("boxes") is not None and d["boxes"].shape[0] > 0)
+            n_with = sum(1 for d in data_list if d.get("boxes") is not None and len(d["boxes"]) > 0)
             print(f"  {len(data_list)} images ({n_with} with annotations).")
         else:
             print(f"  {len(data_list)} images.")
@@ -195,8 +202,77 @@ def get_data_list(
     return result
 
 
-def create_lung_pet_ct_dataset(
+def get_biglunge_data_list(
     data_path: str,
+    csv_path: str,
+    val_frac: float = 0.1,
+    test_frac: float = 0.1,
+    seed: int = 42,
+    testing: bool = False,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Build {split: data_list} dict with patient-level splitting for BigLunge."""
+    if not os.path.isdir(data_path):
+        raise ValueError(f"Data path '{data_path}' does not exist or is not a directory.")
+    if not os.path.isfile(csv_path):
+        raise ValueError(f"CSV file '{csv_path}' does not exist.")
+
+    patient_labels = load_patient_labels(csv_path)
+
+    data_root = Path(data_path)
+    patient_folders = sorted(
+        int(e.name) for e in data_root.iterdir()
+        if e.is_dir() and e.name.isdigit() and int(e.name) in patient_labels
+    )
+
+    if not patient_folders:
+        raise ValueError(f"No valid patient folders found in '{data_path}'.")
+
+    print(f"Found {len(patient_folders)} patients with labels.")
+
+    rng = np.random.default_rng(seed)
+    rng.shuffle(patient_folders)
+
+    n_total = len(patient_folders)
+    n_test = int(n_total * test_frac)
+    n_val = int(n_total * val_frac)
+    n_train = n_total - n_test - n_val
+
+    split_patients = {
+        "train": patient_folders[:n_train],
+        "val": patient_folders[n_train:n_train + n_val],
+        "test": patient_folders[n_train + n_val:],
+    }
+
+    result: Dict[str, List[Dict[str, Any]]] = {}
+    for split, selected in split_patients.items():
+        print(f"Split '{split}': {len(selected)} patients.")
+        data_list = []
+        for pid in selected:
+            patient_dir = data_root / str(pid)
+            if not patient_dir.is_dir():
+                continue
+            label = patient_labels[pid]
+            for nii in patient_dir.glob("*.nii*"):
+                if "_label_Lungs_auto" not in nii.name:
+                    data_list.append({"image": str(nii), "scan_label": label, "patient_id": pid})
+                    if testing and len(data_list) >= 2:
+                        break
+            if testing and len(data_list) >= 2:
+                break
+
+        class_counts: Dict[int, int] = {}
+        for item in data_list:
+            class_counts[item["scan_label"]] = class_counts.get(item["scan_label"], 0) + 1
+        print(f"  {len(data_list)} images, class distribution: {class_counts}")
+        result[split] = data_list
+
+    return result
+
+
+def create_dataset(
+    dataset_type: str,
+    data_path: str,
+    csv_path: str = "",
     img_size: int = 224,
     depth_size: int = 64,   
     convert_to_rgb: bool = True,
@@ -207,10 +283,33 @@ def create_lung_pet_ct_dataset(
     use_3d: bool = False,
     testing: bool = False,
     warm_cache: bool = False,
+    val_frac: float = 0.1,
+    test_frac: float = 0.1,
+    seed: int = 42,
     **kwargs: Any,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
-    """Create train/val/test PersistentDatasets for Lung-PET-CT-Dx (disk-cached transforms)."""
-    all_splits = get_data_list(data_path, annotation_dir=annotation_dir, testing=testing, img_size=img_size)
+    """
+    Unified function to create train/val/test PersistentDatasets for SCLC.
+    
+    Args:
+        dataset_type: "big_lunge" or "lung_pet_ct_dx"
+        ...
+    """
+    if dataset_type == "big_lunge":
+        all_splits = get_biglunge_data_list(
+            data_path=data_path, csv_path=csv_path,
+            val_frac=val_frac, test_frac=test_frac, seed=seed,
+            testing=testing,
+        )
+        cache_name = "monai_biglunge"
+    elif dataset_type == "lung_pet_ct_dx":
+        all_splits = get_lung_pet_ct_dx_data_list(
+            data_path=data_path, val_frac=val_frac, test_frac=test_frac, seed=seed,
+            annotation_dir=annotation_dir, testing=testing, img_size=img_size
+        )
+        cache_name = "monai_lung_pet_ct"
+    else:
+        raise ValueError(f"Unknown dataset_type: {dataset_type}")
 
     datasets = []
     for split in ("train", "val", "test"):
@@ -234,7 +333,7 @@ def create_lung_pet_ct_dataset(
             current_cache_dir = os.path.join(
                 os.path.expanduser("~"),
                 ".cache",
-                "monai_lung_pet_ct",
+                cache_name,
                 f"{mode_key}_img{img_size}_d{depth_size}",
                 split,
             )
@@ -246,8 +345,13 @@ def create_lung_pet_ct_dataset(
 
         ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=current_cache_dir)
 
-        for i in tqdm(range(len(ds)), desc=f"Caching Lung-PET-CT-Dx [{split}]", unit="img"):
-            _ = ds[i]
+        # PersistentDataset automatically uses existing cache files. 
+        # We only explicitly loop (warm up) if the directory is empty or warm_cache is forced.
+        is_empty = len(os.listdir(current_cache_dir)) == 0 if os.path.exists(current_cache_dir) else True
+
+        if warm_cache or is_empty:
+            for i in tqdm(range(len(ds)), desc=f"Caching [{split}]", unit="img"):
+                _ = ds[i]
 
         datasets.append(ds)
 
@@ -260,59 +364,3 @@ def get_class_names() -> List[str]:
 def get_num_classes() -> int:
     return len(CLASS_NAMES)
 
-
-if __name__ == "__main__":
-    import argparse
-    import time
-    from monai.data import DataLoader  # type: ignore[attr-defined]
-
-    def _list_collate(batch):
-        """Simple collate that returns a list of dicts (no stacking)."""
-        return batch
-
-    parser = argparse.ArgumentParser(description="Lung-PET-CT-Dx data loading benchmark")
-    parser.add_argument("--data-path", type=str, required=True)
-    parser.add_argument("--annotation-dir", type=str, default="")
-    parser.add_argument("--cache-dir", type=str, default=None)
-    parser.add_argument("--img-size", type=int, default=224)
-    parser.add_argument("--batch-size", type=int, default=4)
-    parser.add_argument("--num-workers", type=int, default=4)
-    args = parser.parse_args()
-
-    print(f"{'=' * 60}")
-    print(f"Benchmark | img={args.img_size} batch={args.batch_size} workers={args.num_workers}")
-    print(f"{'=' * 60}")
-
-    train_ds, val_ds, test_ds = create_lung_pet_ct_dataset(
-        data_path=args.data_path, img_size=args.img_size,
-        cache_dir=args.cache_dir, num_workers=args.num_workers,
-        annotation_dir=args.annotation_dir,
-    )
-
-    for split, ds in [("train", train_ds), ("val", val_ds), ("test", test_ds)]:
-        print(f"\n--- {split} ---")
-        print(f"  Samples: {len(ds)}")
-
-        t0 = time.perf_counter()
-        _ = ds[0]
-        print(f"  First access : {time.perf_counter() - t0:.4f}s")
-
-        loader = DataLoader(ds, batch_size=args.batch_size,
-                            num_workers=args.num_workers, shuffle=False, pin_memory=False,
-                            collate_fn=_list_collate)
-
-        for pass_name in ("1st pass", "2nd pass"):
-            n = 0
-            t0 = time.perf_counter()
-            for _ in loader:
-                n += 1
-            elapsed = time.perf_counter() - t0
-            sps = len(ds) / elapsed if elapsed > 0 else float("inf")
-            print(f"  {pass_name}      : {elapsed:.2f}s  ({n} batches, {sps:.1f} samples/s)")
-
-        sample = ds[0]
-        print(f"  Shape        : {tuple(sample['image'].shape)}, dtype={sample['image'].dtype}")
-
-    print(f"\n{'=' * 60}\nDone.")
-
-# python -m data.lung_pet_ct_dx_loader --data-path /home/data/Lung-PET-CT-Dx --annotation-dir /home/data/Annotation
