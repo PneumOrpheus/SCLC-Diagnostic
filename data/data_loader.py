@@ -195,18 +195,23 @@ def get_lung_pet_ct_dx_data_list(
                     entry["labels"] = annot["labels"]
 
                 data_list.append(entry)
-                if testing and len(data_list) >= 2:
+                if testing and len(data_list) >= 32:
                     break
-            if testing and len(data_list) >= 2:
+            if testing and len(data_list) >= 32:
                 break
+                
+        class_counts: Dict[int, int] = {}
+        for item in data_list:
+            class_counts[item["scan_label"]] = class_counts.get(item["scan_label"], 0) + 1
 
         if annotation_dir:
             n_with = sum(1 for d in data_list if d.get("boxes") is not None and len(d["boxes"]) > 0)
-            print(f"  {len(data_list)} images ({n_with} with annotations).")
+            print(f"  {len(data_list)} images ({n_with} with annotations), class distribution: {class_counts}")
         else:
-            print(f"  {len(data_list)} images.")
+            print(f"  {len(data_list)} images, class distribution: {class_counts}")
 
         result[split] = data_list
+        
 
     return result
 
@@ -264,9 +269,9 @@ def get_biglunge_data_list(
             for nii in patient_dir.glob("*.nii*"):
                 if "_label_Lungs_auto" not in nii.name:
                     data_list.append({"image": str(nii), "scan_label": label, "patient_id": pid})
-                    if testing and len(data_list) >= 2:
+                    if testing and len(data_list) >= 32:
                         break
-            if testing and len(data_list) >= 2:
+            if testing and len(data_list) >= 32:
                 break
 
         class_counts: Dict[int, int] = {}
