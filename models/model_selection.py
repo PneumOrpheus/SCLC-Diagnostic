@@ -457,7 +457,6 @@ class DualHeadSCLCModel(nn.Module):
             batch_5d = torch.stack(padded_scans, dim=0)  # (B, C, H, W, D)
             batch_5d = batch_5d.permute(0, 1, 4, 2, 3).contiguous()  # (B, C, D, H, W)
             features = self.backbone(batch_5d)
-            print(f"Features extracted from 3D backbone with input shape {features}.")
             _, _, _, sH, sW = batch_5d.shape
             
             # Use original H and W before padding
@@ -489,7 +488,8 @@ class DualHeadSCLCModel(nn.Module):
                     # Usually, the safest approach for Faster R-CNN is to pass a valid tensor representation
                     # But if we pass empty boxes (0, 4), torchvision's matcher handles it safely 
                     # ONLY IF the tensor type strictly maps to the device without zero-division in your version.
-                    # Ensure device consistency and correct zeros shape
+                    # Ensure device consistency and correct zeros shape based on coordinates logic
+                    # NOTE: Torchvision's ROI heads strictly expect (N, 4) targets for 2D bounding boxes even when utilizing volumetric data when using FasterRCNN natively!
                     empty_t = {
                         "boxes": torch.zeros((0, 4), dtype=torch.float32, device=scans[0].device),
                         "labels": torch.zeros((0,), dtype=torch.int64, device=scans[0].device),

@@ -173,7 +173,7 @@ Examples:
                         help="Early stopping patience (epochs without improvement)")
 
     # Annotation directory for bounding boxes (Lung-PET-CT-Dx)
-    parser.add_argument("--annotation-dir", type=str, default="/home/data/Annotation",
+    parser.add_argument("--annotation-dir", type=str, default="/home/data/Annotation_ZMapped",
                         help="Path to annotation directory with per-patient XML bounding boxes")
 
     # Performance / acceleration

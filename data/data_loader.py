@@ -27,6 +27,7 @@ NORWEGIAN_CLASS_MAP = {
 def load_patient_annotations(
     annotation_dir: str,
     patient_short_id: str,
+    series_uid: str,
     orig_size: int = 512,
     target_size: int = 224, 
 ) -> Dict[str, torch.Tensor]:
@@ -40,7 +41,9 @@ def load_patient_annotations(
     if not os.path.isdir(patient_annot_dir):
         return empty
 
-    xml_files = glob.glob(os.path.join(patient_annot_dir, "*.xml"))
+    # Only load annotations specific to the current series
+    xml_pattern = os.path.join(patient_annot_dir, f"*_{series_uid}_slice*.xml")
+    xml_files = glob.glob(xml_pattern)
     if not xml_files:
         return empty
 
@@ -67,6 +70,7 @@ def load_patient_annotations(
                 slice_idx = int(slice_str)
                 all_boxes.append((xmin, ymin, xmax, ymax, slice_idx, CLASS_MAP[letter]))
         except (ET.ParseError, AttributeError):
+            print(f"Warning: Failed to parse XML '{xml_path}'. Skipping.")
             continue
 
     if not all_boxes:
@@ -177,11 +181,16 @@ def get_lung_pet_ct_dx_data_list(
 
                 if annotation_dir and os.path.isdir(annotation_dir):
                     short_id = pid.split("-")[-1] if "-" in pid else pid
-                    if short_id not in annotation_cache:
-                        annotation_cache[short_id] = load_patient_annotations(
-                            annotation_dir, short_id, orig_size=512, target_size=img_size
+                    
+                    # Extract series_uid from the file name (assuming format: patientID_seriesUID.nii.gz)
+                    series_uid = f.replace(f"{pid}_", "").split(".nii")[0]
+                    cache_key = f"{short_id}_{series_uid}"
+                    
+                    if cache_key not in annotation_cache:
+                        annotation_cache[cache_key] = load_patient_annotations(
+                            annotation_dir, short_id, series_uid, orig_size=512, target_size=img_size
                         )
-                    annot = annotation_cache[short_id]
+                    annot = annotation_cache[cache_key]
                     entry["boxes"] = annot["boxes"]
                     entry["labels"] = annot["labels"]
 

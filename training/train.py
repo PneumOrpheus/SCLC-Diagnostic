@@ -45,7 +45,20 @@ def sclc_collate_fn(batch: List[Dict[str, Any]]) -> tuple:
 
         boxes = item.get("boxes", [])
         if not isinstance(boxes, torch.Tensor):
+            # Faster RCNN in torchvision strictly expects 2D bounding boxes (N, 4)
+            # Some boxes have 6 elements ([x1, y1, z1, x2, y2, z2]), we MUST drop the Z dimension
+            # to feed it into the region proposal network.
+            if len(boxes) > 0 and len(boxes[0]) == 6:
+                # Strip out zmin (idx 2) and zmax (idx 5) to yield [x1, y1, x2, y2]
+                boxes = [[b[0], b[1], b[3], b[4]] for b in boxes]
+            
             boxes = torch.tensor(boxes, dtype=torch.float32).reshape(-1, 4) if len(boxes) > 0 else torch.zeros((0, 4), dtype=torch.float32)
+        else:
+            if boxes.numel() == 0:
+                boxes = torch.zeros((0, 4), dtype=torch.float32)
+            elif boxes.shape[-1] == 6:
+                # Drop Z coordinate to get (N, 4)
+                boxes = boxes[:, [0, 1, 3, 4]]
 
         labels = item.get("labels", [])
         if not isinstance(labels, torch.Tensor):

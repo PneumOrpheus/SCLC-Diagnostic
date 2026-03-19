@@ -254,12 +254,26 @@ class ExtractSubVolumed(MapTransform):
                     adjusted_boxes[:, 2] -= start
                     adjusted_boxes[:, 5] -= start
                     
-                    # We could clamp the Z coordinates here to [0, target-1], but because 
-                    # we centered around the tumor, they should easily fit inside the 64 slices.
                     d["boxes"] = adjusted_boxes.tolist()
             else:
-                # If the volume is thinner than 64 slices, logic usually pads it earlier in the pipeline
-                raise ValueError(f"Volume depth {depth} is less than target {target} slices.")
+                # If the volume is thinner than target slices, pad the Z axis
+                pad_size = target - depth
+                pad_before = pad_size // 2
+                pad_after = pad_size - pad_before
+                
+                if isinstance(volume, np.ndarray):
+                    # volume is (C, X, Y, Z)
+                    d[key] = np.pad(volume, ((0,0), (0,0), (0,0), (pad_before, pad_after)), mode='constant')
+                else:
+                    import torch.nn.functional as F
+                    d[key] = F.pad(volume, (pad_before, pad_after), mode='constant')
+                    
+                # Adjust the box Z-coordinates for the padding
+                if key == "image" and "boxes" in d and len(d["boxes"]) > 0:
+                    adjusted_boxes = np.array(d["boxes"], dtype=np.float32)
+                    adjusted_boxes[:, 2] += pad_before
+                    adjusted_boxes[:, 5] += pad_before
+                    d["boxes"] = adjusted_boxes.tolist()
                 
         return d
 
