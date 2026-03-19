@@ -7,7 +7,6 @@ import os
 from typing import Any, Dict, List, Sequence, Optional
 
 # MONAI transforms for preprocessing
-from models.model_selection import focal_loss
 
 """
 SCLC Diagnostic System Training
@@ -44,9 +43,30 @@ def sclc_collate_fn(batch: List[Dict[str, Any]]) -> tuple:
         if not isinstance(scan_label, torch.Tensor):
             scan_label = torch.tensor(scan_label, dtype=torch.int64)
 
+        boxes = item.get("boxes", [])
+        if not isinstance(boxes, torch.Tensor):
+            # Faster RCNN in torchvision strictly expects 2D bounding boxes (N, 4)
+            # Some boxes have 6 elements ([x1, y1, z1, x2, y2, z2]), we MUST drop the Z dimension
+            # to feed it into the region proposal network.
+            if len(boxes) > 0 and len(boxes[0]) == 6:
+                # Strip out zmin (idx 2) and zmax (idx 5) to yield [x1, y1, x2, y2]
+                boxes = [[b[0], b[1], b[3], b[4]] for b in boxes]
+            
+            boxes = torch.tensor(boxes, dtype=torch.float32).reshape(-1, 4) if len(boxes) > 0 else torch.zeros((0, 4), dtype=torch.float32)
+        else:
+            if boxes.numel() == 0:
+                boxes = torch.zeros((0, 4), dtype=torch.float32)
+            elif boxes.shape[-1] == 6:
+                # Drop Z coordinate to get (N, 4)
+                boxes = boxes[:, [0, 1, 3, 4]]
+
+        labels = item.get("labels", [])
+        if not isinstance(labels, torch.Tensor):
+            labels = torch.tensor(labels, dtype=torch.int64)
+
         target = {
-            "boxes": item.get("boxes", torch.zeros((0, 4), dtype=torch.float32)),
-            "labels": item.get("labels", torch.zeros((0,), dtype=torch.int64)),
+            "boxes": boxes,
+            "labels": labels,
             "scan_label": scan_label,
             "scan_id": torch.tensor(i, dtype=torch.int64),
         }
@@ -56,24 +76,13 @@ def sclc_collate_fn(batch: List[Dict[str, Any]]) -> tuple:
 
 def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10,
                 use_mixup=False, mixup_alpha=0.2,
-                scaler=None, accumulation_steps=1, clip_grad=1.0,
-                label_smoothing=0.0):
-    """Train one epoch with optional Mixup augmentation, AMP, and gradient accumulation.
-    
-    Args:
-        model: The model to train.
-        optimizer: Optimizer.
-        data_loader: Training data loader.
-        device: Device to train on.
-        epoch: Current epoch number.
-        print_freq: Print frequency.
-        use_mixup: Whether to apply Mixup data augmentation.
-        mixup_alpha: Beta distribution parameter for Mixup.
-        scaler: GradScaler for AMP (None = no AMP).
-        accumulation_steps: Number of mini-batches to accumulate before stepping.
-        clip_grad: Max gradient norm for clipping (0 = disabled).
-        label_smoothing: Label smoothing factor (0.0 = disabled).
+                scaler=None, accumulation_steps=1, clip_grad=1.0):
+    """Train one epoch with AMP, and gradient accumulation.
+    (Note: Mixup is disabled as it is structurally incompatible with Object Detection bounded targets)
     """
+    if use_mixup:
+        print("Warning: Mixup is disabled. It is incompatible with bounding box targets in Dual-Head networks.")
+        
     model.train()
     running_loss = 0.0
     running_det_loss = 0.0
@@ -94,52 +103,11 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10,
         scans = [scan.to(device, non_blocking=True) for scan in scans]
         targets = [{k: v.to(device, non_blocking=True) for k, v in t.items()} for t in targets]
         
-        batch_size = len(scans)
-        apply_mixup = use_mixup and batch_size > 1 and np.random.random() < 0.5
-        
         with torch.amp.autocast(enabled=amp_enabled, device_type=device.type):
-            if apply_mixup:
-                # Blend pairs of images and compute mixed loss
-                lam = np.random.beta(mixup_alpha, mixup_alpha)
-                index = torch.randperm(batch_size)
-                
-                mixed_scans = [lam * scans[j] + (1 - lam) * scans[index[j]] for j in range(batch_size)]
-                
-                # Forward with mixed images, request logits for proper mixup loss
-                loss_dict = model(mixed_scans, targets, return_logits=True)
-                
-                global_logits = loss_dict.pop("global_logits")
-                _ = loss_dict.pop("global_classification_loss")
-                
-                # Compute proper mixup focal loss
-                gt_a = torch.stack([targets[j]["scan_label"] for j in range(batch_size)])
-                gt_b = torch.stack([targets[index[j]]["scan_label"] for j in range(batch_size)])
-                
-                class_w = model.class_weights if hasattr(model, 'class_weights') else None
-                global_loss = (
-                    lam * focal_loss(global_logits, gt_a, alpha=class_w) +
-                    (1 - lam) * focal_loss(global_logits, gt_b, alpha=class_w)
-                )
-            else:
-                # Request logits when label smoothing is needed
-                need_logits = label_smoothing > 0.0
-                loss_dict = model(scans, targets, return_logits=need_logits)
-                
-                if need_logits:
-                    global_logits = loss_dict.pop("global_logits")
-                    _ = loss_dict.pop("global_classification_loss")
-                    
-                    # Compute label-smoothed loss via cross-entropy
-                    gt_labels = torch.stack([t["scan_label"] for t in targets])
-                    num_classes = global_logits.size(-1)
-                    log_probs = torch.log_softmax(global_logits, dim=-1)
-                    
-                    # One-hot targets blended with uniform distribution
-                    one_hot = torch.zeros_like(log_probs).scatter_(1, gt_labels.unsqueeze(1), 1.0)
-                    smooth_targets = (1.0 - label_smoothing) * one_hot + label_smoothing / num_classes
-                    global_loss = -(smooth_targets * log_probs).sum(dim=-1).mean()
-                else:
-                    global_loss = loss_dict.pop("global_classification_loss")
+            
+            loss_dict = model(scans, targets)
+            
+            global_loss = loss_dict.pop("global_classification_loss")
 
             # Ensure detection loss is always a tensor on the correct device
             if loss_dict:
@@ -153,8 +121,16 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10,
             else:
                 loss_detection = torch.zeros((), device=device)
             
-            # Weighted sum - global classification is the primary task
-            total_loss = loss_detection + global_loss
+            # --- DYNAMIC RE-WEIGHTING LOSSES ---
+            # Warmup Schedule: start with 0 for classification and gradually increase
+            # to let the detector learn spatial representation first.
+            warmup_epochs = 5
+            ramp_factor = (epoch - 1) / warmup_epochs if epoch <= warmup_epochs else 1.0
+            
+            det_weight = 0.25
+            cls_weight = 2.0 * ramp_factor
+            
+            total_loss = (det_weight * loss_detection) + (cls_weight * global_loss)
             
             # Scale loss for gradient accumulation
             total_loss = total_loss / accumulation_steps
@@ -192,9 +168,8 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10,
         running_global_loss += global_loss.item()
         
         if i % print_freq == 0:
-            extra = " [mixup]" if apply_mixup else ""
             memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0) if device.type == "cuda" else 0
-            print(f"Epoch [{epoch}], Iteration [{i}/{num_batches}]{extra}, "
+            print(f"Epoch [{epoch}], Iteration [{i}/{num_batches}], "
                   f"Total loss: {total_loss.item() * accumulation_steps:.4f}, "
                   f"Detection loss: {loss_detection.item():.4f}, "
                   f"Global loss: {global_loss.item():.4f}, "
@@ -212,7 +187,7 @@ def train_epoch(model, optimizer, data_loader, device, epoch, print_freq=10,
 
 
 @torch.no_grad()
-def validate_epoch(model, data_loader, device, phase="val"):
+def validate_epoch(model, data_loader, device, epoch=None, phase="val"):
     """
     Computes validation loss. 
     NOTE: Sets model to train() mode with no_grad() because standard torchvision 
@@ -248,7 +223,11 @@ def validate_epoch(model, data_loader, device, phase="val"):
         else:
             loss_detection = torch.zeros((), device=device)
             
-        total_loss = loss_detection + 1.0 * global_loss
+        # Match training weights so eval metrics align
+        warmup_epochs = 5
+        ramp_factor = (epoch - 1) / warmup_epochs if epoch is not None and epoch <= warmup_epochs else 1.0
+        
+        total_loss = (0.25 * loss_detection) + (2.0 * ramp_factor * global_loss)
         
         running_loss += total_loss.item()
         running_det_loss += loss_detection.item()

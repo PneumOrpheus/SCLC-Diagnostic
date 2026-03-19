@@ -90,126 +90,6 @@ class LoadNiftiWithRGBSupportd(MapTransform):
         return d
 
 
-class ExtractMiddleSliced(MapTransform):
-    """Extract the middle 2D slice from a 3D volume along the slice axis.
-    
-    For NIfTI volumes with shape (C, X, Y, Z), extracts middle slice along Z
-    to get (C, X, Y). NIfTI stores axial CT slices along the last spatial axis.
-    """
-    
-    def __init__(
-        self, 
-        keys: KeysCollection,
-        allow_missing_keys: bool = False
-    ) -> None:
-        super().__init__(keys, allow_missing_keys)
-    
-    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
-        d: Dict[Hashable, Any] = dict(data)
-        for key in self.key_iterator(d):
-            volume = d[key]
-            if hasattr(volume, 'ndim') and volume.ndim >= 3:
-                # NIfTI data is (C, X, Y, Z) - slices are along the last axis
-                if volume.ndim == 4:
-                    depth_axis = 3
-                elif volume.ndim == 3:
-                    depth_axis = 2
-                else:
-                    depth_axis = -1
-                    
-                mid_idx = volume.shape[depth_axis] // 2
-                if isinstance(volume, np.ndarray):
-                    d[key] = np.take(volume, mid_idx, axis=depth_axis)
-                else:
-                    d[key] = volume.select(depth_axis, mid_idx)
-        return d
-
-
-class ExtractMultiSliced(MapTransform):
-    """Extract multiple adjacent slices from a 3D volume and aggregate via projection.
-    
-    Takes N slices centered around the middle of the volume and applies
-    max-intensity projection (MIP) to produce a single representative 2D slice.
-    MIP captures more diagnostic information than a single middle slice,
-    as tumors may span multiple slices.
-    """
-    
-    def __init__(
-        self,
-        keys: KeysCollection,
-        num_slices: int = 5,
-        aggregation: str = "max",
-        allow_missing_keys: bool = False
-    ) -> None:
-        super().__init__(keys, allow_missing_keys)
-        self.num_slices = num_slices
-        self.aggregation = aggregation
-    
-    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
-        d: Dict[Hashable, Any] = dict(data)
-        for key in self.key_iterator(d):
-            volume = d[key]
-            if hasattr(volume, 'ndim') and volume.ndim >= 3:
-                if volume.ndim == 4:
-                    depth_axis = 3
-                elif volume.ndim == 3:
-                    depth_axis = 2
-                else:
-                    depth_axis = -1
-                
-                num_available = volume.shape[depth_axis]
-                mid = num_available // 2
-                half = self.num_slices // 2
-                
-                start = max(0, mid - half)
-                end = min(num_available, start + self.num_slices)
-                start = max(0, end - self.num_slices)
-                
-                if isinstance(volume, np.ndarray):
-                    indices = list(range(start, end))
-                    slices = np.take(volume, indices, axis=depth_axis)
-                    if self.aggregation == "max":
-                        d[key] = np.max(slices, axis=depth_axis)
-                    else:
-                        d[key] = np.mean(slices, axis=depth_axis)
-                else:
-                    slices = volume.narrow(depth_axis, start, end - start)
-                    if self.aggregation == "max":
-                        d[key] = slices.max(dim=depth_axis)[0]
-                    else:
-                        d[key] = slices.mean(dim=depth_axis)
-        return d
-
-
-class ApplyWindowingd(MapTransform):
-    """Apply CT windowing to enhance contrast for specific tissues.
-    
-    Windowing formula maps HU values to [0, 1] range based on window center and width.
-    """
-    
-    def __init__(
-        self,
-        keys: KeysCollection,
-        window_center: float,
-        window_width: float,
-        allow_missing_keys: bool = False
-    ) -> None:
-        super().__init__(keys, allow_missing_keys)
-        self.window_center = window_center
-        self.window_width = window_width
-    
-    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
-        d: Dict[Hashable, Any] = dict(data)
-        for key in self.key_iterator(d):
-            volume = d[key]
-            img_min = self.window_center - (self.window_width / 2)
-            img_max = self.window_center + (self.window_width / 2)
-            
-            windowed = np.clip(volume, img_min, img_max)
-            d[key] = ((windowed - img_min) / (img_max - img_min)).astype(np.float32)
-        return d
-
-
 class CreateMultiChannelCTd(MapTransform):
     """Create a 3-channel representation using different CT windows.
     
@@ -297,25 +177,25 @@ class AddPlaceholderTargetsd(MapTransform):
         d: Dict[Hashable, Any] = dict(data)
         # Add placeholder targets if not present
         if "boxes" not in d:
-            d["boxes"] = torch.zeros((0, 4), dtype=torch.float32)
+            d["boxes"] = []
         if "labels" not in d:
-            d["labels"] = torch.zeros((0,), dtype=torch.int64)
+            d["labels"] = []
         if "scan_label" not in d:
-            d["scan_label"] = torch.tensor(0, dtype=torch.int64)
+            d["scan_label"] = 0
         return d
 
 
 class ExtractSubVolumed(MapTransform):
-    """Extract a fixed number of slices from the center of a 3D volume.
-
-    For 3D models, keeps the volume as (C, D, H, W) instead of collapsing to 2D.
-    Selects `num_slices` centered slices along the depth (last spatial) axis.
+    """Extract a fixed number of slices from a 3D volume.
+    
+    If 'boxes' is present in data, centers the crop around the tumor's Z-axis.
+    Otherwise, extracts from the center of the volume.
     """
 
     def __init__(
         self,
         keys: KeysCollection,
-        num_slices: int = 16,
+        num_slices: int = 64,
         allow_missing_keys: bool = False
     ) -> None:
         super().__init__(keys, allow_missing_keys)
@@ -323,6 +203,18 @@ class ExtractSubVolumed(MapTransform):
 
     def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
         d: Dict[Hashable, Any] = dict(data)
+        
+        # Figure out the center Z coordinate from the annotations if available
+        target_z_center = None
+        if "boxes" in d and len(d["boxes"]) > 0:
+            # Boxes are [x1, y1, z1, x2, y2, z2]
+            boxes = np.array(d["boxes"])
+            # Get the overall min and max Z across all bounding boxes
+            z_min = boxes[:, 2].min()
+            z_max = boxes[:, 5].max()
+            # Calculate the middle of the tumor
+            target_z_center = int((z_min + z_max) / 2)
+
         for key in self.key_iterator(d):
             volume = d[key]
             if not hasattr(volume, 'ndim') or volume.ndim < 4:
@@ -333,28 +225,56 @@ class ExtractSubVolumed(MapTransform):
             target = self.num_slices
 
             if depth >= target:
-                mid = depth // 2
+                if target_z_center is not None:
+                    mid = target_z_center
+                else:
+                    mid = depth // 2
+                
                 half = target // 2
-                start = max(0, mid - half)
+                start = mid - half
                 end = start + target
-                if end > depth:
+                
+                # Handle edge cases to ensure we always get exactly 'target' slices
+                if start < 0:
+                    start = 0
+                    end = target
+                elif end > depth:
                     end = depth
-                    start = end - target
+                    start = depth - target
+                    
                 if isinstance(volume, np.ndarray):
                     d[key] = volume[..., start:end]
                 else:
                     d[key] = volume[..., start:end]
+                    
+                # IMPORTANT: Adjust the box Z-coordinates so they align with the new cropped volume!
+                if key == "image" and "boxes" in d and len(d["boxes"]) > 0:
+                    # Subtract the start offset from the Z-coordinates
+                    adjusted_boxes = np.array(d["boxes"], dtype=np.float32)
+                    adjusted_boxes[:, 2] -= start
+                    adjusted_boxes[:, 5] -= start
+                    
+                    d["boxes"] = adjusted_boxes.tolist()
             else:
-                # Pad with zeros if not enough slices
-                pad_total = target - depth
-                pad_before = pad_total // 2
-                pad_after = pad_total - pad_before
+                # If the volume is thinner than target slices, pad the Z axis
+                pad_size = target - depth
+                pad_before = pad_size // 2
+                pad_after = pad_size - pad_before
+                
                 if isinstance(volume, np.ndarray):
-                    pad_widths = [(0, 0)] * (volume.ndim - 1) + [(pad_before, pad_after)]
-                    d[key] = np.pad(volume, pad_widths, mode='constant', constant_values=0)
+                    # volume is (C, X, Y, Z)
+                    d[key] = np.pad(volume, ((0,0), (0,0), (0,0), (pad_before, pad_after)), mode='constant')
                 else:
-                    # PyTorch: pad last dimension
-                    d[key] = torch.nn.functional.pad(volume, (pad_before, pad_after), mode='constant', value=0)
+                    import torch.nn.functional as F
+                    d[key] = F.pad(volume, (pad_before, pad_after), mode='constant')
+                    
+                # Adjust the box Z-coordinates for the padding
+                if key == "image" and "boxes" in d and len(d["boxes"]) > 0:
+                    adjusted_boxes = np.array(d["boxes"], dtype=np.float32)
+                    adjusted_boxes[:, 2] += pad_before
+                    adjusted_boxes[:, 5] += pad_before
+                    d["boxes"] = adjusted_boxes.tolist()
+                
         return d
 
 
@@ -405,8 +325,6 @@ def get_train_transforms(
             )
         )
     
-    # Extract multiple slices and max-project for richer 2D representation
-    transforms.append(ExtractMultiSliced(keys=["image"], num_slices=5, aggregation="max"))
     
     # Convert to RGB if needed (also ensures 3 channels)
     if convert_to_rgb and not use_multichannel_windowing:
@@ -511,34 +429,17 @@ def get_val_transforms(
 
 def get_train_transforms_3d(
     img_size: int = 224,
-    depth_size: int = 16,
+    depth_size: int = 64,
 ) -> Compose:
     """Get the 3D training transforms pipeline for volumetric models.
 
     Keeps the volume as (C, D, H, W) for 3D Swin Transformer input.
-    Uses single-channel grayscale (no RGB conversion).
-
-    Args:
-        img_size: Target spatial size (H, W).
-        depth_size: Number of depth slices to extract.
-
-    Returns:
-        Composed MONAI transforms for 3D training.
+    Uses single-channel grayscale (no RGB conversion) on the FULL scan depth.
     """
     transforms = [
         LoadNiftiWithRGBSupportd(keys=["image"]),
 
-        # Clip to valid HU range
-        ScaleIntensityRanged(
-            keys=["image"],
-            a_min=-1024,
-            a_max=3071,
-            b_min=-1024,
-            b_max=3071,
-            clip=True,
-        ),
-
-        # Scale intensity to [0, 1]
+        # Scale intensity to [0, 1] AND clip outliers dynamically
         ScaleIntensityRanged(
             keys=["image"],
             a_min=-1024,
@@ -548,19 +449,12 @@ def get_train_transforms_3d(
             clip=True,
         ),
 
-        # Extract sub-volume of fixed depth from center
+        # Extract a contiguous crop of depth_size from the center of the Z-axis
         ExtractSubVolumed(keys=["image"], num_slices=depth_size),
-
-        # Resize spatial dimensions (keeps depth intact)
-        # Input is (C, X, Y, Z) = (1, X, Y, depth_size)
-        # We resize X and Y to img_size
-        Resized(keys=["image"], spatial_size=(img_size, img_size, depth_size), mode="trilinear"),
-
-        # --- 3D Data Augmentation ---
-        RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
-        RandFlipd(keys=["image"], prob=0.5, spatial_axis=1),
-        RandFlipd(keys=["image"], prob=0.3, spatial_axis=2),
-
+        
+        # Resize only X and Y down to img_size 
+        Resized(keys=["image"], spatial_size=(img_size, img_size, -1), mode="trilinear"),
+        
         # Intensity augmentation
         RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
         RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
@@ -570,35 +464,18 @@ def get_train_transforms_3d(
         AddPlaceholderTargetsd(keys=["image"]),
         ToTensord(keys=["image"]),
     ]
-
     return Compose(transforms)
 
 
 def get_val_transforms_3d(
     img_size: int = 224,
-    depth_size: int = 16,
+    depth_size: int = 64,
 ) -> Compose:
-    """Get the 3D validation/test transforms pipeline (no augmentation).
-
-    Args:
-        img_size: Target spatial size (H, W).
-        depth_size: Number of depth slices.
-
-    Returns:
-        Composed MONAI transforms for 3D validation/test.
-    """
+    """Get the 3D validation/test transforms pipeline for volumetric models."""
     transforms = [
         LoadNiftiWithRGBSupportd(keys=["image"]),
 
-        ScaleIntensityRanged(
-            keys=["image"],
-            a_min=-1024,
-            a_max=3071,
-            b_min=-1024,
-            b_max=3071,
-            clip=True,
-        ),
-
+        # Scale intensity and clip outliers dynamically
         ScaleIntensityRanged(
             keys=["image"],
             a_min=-1024,
@@ -609,10 +486,10 @@ def get_val_transforms_3d(
         ),
 
         ExtractSubVolumed(keys=["image"], num_slices=depth_size),
-        Resized(keys=["image"], spatial_size=(img_size, img_size, depth_size), mode="trilinear"),
 
+        Resized(keys=["image"], spatial_size=(img_size, img_size, depth_size), mode="trilinear"),
+        
         AddPlaceholderTargetsd(keys=["image"]),
         ToTensord(keys=["image"]),
     ]
-
     return Compose(transforms)

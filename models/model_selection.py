@@ -10,9 +10,11 @@ from torchvision.models.detection.rpn import AnchorGenerator
 from torchvision.models.detection.image_list import ImageList
 from torchvision.models.detection.transform import GeneralizedRCNNTransform
 from collections import OrderedDict
+from monai.losses import DiceFocalLoss
 
 from models.build import build_model
 from models.utils import load_pretrained
+from models.swin_unetr import get_swin_unetr_model
 
 """
 SCLC Diagnostic System - Model Architecture Module
@@ -130,7 +132,7 @@ class SwinFeatureExtractor3D(nn.Module):
             # Reshape to 5D: (B, D, H, W, C) -> (B, C, D, H, W)
             feat_5d = x.view(B, int(D), int(H), int(W), int(C)).permute(0, 4, 1, 2, 3).contiguous()
             # Collapse depth via adaptive average pooling -> (B, C, 1, H, W) -> (B, C, H, W)
-            feat_2d = F.adaptive_avg_pool3d(feat_5d, (1, int(H), int(W))).squeeze(2)
+            feat_2d = F.adaptive_max_pool3d(feat_5d, (1, int(H), int(W))).squeeze(2)
             features.append(feat_2d)
 
             downsample: Optional[nn.Module] = layer.downsample  # type: ignore[assignment]
@@ -146,7 +148,7 @@ class FlexibleBackbone(nn.Module):
     Extracts multi-scale features without FPN - use BackboneWithFPN for detection tasks.
     Supports loading local checkpoints for fine-tuning.
     """
-    def __init__(self, model_name: str, checkpoint_path: str = "", config: Optional[Any] = None, logger: Optional[logging.Logger] = None):
+    def __init__(self, model_name: str, checkpoint_path: str, config: Optional[Any] = None, logger: Optional[logging.Logger] = None):
         super(FlexibleBackbone, self).__init__()
         
         print(f"Initializing Backbone: {model_name}")
@@ -171,8 +173,12 @@ class FlexibleBackbone(nn.Module):
                 self.body = SwinFeatureExtractor(swin_model)
             self._use_custom_swin = True
         else:
-            import timm
-            self.body = timm.create_model(model_name, pretrained=True, features_only=True)
+            if model_name == "swinunetr":
+                self.body = get_swin_unetr_model(checkpoint_path)
+                self._is_3d = True
+            else:
+                import timm
+                self.body = timm.create_model(model_name, pretrained=True, features_only=True)
 
         # Get channel counts from the backbone automatically
         if hasattr(self.body, "num_features"):
@@ -230,52 +236,6 @@ class BackboneWithFPN(nn.Module):
         # Pass through FPN
         fpn_out = self.fpn(x_dict)
         return fpn_out
-
-
-def focal_loss(
-    logits: torch.Tensor,
-    targets: torch.Tensor,
-    alpha: Optional[torch.Tensor] = None,
-    gamma: float = 2.0,
-    label_smoothing: float = 0.1,
-    reduction: str = 'mean'
-) -> torch.Tensor:
-    """Focal loss for multi-class classification with optional label smoothing.
-    
-    FL(p_t) = -alpha_t * (1 - p_t)^gamma * log(p_t)
-    
-    Args:
-        logits: Raw predictions [B, C].
-        targets: Integer class labels [B].
-        alpha: Per-class weights [C] (optional).
-        gamma: Focusing parameter to down-weight easy examples.
-        label_smoothing: Label smoothing factor.
-        reduction: 'mean' or 'sum'.
-    """
-    num_classes = logits.shape[1]
-    
-    with torch.no_grad():
-        smooth_targets = torch.zeros_like(logits)
-        smooth_targets.fill_(label_smoothing / (num_classes - 1))
-        smooth_targets.scatter_(1, targets.unsqueeze(1), 1.0 - label_smoothing)
-    
-    log_probs = F.log_softmax(logits, dim=1)
-    probs = torch.exp(log_probs)
-    
-    focal_weight = (1 - probs) ** gamma
-    
-    if alpha is not None:
-        focal_weight = focal_weight * alpha.unsqueeze(0)
-    
-    loss = -focal_weight * smooth_targets * log_probs
-    loss = loss.sum(dim=1)
-    
-    if reduction == 'mean':
-        return loss.mean()
-    elif reduction == 'sum':
-        return loss.sum()
-    return loss
-
     
 class GlobalClassificationHead(nn.Module):
     """
@@ -304,6 +264,7 @@ class GlobalClassificationHead(nn.Module):
         x = torch.cat(pooled, dim=1)
         x = self.fc(x)
         return x
+
     
 class DualHeadSCLCModel(nn.Module):
     """
@@ -315,11 +276,12 @@ class DualHeadSCLCModel(nn.Module):
     """
     def __init__(self, backbone_type: str, checkpoint_path: str = "", config: Optional[Any] = None, 
                  num_detection_classes: int = 4, num_global_classes: int = 3, 
-                 train_backbone_only: bool = False, logger: Optional[logging.Logger] = None):
+                 train_backbone_only: bool = False, logger: Optional[logging.Logger] = None,
+                 img_size: int = 224): 
         super(DualHeadSCLCModel, self).__init__()
         
         self._train_backbone_only = train_backbone_only
-        self._is_3d = backbone_type in ("swin3d", "swinv2_3d")
+        self._is_3d = backbone_type in ("swin3d", "swinv2_3d", "swinunetr")
         
         # Class weights for weighted CE loss
         self.register_buffer('class_weights', None)
@@ -331,7 +293,8 @@ class DualHeadSCLCModel(nn.Module):
             "swin3d": "swin3d_base_patch4_window7_224",
             "swinv2_3d": "swinv2_3d_base_patch4_window7_224",
             "resnet": "resnet50",
-            "densenet": "densenet121"
+            "densenet": "densenet121",
+            "swinunetr": "swinunetr"
         }
         
         if backbone_type not in backbone_map:
@@ -347,9 +310,10 @@ class DualHeadSCLCModel(nn.Module):
         # Initialize BackboneWithFPN wrapper for detection
         self.backbone = BackboneWithFPN(self._backbone_core, out_channels=fpn_out_channels)
         
-        # RPN Anchor Generator
+                # RPN Anchor Generator
         num_feature_levels = len(self.backbone.in_channels_list)
-        base_anchor_sizes = (8, 16, 32, 64, 128)
+        base_anchor_sizes = (16, 32, 64, 128) 
+        
         # Use one scale per feature level, slicing from the predefined base sizes
         anchor_sizes = tuple((base_anchor_sizes[i],) for i in range(min(num_feature_levels, len(base_anchor_sizes))))
         anchor_aspect_ratios = ((0.5, 1.0, 2.0),) * len(anchor_sizes)
@@ -367,16 +331,14 @@ class DualHeadSCLCModel(nn.Module):
             sampling_ratio=2
         )
         
-        # TODO: Adjust min_size and max_size based on backbone requirements
         # Initialize Detection Head
         self.detector = torchvision.models.detection.FasterRCNN(
             backbone=self.backbone,
             num_classes=num_detection_classes,
             rpn_anchor_generator=anchor_generator,
             box_roi_pool=roi_pooler,
-            # Set min/max size to match Swin input requirements
-            min_size=224,
-            max_size=224,
+            min_size=img_size,       # <--- MUST equal the resized spatial dimensions
+            max_size=img_size,       
         )
         
         # Initialize Global Classification Head
@@ -416,6 +378,16 @@ class DualHeadSCLCModel(nn.Module):
             self._freeze_non_backbone_params()
         else:
             self._unfreeze_all_params()
+
+    def freeze_global_classifier_only(self) -> None:
+        """Freezes only the global classifier, allowing Backbone, FPN, and Detector to train during DAPT."""
+        # Unfreeze everything first to ensure a clean slate
+        self._unfreeze_all_params()
+        
+        # Freeze only the global classifier
+        for param in self.global_classifier.parameters():
+            param.requires_grad = False
+
 
     def set_class_weights(self, class_weights: Optional[torch.Tensor]) -> None:
         """Set class weights for weighted cross-entropy loss.
@@ -466,17 +438,31 @@ class DualHeadSCLCModel(nn.Module):
         
     def forward(self, scans: List[torch.Tensor], targets: Optional[List[Dict]] = None,
                 return_logits: bool = False) -> Union[Dict[str, torch.Tensor], Tuple[List[Dict], torch.Tensor]]:
+        
+        # --- 1. Fix for Variable Depth Tensor Stacking (Issue 2) ---
         if self._is_3d:
-            # 3D path: scans are (C, H, W, D) tensors from MONAI 3D transforms.
-            # Stack into (B, C, H, W, D) then permute to (B, C, D, H, W) for Conv3d.
-            batch_5d = torch.stack(scans, dim=0)  # (B, C, H, W, D)
+            max_x = max(scan.shape[-3] for scan in scans)
+            max_y = max(scan.shape[-2] for scan in scans)
+            max_d = max(scan.shape[-1] for scan in scans)
+
+            padded_scans = []
+            for scan in scans:
+                pad_x = max_x - scan.shape[-3]
+                pad_y = max_y - scan.shape[-2]
+                pad_d = max_d - scan.shape[-1]
+                # F.pad formats from last dim to first: (pad_left, pad_right_D, pad_top, pad_bottom_Y, pad_front, pad_back_X)
+                padded = F.pad(scan, (0, pad_d, 0, pad_y, 0, pad_x))
+                padded_scans.append(padded)
+
+            batch_5d = torch.stack(padded_scans, dim=0)  # (B, C, H, W, D)
             batch_5d = batch_5d.permute(0, 1, 4, 2, 3).contiguous()  # (B, C, D, H, W)
             features = self.backbone(batch_5d)
-            # Build ImageList with 2D spatial sizes (H, W) for RPN/ROI heads
             _, _, _, sH, sW = batch_5d.shape
-            image_sizes = [(sH, sW)] * len(scans)
-            # Create a dummy 2D tensor view for ImageList (RPN needs .tensors attribute)
-            # Use any 2D FPN feature to infer the batched tensor shape expected
+            
+            # Use original H and W before padding
+            # scan.shape is (C, H, W, D), so -3 is H, -2 is W
+            image_sizes = [(int(scan.shape[-3]), int(scan.shape[-2])) for scan in scans]
+            
             first_feat = next(iter(features.values()))
             B = first_feat.shape[0]
             scans_transformed = ImageList(
@@ -487,14 +473,32 @@ class DualHeadSCLCModel(nn.Module):
             scans_transformed, targets_transformed = self.detector.transform(scans, targets)
             features = self.backbone(scans_transformed.tensors)
         
-        # Detection head - generates proposals and computes detection losses.
-        # In backbone-only mode, skip detector losses to avoid noisy gradients from frozen branches.
-        if self.training and self._train_backbone_only:
-            losses = {}
-            detections = []
-            proposals = []
-            attention_masks = None
-        elif self.training:
+        # --- 2. Fix for Empty Dummy Targets (Issue 4) ---
+        # Torchvision's RPN can produce NaN losses if fed empty (0, 4) targets.
+        # We need to sanitize targets before passing them to the detection heads.
+        valid_targets = targets_transformed
+        if self.training and targets_transformed is not None:
+            valid_targets = []
+            for t in targets_transformed:
+                # Only keep targets that have actual valid bounding box areas
+                if t["boxes"].shape[0] > 0 and t["boxes"].numel() > 0:
+                    valid_targets.append(t)
+                else:
+                    # If empty, create a perfectly valid "background" dummy box or filter it entirely.
+                    # Usually, the safest approach for Faster R-CNN is to pass a valid tensor representation
+                    # But if we pass empty boxes (0, 4), torchvision's matcher handles it safely 
+                    # ONLY IF the tensor type strictly maps to the device without zero-division in your version.
+                    # Ensure device consistency and correct zeros shape based on coordinates logic
+                    # NOTE: Torchvision's ROI heads strictly expect (N, 4) targets for 2D bounding boxes even when utilizing volumetric data when using FasterRCNN natively!
+                    empty_t = {
+                        "boxes": torch.zeros((0, 4), dtype=torch.float32, device=scans[0].device),
+                        "labels": torch.zeros((0,), dtype=torch.int64, device=scans[0].device),
+                        "scan_label": t["scan_label"]
+                    }
+                    valid_targets.append(empty_t)
+            targets_transformed = valid_targets
+        
+        if self.training:
             proposals, proposals_losses = self.detector.rpn(
                 scans_transformed, features, targets_transformed
             )
@@ -516,11 +520,10 @@ class DualHeadSCLCModel(nn.Module):
                 features, proposals, scans_transformed.image_sizes, None
             )
             losses = {}
-
-            # Proposal-guided attention for inference/global prediction
-            attention_masks = self._build_proposal_attention(
-                proposals, scans_transformed.image_sizes, features
-            )
+        
+        attention_masks = self._build_proposal_attention(
+            proposals, scans_transformed.image_sizes, features
+        )
         global_logits = self.global_classifier(features, attention_masks=attention_masks)
         
         if self.training:
@@ -530,9 +533,14 @@ class DualHeadSCLCModel(nn.Module):
                     "for each sample during training, but got None."
                 )
             gt_labels = torch.stack([t["scan_label"] for t in targets_transformed])
-            global_loss = focal_loss(
-                global_logits, gt_labels, alpha=self.class_weights
+            # Use MONAI DiceFocalLoss
+            loss_func = DiceFocalLoss(
+                to_onehot_y=True,
+                softmax=True,
+                weight=self.class_weights
             )
+            global_loss = loss_func(global_logits.unsqueeze(-1), gt_labels.view(-1, 1, 1))
+            
             losses['global_classification_loss'] = global_loss
             if return_logits:
                 losses['global_logits'] = global_logits
@@ -554,7 +562,7 @@ def get_sclc_model(
     Factory function to create DualHeadSCLCModel with specified backbone.
     
     Args:
-        backbone_type: One of 'swin', 'swinv2', 'resnet', 'densenet'
+        backbone_type: One of 'swin', 'swinv2', 'resnet', 'densenet', 'swinunetr'
         checkpoint_path: Path to pretrained weights (.pth file)
         num_detection_classes: Number of detection classes (including background).
             Default 4: background + A(Adenocarcinoma) + B(Small Cell) + G(Squamous Cell)
