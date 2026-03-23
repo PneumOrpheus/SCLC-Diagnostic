@@ -20,28 +20,34 @@ class SwinUNETRClassifier(nn.Module):
         # In MONAI's SwinUNETR, the deepest feature channel size is feature_size * 16 (i.e., 768)
         bottleneck_channels = 48 * 16  
         
-        self.global_pool = nn.AdaptiveAvgPool3d(1)
+        self.global_pool = nn.AdaptiveMaxPool3d(1)
         self.classification_head = nn.Sequential(
             nn.Linear(bottleneck_channels, 256),
             nn.GELU(),
             nn.Dropout(0.3),
             nn.Linear(256, num_classes)
         )
-
-    def forward(self, x):
-        # Pass input through the SwinViT encoder. 
-        # MONAI's swinViT returns a list of multi-scale hidden states.
-        hidden_states = self.swin_unetr.swinViT(x)
         
-        # Grab the deepest, most semantically rich feature map [B, C, D, H, W]
-        deepest_features = hidden_states[-1] 
+        # Register a hook to capture the deepest features during full forward pass
+        self.deepest_features = None
+        def vit_hook(module, input, output):
+            self.deepest_features = output[-1]
+        self.swin_unetr.swinViT.register_forward_hook(vit_hook)
+
+    def forward(self, x, return_segmentation=False):
+        # populates self.deepest_features with the final encoder bottleneck before the decoder.
+        seg_logits = self.swin_unetr(x)
         
         # Pool spatially to [B, C, 1, 1, 1] then flatten to [B, C]
-        pooled = self.global_pool(deepest_features).flatten(1)
+        pooled = self.global_pool(self.deepest_features).flatten(1)
         
         # Get class logits [B, num_classes]
-        logits = self.classification_head(pooled)
-        return logits
+        cls_logits = self.classification_head(pooled)
+        
+        if return_segmentation:
+            return cls_logits, seg_logits
+        else:
+            return cls_logits
 
 
 def get_sclc_model(checkpoint_path: str = "") -> nn.Module:

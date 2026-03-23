@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 from typing import Dict, Any, Tuple
 import argparse
 import time
+from collections import Counter
 
 from model_selection2 import get_sclc_model
 from training.train2 import simple_collate_fn, train_epoch, validate_epoch
@@ -35,11 +36,12 @@ def parse_args():
     parser.add_argument("--model-checkpoint", type=str, default="")
     
     # Hyperparameters
-    parser.add_argument("--dapt-epochs", type=int, default=20)
+    parser.add_argument("--dapt-epochs", type=int, default=40)
     parser.add_argument("--dapt-lr", type=float, default=1e-4)
-    parser.add_argument("--finetune-epochs", type=int, default=20)
-    parser.add_argument("--finetune-lr", type=float, default=3e-5)
+    parser.add_argument("--finetune-epochs", type=int, default=40)
+    parser.add_argument("--finetune-lr", type=float, default=3e-4)
     parser.add_argument("--batch-size", type=int, default=2)
+    parser.add_argument("--accumulation-steps", type=int, default=4, help="Gradient accumulation steps to increase effective batch size")
     parser.add_argument("--weight-decay", type=float, default=1e-4)
     
     # System
@@ -49,6 +51,7 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--disable-amp", action="store_true")
     parser.add_argument("--testing", default=False, action="store_true", help="Run with a tiny subset for testing")
+    parser.add_argument("--anno", default=False, action="store_true", help="Use annotations for multi-task segmentation learning")
 
     return parser.parse_args()
 
@@ -63,7 +66,7 @@ def create_dataloaders(args, dataset_type, data_path, csv_path=""):
         convert_to_rgb=False,
         use_multichannel_windowing=False,
         num_workers=args.num_workers,
-        annotation_dir=args.annotation_dir if dataset_type == "lung_pet_ct" else "",
+        annotation_dir=args.annotation_dir if (dataset_type == "lung_pet_ct_dx" and args.anno) else "",
         use_3d=True,
         testing=args.testing,
         warm_cache=False,
@@ -76,30 +79,102 @@ def create_dataloaders(args, dataset_type, data_path, csv_path=""):
     return train_loader, val_loader, test_loader
 
 
-def run_training_phase(phase_name, model, train_loader, val_loader, device, epochs, lr, weight_decay, checkpoint_dir, logger, scaler):
-    logger.info(f"\n{'='*60}\nStarting {phase_name}\n{'='*60}")
-    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+def run_training_phase(
+    model, train_loader, val_loader, device, epochs, lr, weight_decay,
+    checkpoint_dir, logger, phase_name, patience=20, scaler=None, use_segmentation=False, accumulation_steps=4
+):
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
     
     best_acc = 0.0
-    best_ckpt = ""
+    epochs_no_improve = 0
+    best_model_path = os.path.join(checkpoint_dir, f"best_{phase_name}_phase.pth")
     
+    num_classes = 3 
+    
+    print(f"\nComputing class distributions for the {phase_name} dataset...")
+    logger.info(f"Computing class distributions for the {phase_name} dataset...")
+    class_weights = compute_class_weights(train_loader, num_classes=num_classes, device=device)
+    print(f"[{phase_name}] Automatically assigned Class Weights: {class_weights.cpu().numpy()}")
+    logger.info(f"Class Weights: {class_weights.cpu().numpy()}")
+
     for epoch in range(1, epochs + 1):
-        logger.info(f"--- {phase_name} Epoch {epoch}/{epochs} (LR: {optimizer.param_groups[0]['lr']:.2e}) ---")
+        print(f"\n--- {phase_name} Epoch {epoch}/{epochs} ---")
         
-        train_epoch(model, train_loader, optimizer, epoch, device, logger, scaler)
+        train_loss = train_epoch(
+            model=model, 
+            loader=train_loader, 
+            optimizer=optimizer, 
+            epoch=epoch, 
+            device=device, 
+            logger=logger, 
+            scaler=scaler,
+            use_segmentation=use_segmentation,
+            class_weights=class_weights,
+            accumulation_steps=accumulation_steps # Pass down here
+        )
         val_metrics = validate_epoch(model, val_loader, device, logger)
         
         scheduler.step()
         
         acc = val_metrics["accuracy"]
+        
+        # Clean up phase name for saving (e.g. 'DAPT Phase' -> 'dapt')
+        phase_prefix = phase_name.lower().replace(' ', '_').replace('_phase', '')
+        
         if acc > best_acc:
             best_acc = acc
-            best_ckpt = os.path.join(checkpoint_dir, f"best_{phase_name.lower().replace(' ', '_')}.pth")
+            best_ckpt = os.path.join(checkpoint_dir, f"best__swinunetr_{phase_prefix}.pth")
             torch.save(model.state_dict(), best_ckpt)
             logger.info(f"[*] New best model saved! Accuracy: {best_acc:.4f}")
+            epochs_no_improve = 0  # reset counter
+        else:
+            epochs_no_improve += 1
+            
+        # Save periodic checkpoint every 10 epochs
+        if epoch % 10 == 0:
+            periodic_ckpt = os.path.join(checkpoint_dir, f"{phase_prefix}_swinunetr_epoch_{epoch}.pth")
+            torch.save(model.state_dict(), periodic_ckpt)
+            logger.info(f"[*] Periodic checkpoint saved at epoch {epoch}: {periodic_ckpt}")
+            
+        # Early stopping
+        if epochs_no_improve >= patience:
+            logger.info(f"Early stopping triggered. No improvement for {patience} epochs.")
+            break
             
     return best_ckpt
+
+
+def compute_class_weights(data_loader: DataLoader, num_classes: int, device: torch.device) -> torch.Tensor:
+    """Compute inverse-frequency class weights from a dataloader."""
+    class_counts = Counter()
+
+    dataset = getattr(data_loader, "dataset", None)
+    metadata = getattr(dataset, "data", None)
+    
+    # Fast path: check dataset metadata directly if possible
+    if isinstance(metadata, list) and len(metadata) > 0 and "scan_label" in metadata[0]:
+        for item in metadata:
+            class_counts[int(item["scan_label"])] += 1
+    # Fallback to iterating dataloader
+    else:
+        for batch_data in data_loader:
+            if len(batch_data) == 3:
+                _, targets, _ = batch_data
+            else:
+                _, targets = batch_data
+                
+            for t in targets:
+                label = t.item() if isinstance(t, torch.Tensor) else t
+                class_counts[label] += 1
+    
+    total = sum(class_counts.values())
+    weights = torch.zeros(num_classes, dtype=torch.float32)
+    for cls_idx in range(num_classes):
+        count = class_counts.get(cls_idx, 1)  # avoid division by zero
+        weights[cls_idx] = total / (num_classes * count)
+    
+    return weights.to(device)
 
 
 def main():
@@ -130,8 +205,11 @@ def main():
         train_loader, val_loader, test_loader = create_dataloaders(args, "lung_pet_ct_dx", args.dapt_dataset)
         
         best_dapt_ckpt = run_training_phase(
-            "DAPT Phase", model, train_loader, val_loader, device, 
-            args.dapt_epochs, args.dapt_lr, args.weight_decay, args.checkpoint_dir, logger, scaler
+            model, train_loader, val_loader, device, 
+            args.dapt_epochs, args.dapt_lr, args.weight_decay, args.checkpoint_dir, logger, 
+            "dapt", scaler=scaler,
+            use_segmentation=args.anno, 
+            accumulation_steps=args.accumulation_steps
         )
         current_checkpoint = best_dapt_ckpt
         
@@ -148,10 +226,43 @@ def main():
         train_loader, val_loader, test_loader = create_dataloaders(args, "big_lunge", args.finetune_dataset, args.finetune_csv)
         
         best_finetune_ckpt = run_training_phase(
-            "FineTune Phase", model, train_loader, val_loader, device, 
-            args.finetune_epochs, args.finetune_lr, args.weight_decay, args.checkpoint_dir, logger, scaler
+            model, train_loader, val_loader, device, 
+            args.finetune_epochs, args.finetune_lr, args.weight_decay, args.checkpoint_dir, logger, 
+            "finetune", scaler=scaler,
+            use_segmentation=args.anno, 
+            accumulation_steps=args.accumulation_steps
         )
         
+    # --- PHASE 3: INFERENCE ---
+    if args.mode in ["full", "inference"]:
+        logger.info(f"\n{'='*60}\nStarting Inference Phase\n{'='*60}")
+        
+        if args.mode == "inference":
+            if args.model_checkpoint:
+                model.load_state_dict(torch.load(args.model_checkpoint, map_location=device))
+                logger.info(f"Loaded model checkpoint from: {args.model_checkpoint}")
+            else:
+                logger.info("No --model-checkpoint provided for inference mode. Using initial weights.")
+            
+            logger.info("Setting up Test Datasets...")
+            if test_loader is None:
+                _, _, test_loader = create_dataloaders(args, "big_lunge", args.finetune_dataset, args.finetune_csv)
+            
+        elif args.mode == "full":
+            if 'best_finetune_ckpt' in locals() and best_finetune_ckpt:
+                model.load_state_dict(torch.load(best_finetune_ckpt, map_location=device))
+                logger.info("Loaded best FineTune checkpoint for final inference.")
+            elif 'best_dapt_ckpt' in locals() and best_dapt_ckpt:
+                model.load_state_dict(torch.load(best_dapt_ckpt, map_location=device))
+                logger.info("Loaded best DAPT checkpoint for final inference.")
+                
+        if 'test_loader' in locals():
+            logger.info("Running evaluation on the Test Set...")
+            test_metrics = validate_epoch(model, test_loader, device, logger)
+            logger.info(f"Final Test Set Accuracy: {test_metrics['accuracy']:.4f}")
+        else:
+            logger.error("Test loader not available. Skipping inference.")
+            
     logger.info("Pipeline Execution Complete!")
 
 if __name__ == "__main__":
