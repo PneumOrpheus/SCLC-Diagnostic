@@ -3,12 +3,58 @@ import sys
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
+import nibabel as nib
 
 # Add the root directory to Python path to allow imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from data.data_loader import get_lung_pet_ct_dx_data_list
-from data.transforms import get_val_transforms_3d
+from data.data_loader import get_biglunge_data_list, get_lung_pet_ct_dx_data_list 
+from data.transforms import get_val_transforms_3d, get_train_transforms_3d
+
+def save_transformed_volumes():
+    output_dir = "/home/hansstem/SCLC-Classification/data_exploration/box_images"
+    os.makedirs(output_dir, exist_ok=True)
+
+    data_path = "/home/data/BigLunge/pre_formatting_ws_iso1.0mm_croplungs_bb/1"
+    
+    
+    print("Loading data lists for volume generation...")
+    splits = get_biglunge_data_list(
+        data_path=data_path,
+        csv_path="/home/data/BigLunge/patients_parameters.csv",
+    )
+    for split in ("train", "val", "test"):
+        data_list = splits[split]
+    
+    
+    transforms = get_train_transforms_3d(img_size=224, depth_size=128)
+    
+    saved_count = 0
+    for i, sample in enumerate(data_list):
+        if saved_count >= 50:
+            break
+             
+        try:
+            # Apply transforms
+            transformed = transforms(sample)
+        except Exception as e:
+            print(f"Skipping sample {i} due to transform error: {e}")
+            continue
+            
+        image = transformed["image"]
+        image_np = image[0].numpy()  # Get single channel volume
+        
+        patient_id = sample["patient_id"]
+        save_path = os.path.join(output_dir, f"transformed_{patient_id}_d128.nii.gz")
+        
+        # Save as NIfTI volume
+        nii_img = nib.Nifti1Image(image_np, affine=np.eye(4))
+        # nib.save(nii_img, save_path)
+        
+        print(f"Saved volume {save_path}")
+        saved_count += 1
+        
+    print(f"Finished generating {saved_count} volumes in {output_dir}")
 
 def main():
     output_dir = "/home/hansstem/SCLC-Classification/data_exploration/box_images"
@@ -36,7 +82,7 @@ def main():
     
     saved_count = 0
     for i, sample in enumerate(annotated_samples):
-        if saved_count >= 10:
+        if saved_count >= 5:
             break
             
         try:
@@ -94,4 +140,6 @@ def main():
     print(f"Finished generating {saved_count} images in {output_dir}")
 
 if __name__ == "__main__":
-    main()
+    # main()
+    print("Starting volume generation...")
+    save_transformed_volumes()

@@ -195,9 +195,9 @@ def get_lung_pet_ct_dx_data_list(
                     entry["labels"] = annot["labels"]
 
                 data_list.append(entry)
-                if testing and len(data_list) >= 32:
+                if testing and len(data_list) >= 8:
                     break
-            if testing and len(data_list) >= 32:
+            if testing and len(data_list) >= 8:
                 break
                 
         class_counts: Dict[int, int] = {}
@@ -267,7 +267,7 @@ def get_biglunge_data_list(
                 continue
             label = patient_labels[pid]
             for nii in patient_dir.glob("*.nii*"):
-                if "_label_Lungs_auto" not in nii.name:
+                if "_label_" not in nii.name:
                     data_list.append({"image": str(nii), "scan_label": label, "patient_id": pid})
                     if testing and len(data_list) >= 32:
                         break
@@ -326,10 +326,32 @@ def create_dataset(
         raise ValueError(f"Unknown dataset_type: {dataset_type}")
 
     datasets = []
+    
+    # Import nibabel here to safely read NIfTI headers without fully loading
+    import nibabel as nib
+    
     for split in ("train", "val", "test"):
         data_list = all_splits[split]
 
         if use_3d:
+            # Pre-filter to discard any volumes that don't have enough Z slices
+            min_allowed_slices = depth_size - 79 # May change this later 128 - 79 = 49
+            filtered_list = []
+            
+            print(f"[{split}] Filtering 3D volumes (min {min_allowed_slices} slices required)...")
+            for item in tqdm(data_list, desc="Checking depth"):
+                try:
+                    img = nib.load(item["image"])
+                    # Standard NIfTI has shape (X, Y, Z) or (X, Y, Z, T)
+                    if len(img.shape) >= 3 and img.shape[2] >= min_allowed_slices:
+                        filtered_list.append(item)
+                    else:
+                        print(f"Discarded {item['image']} (depth: {img.shape[2] if len(img.shape) >=3 else 0})")
+                except Exception as e:
+                    print(f"Skipping {item['image']} due to read error: {e}")
+                    
+            data_list = filtered_list
+
             if split == "train":
                 transforms = get_train_transforms_3d(img_size=img_size, depth_size=depth_size)
             else:
@@ -365,7 +387,10 @@ def create_dataset(
 
         if warm_cache or is_empty:
             for i in tqdm(range(len(ds)), desc=f"Caching [{split}]", unit="img"):
-                _ = ds[i]
+                try:
+                    _ = ds[i]
+                except Exception as e:
+                    print(f"Skipped caching sample {i} due to: {e}")
 
         datasets.append(ds)
 

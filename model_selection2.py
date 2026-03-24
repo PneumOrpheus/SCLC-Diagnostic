@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from monai.networks.nets import SwinUNETR
+from monai.networks.nets import SwinUNETR, resnet50
 import os
 
 class SwinUNETRClassifier(nn.Module):
@@ -50,25 +50,74 @@ class SwinUNETRClassifier(nn.Module):
             return cls_logits
 
 
-def get_sclc_model(checkpoint_path: str = "") -> nn.Module:
-    model = SwinUNETRClassifier(in_channels=1, num_classes=3)
-    if checkpoint_path:
-        if os.path.exists(checkpoint_path):
-            print(f"[*] Loading pretrained SwinUNETR weights from {checkpoint_path}")
+class ResNetClassifier(nn.Module):
+    def __init__(self, in_channels=1, num_classes=3):
+        super().__init__()
+        # Initialize MONAI's 3D ResNet50. Setting feed_forward=False allows loading MedicalNet weights
+        self.resnet = resnet50(
+            pretrained=True,
+            spatial_dims=3,
+            n_input_channels=in_channels,
+            feed_forward=False,
+            shortcut_type="B",
+            bias_downsample=False
+        )
+        
+        # Adding a custom classification head
+        self.classification_head = nn.Sequential(
+            nn.Linear(2048, 256),
+            nn.GELU(),
+            nn.Dropout(0.3),
+            nn.Linear(256, num_classes)
+        )
+
+    def forward(self, x, return_segmentation=False):
+        features = self.resnet(x)
+        
+        # Squeeze in case MONAI returns spatial features [B, C, D, H, W]
+        if features.dim() > 2:
+            features = nn.functional.adaptive_avg_pool3d(features, 1).flatten(1)
+            
+        cls_logits = self.classification_head(features)
+        
+        if return_segmentation:
+            # ResNet doesn't naturally output a segmentation mask, so we return a dummy zero mask
+            # This enables pipeline compatibility without breaking the loss functions
+            seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+            return cls_logits, seg_logits
+        else:
+            return cls_logits
+
+
+def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr") -> nn.Module:
+    if model_type.lower() == "resnet50":
+        model = ResNetClassifier(in_channels=1, num_classes=3)
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            print(f"[*] Loading pretrained ResNet weights from {checkpoint_path}")
             state_dict = torch.load(checkpoint_path, map_location="cpu")
-            # MONAI checkpoints sometimes wrap the weights in a 'state_dict' key
             if "state_dict" in state_dict:
                 state_dict = state_dict["state_dict"]
-            
-            # Load into the underlying swin_unetr backbone
-            # Pop out the final segmentation layer mismatched sizes so strict=False can work efficiently
-            if 'out.conv.conv.weight' in state_dict:
-                state_dict.pop('out.conv.conv.weight')
-            if 'out.conv.conv.bias' in state_dict:
-                state_dict.pop('out.conv.conv.bias')
-            
-            model.swin_unetr.load_state_dict(state_dict, strict=False)
+            model.resnet.load_state_dict(state_dict, strict=False)
             print("[*] Pretrained weights loaded successfully.")
-        else:
-            print(f"[!] Warning: Checkpoint path {checkpoint_path} does not exist. Initializing from scratch.")
+    else:
+        model = SwinUNETRClassifier(in_channels=1, num_classes=3)
+        if checkpoint_path:
+            if os.path.exists(checkpoint_path):
+                print(f"[*] Loading pretrained SwinUNETR weights from {checkpoint_path}")
+                state_dict = torch.load(checkpoint_path, map_location="cpu")
+                # MONAI checkpoints sometimes wrap the weights in a 'state_dict' key
+                if "state_dict" in state_dict:
+                    state_dict = state_dict["state_dict"]
+                
+                # Load into the underlying swin_unetr backbone
+                # Pop out the final segmentation layer mismatched sizes so strict=False can work efficiently
+                if 'out.conv.conv.weight' in state_dict:
+                    state_dict.pop('out.conv.conv.weight')
+                if 'out.conv.conv.bias' in state_dict:
+                    state_dict.pop('out.conv.conv.bias')
+                
+                model.swin_unetr.load_state_dict(state_dict, strict=False)
+                print("[*] Pretrained weights loaded successfully.")
+            else:
+                print(f"[!] Warning: Checkpoint path {checkpoint_path} does not exist. Initializing from scratch.")
     return model

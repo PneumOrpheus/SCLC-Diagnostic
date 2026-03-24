@@ -21,6 +21,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description="SCLC Simplified 3D Classification Pipeline")
     
     # Mode selection
+    parser.add_argument("--model-type", type=str, default="swin_unetr", choices=["swin_unetr", "resnet50"],
+                        help="Model architecture to use")
     parser.add_argument("--mode", type=str, default="full", choices=["full", "dapt", "finetune", "inference"],
                         help="Pipeline mode")
     
@@ -36,9 +38,9 @@ def parse_args():
     parser.add_argument("--model-checkpoint", type=str, default="")
     
     # Hyperparameters
-    parser.add_argument("--dapt-epochs", type=int, default=40)
+    parser.add_argument("--dapt-epochs", type=int, default=30)
     parser.add_argument("--dapt-lr", type=float, default=1e-4)
-    parser.add_argument("--finetune-epochs", type=int, default=40)
+    parser.add_argument("--finetune-epochs", type=int, default=30)
     parser.add_argument("--finetune-lr", type=float, default=3e-4)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--accumulation-steps", type=int, default=4, help="Gradient accumulation steps to increase effective batch size")
@@ -52,17 +54,18 @@ def parse_args():
     parser.add_argument("--disable-amp", action="store_true")
     parser.add_argument("--testing", default=False, action="store_true", help="Run with a tiny subset for testing")
     parser.add_argument("--anno", default=False, action="store_true", help="Use annotations for multi-task segmentation learning")
+    parser.add_argument("--depth-size", type=int, default=64, help="Depth size for the 3D images")
 
     return parser.parse_args()
 
 
-def create_dataloaders(args, dataset_type, data_path, csv_path=""):
+def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64):
     train_ds, val_ds, test_ds = create_dataset(
         dataset_type=dataset_type,
         data_path=data_path,
         csv_path=csv_path,
         img_size=224,
-        depth_size=64,
+        depth_size=depth_size,
         convert_to_rgb=False,
         use_multichannel_windowing=False,
         num_workers=args.num_workers,
@@ -81,7 +84,8 @@ def create_dataloaders(args, dataset_type, data_path, csv_path=""):
 
 def run_training_phase(
     model, train_loader, val_loader, device, epochs, lr, weight_decay,
-    checkpoint_dir, logger, phase_name, patience=20, scaler=None, use_segmentation=False, accumulation_steps=4
+    checkpoint_dir, logger, phase_name, patience=20, scaler=None, use_segmentation=False, accumulation_steps=4,
+    model_type="swin_unetr"
 ):
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
@@ -124,7 +128,7 @@ def run_training_phase(
         
         if acc > best_acc:
             best_acc = acc
-            best_ckpt = os.path.join(checkpoint_dir, f"best__swinunetr_{phase_prefix}.pth")
+            best_ckpt = os.path.join(checkpoint_dir, f"best_{model_type}_{phase_prefix}.pth")
             torch.save(model.state_dict(), best_ckpt)
             logger.info(f"[*] New best model saved! Accuracy: {best_acc:.4f}")
             epochs_no_improve = 0  # reset counter
@@ -133,7 +137,7 @@ def run_training_phase(
             
         # Save periodic checkpoint every 10 epochs
         if epoch % 10 == 0:
-            periodic_ckpt = os.path.join(checkpoint_dir, f"{phase_prefix}_swinunetr_epoch_{epoch}.pth")
+            periodic_ckpt = os.path.join(checkpoint_dir, f"{phase_prefix}_{model_type}_epoch_{epoch}.pth")
             torch.save(model.state_dict(), periodic_ckpt)
             logger.info(f"[*] Periodic checkpoint saved at epoch {epoch}: {periodic_ckpt}")
             
@@ -190,26 +194,29 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     scaler = GradScaler(enabled=not args.disable_amp and device.type == "cuda")
     
-    logger = create_logger(output_dir=args.output_dir, dist_rank=-1, name="sclc_swinunetr")
-    logger.info(f"Running SwinUNETR 3D Classification Pipeline")
+    logger = create_logger(output_dir=args.output_dir, dist_rank=-1, name=f"sclc_{args.model_type}")
+    logger.info(f"Running {args.model_type} 3D Classification Pipeline")
     logger.info(f"Mode: {args.mode} | Testing: {args.testing} | Device: {device} | AMP: {not args.disable_amp}")
     
-    model = get_sclc_model(args.initial_checkpoint).to(device)
-    logger.info(f"Initialized SwinUNETR Classifier. Total Params: {sum(p.numel() for p in model.parameters()):,}")
+    model = get_sclc_model(args.initial_checkpoint, model_type=args.model_type).to(device)
+    num_params = sum(p.numel() for p in model.parameters())
+    logger.info(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
+    print(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
     
     current_checkpoint = args.initial_checkpoint
     
     # --- PHASE 1: DAPT ---
     if args.mode in ["full", "dapt"]:
         logger.info(f"Setting up DAPT Datasets from: {args.dapt_dataset}")
-        train_loader, val_loader, test_loader = create_dataloaders(args, "lung_pet_ct_dx", args.dapt_dataset)
+        train_loader, val_loader, test_loader = create_dataloaders(args, "lung_pet_ct_dx", args.dapt_dataset, depth_size=args.depth_size)
         
         best_dapt_ckpt = run_training_phase(
             model, train_loader, val_loader, device, 
             args.dapt_epochs, args.dapt_lr, args.weight_decay, args.checkpoint_dir, logger, 
             "dapt", scaler=scaler,
             use_segmentation=args.anno, 
-            accumulation_steps=args.accumulation_steps
+            accumulation_steps=args.accumulation_steps,
+            model_type=args.model_type
         )
         current_checkpoint = best_dapt_ckpt
         
@@ -230,7 +237,8 @@ def main():
             args.finetune_epochs, args.finetune_lr, args.weight_decay, args.checkpoint_dir, logger, 
             "finetune", scaler=scaler,
             use_segmentation=args.anno, 
-            accumulation_steps=args.accumulation_steps
+            accumulation_steps=args.accumulation_steps,
+            model_type=args.model_type
         )
         
     # --- PHASE 3: INFERENCE ---
@@ -245,7 +253,7 @@ def main():
                 logger.info("No --model-checkpoint provided for inference mode. Using initial weights.")
             
             logger.info("Setting up Test Datasets...")
-            if test_loader is None:
+            if 'test_loader' not in locals() or test_loader is None:
                 _, _, test_loader = create_dataloaders(args, "big_lunge", args.finetune_dataset, args.finetune_csv)
             
         elif args.mode == "full":
