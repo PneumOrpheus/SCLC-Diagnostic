@@ -2,6 +2,8 @@ import time
 import torch
 import torch.nn as nn
 import numpy as np
+from monai.metrics import ConfusionMatrixMetric
+from monai.losses import DiceLoss
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -43,10 +45,8 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
     run_cls_loss = AverageMeter()
     run_seg_loss = AverageMeter()
     
-    if class_weights is not None:
-        criterion = nn.CrossEntropyLoss(weight=class_weights)
-    else:
-        criterion = nn.CrossEntropyLoss()
+
+    criterion = DiceLoss(to_onehot_y=True, softmax=True)
 
     optimizer.zero_grad()  # 1. Zero gradients before the loop starts
 
@@ -63,7 +63,7 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
         with torch.amp.autocast(enabled=(scaler is not None), device_type='cuda'):
             if use_segmentation:
                 logits, seg_outputs = model(data, return_segmentation=True)
-                cls_loss = criterion(logits, target)
+                cls_loss = criterion(logits, target.view(-1, 1))
                 
                 seg_loss_val = 0.0
                 if masks is not None and torch.sum(masks) > 0:
@@ -74,7 +74,7 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
                     loss = cls_loss
             else:
                 logits = model(data, return_segmentation=False)
-                loss = criterion(logits, target)
+                loss = criterion(logits, target.view(-1, 1))
                 cls_loss = loss
                 seg_loss_val = 0.0
             
@@ -123,7 +123,7 @@ def validate_epoch(model, loader, device, logger):
     run_loss = AverageMeter()
     correct = 0
     total = 0
-    criterion = nn.CrossEntropyLoss()
+    criterion = DiceLoss(to_onehot_y=True, softmax=True)
     
     all_preds = []
     all_targets = []
@@ -139,7 +139,7 @@ def validate_epoch(model, loader, device, logger):
             
         data, target = data.to(device), target.to(device)
         logits = model(data)
-        loss = criterion(logits, target)
+        loss = criterion(logits, target.view(-1, 1))
         
         run_loss.update(loss.item(), n=data.size(0))
         
@@ -152,9 +152,44 @@ def validate_epoch(model, loader, device, logger):
         all_targets.extend(target.cpu().numpy())
 
     accuracy = correct / total if total > 0 else 0.0
-    val_msg = f"Validation Complete => Loss: {run_loss.avg:.4f}, Accuracy: {accuracy:.4f}"
+    
+    # Calculate precision, recall, and f1 (dice for classification)
+    if len(all_targets) > 0:
+        metric = ConfusionMatrixMetric(
+            include_background=True,
+            metric_name=["precision", "recall", "f1 score"], 
+            compute_sample=False, 
+            reduction="mean"
+        )
+        all_targets_t = torch.tensor(all_targets, dtype=torch.long)
+        all_preds_t = torch.tensor(all_preds, dtype=torch.long)
+        
+        max_observed = max(all_targets_t.max().item(), all_preds_t.max().item()) + 1
+        num_classes = max(3, max_observed)
+        
+        target_onehot = nn.functional.one_hot(all_targets_t, num_classes=num_classes)
+        pred_onehot = nn.functional.one_hot(all_preds_t, num_classes=num_classes)
+        
+        metric(y_pred=pred_onehot, y=target_onehot)
+        metrics_res = metric.aggregate()
+        
+        precision = metrics_res[0].item() if not torch.isnan(metrics_res[0]) else 0.0
+        recall = metrics_res[1].item() if not torch.isnan(metrics_res[1]) else 0.0
+        f1 = metrics_res[2].item() if not torch.isnan(metrics_res[2]) else 0.0
+    else:
+        precision, recall, f1 = 0.0, 0.0, 0.0
+        num_classes = 3
+        
+    val_msg = f"Validation Complete => Loss: {run_loss.avg:.4f}, Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, Dice/F1: {f1:.4f}"
     print(val_msg)
     logger.info(val_msg)
+    
+    if torch.cuda.is_available():
+        allocated = torch.cuda.memory_allocated(device) / (1024 ** 3)
+        reserved = torch.cuda.memory_reserved(device) / (1024 ** 3)
+        mem_msg = f"VRAM Usage - Allocated: {allocated:.2f} GB, Reserved: {reserved:.2f} GB"
+        print(mem_msg)
+        logger.info(mem_msg)
     
     # Generate and print confusion matrix
     if len(all_targets) > 0:
@@ -175,7 +210,7 @@ def validate_epoch(model, loader, device, logger):
         display_names = [names[i] if i < len(names) else f"Class{i}" for i in range(num_classes)]
         
         # Header row (Columns = Model's Predictions)
-        header = f"{'True \ Pred':<18}" + "".join([f"{display_names[j]:<16}" for j in range(num_classes)])
+        header = f"{'True \\ Pred':<18}" + "".join([f"{display_names[j]:<16}" for j in range(num_classes)])
         print(header)
         logger.info(header)
         
