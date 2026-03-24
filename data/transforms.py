@@ -15,6 +15,7 @@ from monai.transforms import (  # type: ignore[attr-defined]
     Compose,
     LoadImaged,
     EnsureChannelFirstd,
+    NormalizeIntensityd,
     ScaleIntensityRanged,
     Resized,
     ToTensord,
@@ -26,6 +27,38 @@ from monai.transforms import (  # type: ignore[attr-defined]
     RandScaleIntensityd,
     RandShiftIntensityd,
 )
+
+class BoxesToMaskd(MapTransform):
+    """Generate a 3D binary mask from bounding boxes to supervise models via segmentation tasks."""
+    def __init__(self, keys: KeysCollection = "boxes", mask_key: str = "mask", output_size=(224, 224, 64)):
+        super().__init__(keys)
+        self.mask_key = mask_key
+        self.output_size = output_size
+
+    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
+        d = dict(data)
+        
+        if "image" in d and hasattr(d["image"], "shape"):
+            target_shape = d["image"].shape
+        else:
+            target_shape = (1, *self.output_size)
+            
+        mask = torch.zeros(target_shape, dtype=torch.float32)
+        if "boxes" in d and len(d["boxes"]) > 0:
+            boxes = d["boxes"]
+            for box in boxes:
+                xmin, ymin, zmin, xmax, ymax, zmax = map(int, map(round, box))
+                
+                # Clip to valid limits
+                xmin, xmax = max(0, xmin), max(0, min(target_shape[1], xmax))
+                ymin, ymax = max(0, ymin), max(0, min(target_shape[2], ymax))
+                zmin, zmax = max(0, zmin), max(0, min(target_shape[3], zmax))
+                
+                if xmax > xmin and ymax > ymin and zmax > zmin:
+                    mask[0, xmin:xmax, ymin:ymax, zmin:zmax] = 1.0
+                
+        d[self.mask_key] = mask
+        return d
 
 
 class LoadNiftiWithRGBSupportd(MapTransform):
@@ -455,14 +488,17 @@ def get_train_transforms_3d(
         # Resize only X and Y down to img_size 
         Resized(keys=["image"], spatial_size=(img_size, img_size, -1), mode="trilinear"),
         
-        # Intensity augmentation
-        RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
-        RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
-        RandGaussianNoised(keys=["image"], prob=0.2, mean=0.0, std=0.02),
-        RandAdjustContrastd(keys=["image"], prob=0.3, gamma=(0.8, 1.2)),
-
+        # Build 3D pseudo mask from the boxes for multi-task segmentation
+        BoxesToMaskd(keys=["boxes"], mask_key="mask", output_size=(img_size, img_size, depth_size)),
+        
+        RandFlipd(keys=["image", "mask"], prob=0.5, spatial_axis=0),
+        RandFlipd(keys=["image", "mask"], prob=0.5, spatial_axis=1),
+        RandFlipd(keys=["image", "mask"], prob=0.5, spatial_axis=2),
+        NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+        RandScaleIntensityd(keys="image", factors=0.1, prob=1.0),
+        RandShiftIntensityd(keys="image", offsets=0.1, prob=1.0),
         AddPlaceholderTargetsd(keys=["image"]),
-        ToTensord(keys=["image"]),
+        ToTensord(keys=["image", "mask"]),
     ]
     return Compose(transforms)
 
@@ -489,7 +525,11 @@ def get_val_transforms_3d(
 
         Resized(keys=["image"], spatial_size=(img_size, img_size, depth_size), mode="trilinear"),
         
+        # Build 3D pseudo mask from the boxes for multi-task segmentation
+        BoxesToMaskd(keys=["boxes"], mask_key="mask", output_size=(img_size, img_size, depth_size)),
+        
         AddPlaceholderTargetsd(keys=["image"]),
-        ToTensord(keys=["image"]),
+        NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
+        ToTensord(keys=["image", "mask"]),
     ]
     return Compose(transforms)
