@@ -45,8 +45,11 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
     run_cls_loss = AverageMeter()
     run_seg_loss = AverageMeter()
     
-
-    criterion = DiceLoss(to_onehot_y=True, softmax=True)
+    if class_weights is not None:
+        class_weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
+        criterion = DiceLoss(to_onehot_y=True, softmax=True, weight=class_weights)
+    else:
+        criterion = DiceLoss(to_onehot_y=True, softmax=True)
 
     optimizer.zero_grad()  # 1. Zero gradients before the loop starts
 
