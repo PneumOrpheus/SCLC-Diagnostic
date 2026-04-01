@@ -1,16 +1,21 @@
+import numpy as np
+import torch
+import torch.nn.functional as F
 """
 MONAI Transforms for SCLC Classification
 -----------------------------------------
 Custom and composed transforms for CT scan preprocessing using MONAI's transform framework.
 """
 
-import numpy as np
-import torch
 import nibabel as nib
 from typing import Any, Dict, Hashable, Mapping, Optional, Union
 
 from monai.config import KeysCollection  # type: ignore[attr-defined]
-from monai.transforms import (  # type: ignore[attr-defined]
+from monai.transforms import (
+    AsDiscreted,
+    ScaleIntensityd,
+    ResampleToMatchd,
+    ConcatItemsd,  # type: ignore[attr-defined]
     MapTransform,
     Compose,
     LoadImaged,
@@ -26,50 +31,14 @@ from monai.transforms import (  # type: ignore[attr-defined]
     RandAdjustContrastd,
     RandScaleIntensityd,
     RandShiftIntensityd,
+    Orientationd,
+    Spacingd,
 )
-
-class BoxesToMaskd(MapTransform):
-    """Generate a 3D binary mask from bounding boxes to supervise models via segmentation tasks."""
-    def __init__(self, keys: KeysCollection = "boxes", mask_key: str = "mask", output_size=(224, 224, 64)):
-        super().__init__(keys)
-        self.mask_key = mask_key
-        self.output_size = output_size
-
-    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
-        d = dict(data)
-        
-        if "image" in d and hasattr(d["image"], "shape"):
-            target_shape = d["image"].shape
-        else:
-            target_shape = (1, *self.output_size)
-            
-        mask = torch.zeros(target_shape, dtype=torch.float32)
-        if "boxes" in d and len(d["boxes"]) > 0:
-            boxes = d["boxes"]
-            for box in boxes:
-                xmin, ymin, zmin, xmax, ymax, zmax = map(int, map(round, box))
-                
-                # Clip to valid limits
-                xmin, xmax = max(0, xmin), max(0, min(target_shape[1], xmax))
-                ymin, ymax = max(0, ymin), max(0, min(target_shape[2], ymax))
-                zmin, zmax = max(0, zmin), max(0, min(target_shape[3], zmax))
-                
-                if xmax > xmin and ymax > ymin and zmax > zmin:
-                    mask[0, xmin:xmax, ymin:ymax, zmin:zmax] = 1.0
-                
-        d[self.mask_key] = mask
-        return d
+from monai.data import MetaTensor
 
 
 class LoadNiftiWithRGBSupportd(MapTransform):
-    """Load NIfTI files with support for RGB structured dtypes and 4D volumes.
-    
-    Handles:
-    - Standard 3D NIfTI volumes (X, Y, Z)
-    - RGB structured dtypes (datatype 128)
-    - 4D volumes (X, Y, Z, T) - takes first time point
-    - Squeezes single-slice dimensions
-    """
+    """Load NIfTI files with support for RGB structured dtypes and 4D volumes."""
     
     def __init__(
         self,
@@ -82,35 +51,58 @@ class LoadNiftiWithRGBSupportd(MapTransform):
         d: Dict[Hashable, Any] = dict(data)
         for key in self.key_iterator(d):
             filepath = d[key]
-            img = nib.load(filepath)
-            raw = np.asanyarray(img.dataobj)
+            # mmap=False drastically improves stability when dealing with thousands of zipped files
+            # on multiple workers by forcing it directly into memory immediately 
+            img = nib.load(filepath, mmap=False)
             
-            # Check if it's an RGB structured dtype
-            if raw.dtype.names is not None and set(raw.dtype.names) == {'R', 'G', 'B'}:
+            # 1. Grab the affine matrix from the NiBabel object
+            affine = img.affine 
+            
+            # Check if it's an RGB structured dtype bypassing properties
+            is_rgb = hasattr(img.dataobj, "dtype") and hasattr(img.dataobj.dtype, "names") and img.dataobj.dtype.names is not None and ('R' in img.dataobj.dtype.names or set(img.dataobj.dtype.names) == {'R', 'G', 'B'})
+            
+            if is_rgb:
                 # Convert RGB to grayscale using standard luminance weights
-                r = raw['R'].astype(np.float32)
-                g = raw['G'].astype(np.float32)
-                b = raw['B'].astype(np.float32)
+                raw_rgb = np.asanyarray(img.dataobj)
+                r = raw_rgb['R'].astype(np.float32)
+                g = raw_rgb['G'].astype(np.float32)
+                b = raw_rgb['B'].astype(np.float32)
                 gray = 0.299 * r + 0.587 * g + 0.114 * b
                 # Scale to CT HU-like range (-1024 to 3071) from 0-255
                 arr = (gray / 255.0) * 4095 - 1024
             else:
-                # Standard NIfTI - get float data
-                arr = img.get_fdata().astype(np.float32)
+                # Use get_fdata() directly to force total decompression right now on the CPU thread, 
+                # rather than yielding proxy views that crash later on inside Spacingd PyTorch loops
+                arr = img.get_fdata(dtype=np.float32)
             
-            # Handle 4D volumes by taking first time/frame
-            if arr.ndim == 4:
-                arr = arr[..., 0]
-            
-            # Squeeze any remaining single dimensions but keep at least 3D for proper slice extraction
+            # Handle extra dimensions correctly
             while arr.ndim > 3:
                 # Find dimensions of size 1 and squeeze them
+                squeezed = False
                 for ax in range(arr.ndim - 1, 2, -1):
                     if arr.shape[ax] == 1:
                         arr = arr.squeeze(axis=ax)
+                        squeezed = True
                         break
-                else:
-                    break
+                
+                # If we couldn't squeeze any more 1s, check if the last dimension is RGB (size 3)
+                if not squeezed:
+                    if arr.shape[-1] == 3:
+                        # Convert to grayscale
+                        r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
+                        gray = 0.299 * r + 0.587 * g + 0.114 * b
+                        # Keep it scaled if it seems like a pseudo-CT RGB or just 0-255 RGB
+                        # We'll just map roughly back to HU space if max isn't already huge
+                        if arr.max() <= 256:
+                            arr = (gray / 255.0) * 4095 - 1024
+                        else:
+                            arr = gray
+                    elif arr.ndim >= 4:
+                        # If it's a 4D volume (like time series), just take the first frame
+                        arr = arr[..., 0]
+                    else:
+                        break
+
             
             # Ensure we have a valid 3D volume (at least 3 slices)
             if arr.ndim == 3 and arr.shape[2] < 3:
@@ -118,8 +110,9 @@ class LoadNiftiWithRGBSupportd(MapTransform):
                 reps = (3 // arr.shape[2]) + 1
                 arr = np.repeat(arr, reps, axis=2)
             
-            # Add channel dimension (C, X, Y, Z)
-            d[key] = arr[np.newaxis, ...]
+            # 2. Wrap the numpy array into a MetaTensor with spatial metadata
+            d[key] = MetaTensor(arr, affine=affine)
+            
         return d
 
 
@@ -219,11 +212,7 @@ class AddPlaceholderTargetsd(MapTransform):
 
 
 class ExtractSubVolumed(MapTransform):
-    """Extract a fixed number of slices from a 3D volume.
-    
-    If 'boxes' is present in data, centers the crop around the tumor's Z-axis.
-    Otherwise, extracts from the center of the volume.
-    """
+    """Extract a fixed number of slices from a 3D volume based on actual mask presence."""
 
     def __init__(
         self,
@@ -237,23 +226,31 @@ class ExtractSubVolumed(MapTransform):
     def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
         d: Dict[Hashable, Any] = dict(data)
         
-        # Figure out the center Z coordinate from the annotations if available
+        # Determine center Z from mask if present
         target_z_center = None
-        if "boxes" in d and len(d["boxes"]) > 0:
-            # Boxes are [x1, y1, z1, x2, y2, z2]
-            boxes = np.array(d["boxes"])
-            # Get the overall min and max Z across all bounding boxes
-            z_min = boxes[:, 2].min()
-            z_max = boxes[:, 5].max()
-            # Calculate the middle of the tumor
-            target_z_center = int((z_min + z_max) / 2)
+        if "mask" in d:
+            mask_tensor = d["mask"]
+            if isinstance(mask_tensor, torch.Tensor):
+                nz = torch.nonzero(mask_tensor > 0)
+                if nz.numel() > 0:
+                    z_coords = nz[:, -1]
+                    z_min = z_coords.min().item()
+                    z_max = z_coords.max().item()
+                    target_z_center = int((z_min + z_max) / 2)
+            else:
+                nz = np.nonzero(mask_tensor > 0)
+                # nz is tuple of arrays per dimension
+                if len(nz[-1]) > 0:
+                    z_min = nz[-1].min()
+                    z_max = nz[-1].max()
+                    target_z_center = int((z_min + z_max) / 2)
 
         for key in self.key_iterator(d):
             volume = d[key]
             if not hasattr(volume, 'ndim') or volume.ndim < 4:
                 continue
 
-            # volume is (C, X, Y, Z) — depth is along the last axis
+            # volume is (C, X, Y, Z) (or C, H, W, D). Depth is last axis
             depth = volume.shape[-1]
             target = self.num_slices
 
@@ -267,7 +264,6 @@ class ExtractSubVolumed(MapTransform):
                 start = mid - half
                 end = start + target
                 
-                # Handle edge cases to ensure we always get exactly 'target' slices
                 if start < 0:
                     start = 0
                     end = target
@@ -279,226 +275,125 @@ class ExtractSubVolumed(MapTransform):
                     d[key] = volume[..., start:end]
                 else:
                     d[key] = volume[..., start:end]
-                    
-                # IMPORTANT: Adjust the box Z-coordinates so they align with the new cropped volume!
-                if key == "image" and "boxes" in d and len(d["boxes"]) > 0:
-                    # Subtract the start offset from the Z-coordinates
-                    adjusted_boxes = np.array(d["boxes"], dtype=np.float32)
-                    adjusted_boxes[:, 2] -= start
-                    adjusted_boxes[:, 5] -= start
-                    
-                    d["boxes"] = adjusted_boxes.tolist()
             else:
-                # If the volume is thinner than target slices, pad the Z axis
                 pad_size = target - depth
                 pad_before = pad_size // 2
                 pad_after = pad_size - pad_before
                 
                 if isinstance(volume, np.ndarray):
-                    # volume is (C, X, Y, Z)
                     d[key] = np.pad(volume, ((0,0), (0,0), (0,0), (pad_before, pad_after)), mode='constant')
                 else:
-                    import torch.nn.functional as F
                     d[key] = F.pad(volume, (pad_before, pad_after), mode='constant')
-                    
-                # Adjust the box Z-coordinates for the padding
-                if key == "image" and "boxes" in d and len(d["boxes"]) > 0:
-                    adjusted_boxes = np.array(d["boxes"], dtype=np.float32)
-                    adjusted_boxes[:, 2] += pad_before
-                    adjusted_boxes[:, 5] += pad_before
-                    d["boxes"] = adjusted_boxes.tolist()
                 
         return d
 
-
-def get_train_transforms(
-    img_size: int = 224,
-    convert_to_rgb: bool = True,
-    use_multichannel_windowing: bool = False
-) -> Compose:
-    """Get the training transforms pipeline with data augmentation.
-    
-    Args:
-        img_size: Target image size (height and width).
-        convert_to_rgb: Whether to convert grayscale to 3-channel RGB.
-        use_multichannel_windowing: Whether to use multi-channel CT windowing
-            instead of simple RGB conversion.
-    
-    Returns:
-        Composed MONAI transforms for training.
-    """
-    transforms = [
-        # Load image from file path (handles both standard and RGB NIfTI files)
-        LoadNiftiWithRGBSupportd(keys=["image"]),
+class ConvertRGBToTargetd(MapTransform):
+    """Detects RGB/structured arrays from LoadImaged and converts to standard float32 grayscale."""
+    def __init__(self, keys: KeysCollection, allow_missing_keys: bool = False) -> None:
+        super().__init__(keys, allow_missing_keys)
         
-        # Clip to valid HU range for CT
-        ScaleIntensityRanged(
-            keys=["image"],
-            a_min=-1024,
-            a_max=3071,
-            b_min=-1024,
-            b_max=3071,
-            clip=True,
-        ),
-    ]
-    
-    if use_multichannel_windowing:
-        # Create 3-channel representation using CT windows
-        transforms.append(CreateMultiChannelCTd(keys=["image"]))
-    else:
-        # Simple intensity scaling to [0, 1]
-        transforms.append(
-            ScaleIntensityRanged(
-                keys=["image"],
-                a_min=-1024,
-                a_max=3071,
-                b_min=0,
-                b_max=1,
-                clip=True,
-            )
-        )
-    
-    
-    # Convert to RGB if needed (also ensures 3 channels)
-    if convert_to_rgb and not use_multichannel_windowing:
-        transforms.append(EnsureRGBd(keys=["image"]))
-    
-    # Resize to model input size
-    transforms.append(
-        Resized(keys=["image"], spatial_size=(img_size, img_size), mode="bilinear")
-    )
-    
-    # --- Data Augmentation (training only) ---
-    
-    # Spatial augmentation
-    transforms.append(RandFlipd(keys=["image"], prob=0.5, spatial_axis=0))
-    transforms.append(RandFlipd(keys=["image"], prob=0.5, spatial_axis=1))
-    transforms.append(RandRotate90d(keys=["image"], prob=0.5, spatial_axes=(0, 1)))
-    transforms.append(
-        RandAffined(
-            keys=["image"],
-            prob=0.3,
-            rotate_range=(0.15,),
-            scale_range=(0.1, 0.1),
-            translate_range=(10, 10),
-            mode="bilinear",
-            padding_mode="zeros",
-        )
-    )
-    
-    # Intensity augmentation
-    transforms.append(RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5))
-    transforms.append(RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5))
-    transforms.append(RandGaussianNoised(keys=["image"], prob=0.2, mean=0.0, std=0.02))
-    transforms.append(RandAdjustContrastd(keys=["image"], prob=0.3, gamma=(0.8, 1.2)))
-    
-    # Add placeholder targets
-    transforms.append(AddPlaceholderTargetsd(keys=["image"]))
-    
-    # Convert to tensors
-    transforms.append(ToTensord(keys=["image"]))
-    
-    return Compose(transforms)
-
-
-def get_val_transforms(
-    img_size: int = 224,
-    convert_to_rgb: bool = True,
-    use_multichannel_windowing: bool = False
-) -> Compose:
-    """Get the validation/test transforms pipeline (no augmentation).
-    
-    Args:
-        img_size: Target image size (height and width).
-        convert_to_rgb: Whether to convert grayscale to 3-channel RGB.
-        use_multichannel_windowing: Whether to use multi-channel CT windowing.
-    
-    Returns:
-        Composed MONAI transforms for validation/test.
-    """
-    transforms = [
-        LoadNiftiWithRGBSupportd(keys=["image"]),
-        
-        ScaleIntensityRanged(
-            keys=["image"],
-            a_min=-1024,
-            a_max=3071,
-            b_min=-1024,
-            b_max=3071,
-            clip=True,
-        ),
-    ]
-    
-    if use_multichannel_windowing:
-        transforms.append(CreateMultiChannelCTd(keys=["image"]))
-    else:
-        transforms.append(
-            ScaleIntensityRanged(
-                keys=["image"],
-                a_min=-1024,
-                a_max=3071,
-                b_min=0,
-                b_max=1,
-                clip=True,
-            )
-        )
-    
-    transforms.append(ExtractMultiSliced(keys=["image"], num_slices=5, aggregation="max"))
-    
-    if convert_to_rgb and not use_multichannel_windowing:
-        transforms.append(EnsureRGBd(keys=["image"]))
-    
-    transforms.append(
-        Resized(keys=["image"], spatial_size=(img_size, img_size), mode="bilinear")
-    )
-    
-    # No augmentation for val/test
-    
-    transforms.append(AddPlaceholderTargetsd(keys=["image"]))
-    transforms.append(ToTensord(keys=["image"]))
-    
-    return Compose(transforms)
-
+    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
+        d: Dict[Hashable, Any] = dict(data)
+        for key in self.key_iterator(d):
+            img_tensor = d[key]
+            
+            # If the underlying data is a structured numpy array (like nibabel RGB)
+            if hasattr(img_tensor, "dtype") and hasattr(img_tensor.dtype, "names") and img_tensor.dtype.names is not None:
+                if set(img_tensor.dtype.names) == {'R', 'G', 'B'} or 'R' in img_tensor.dtype.names:
+                    # Convert to grayscale
+                    raw = np.asanyarray(img_tensor)
+                    r = raw['R'].astype(np.float32)
+                    g = raw['G'].astype(np.float32)
+                    b = raw['B'].astype(np.float32)
+                    gray = 0.299 * r + 0.587 * g + 0.114 * b
+                    arr = (gray / 255.0) * 4095 - 1024
+                    
+                    # Re-wrap into MetaTensor to keep affine info intact
+                    d[key] = MetaTensor(arr, meta=img_tensor.meta)
+            
+            # Squeeze and format dims (D, H, W)
+            arr = d[key]
+            if arr.ndim == 4:
+                arr = arr[..., 0] # take first time instance
+                
+            while arr.ndim > 3:
+                for ax in range(arr.ndim - 1, 2, -1):
+                    if arr.shape[ax] == 1:
+                        if isinstance(arr, torch.Tensor):
+                            arr = arr.squeeze(dim=ax)
+                        else:
+                            arr = arr.squeeze(axis=ax)
+                        break
+                else:
+                    break
+                    
+            if arr.ndim == 3 and arr.shape[2] < 3:
+                reps = (3 // arr.shape[2]) + 1
+                if isinstance(arr, torch.Tensor):
+                    arr = torch.repeat_interleave(arr, reps, dim=2)
+                else:
+                    arr = np.repeat(arr, reps, axis=2)
+                
+            d[key] = arr
+            
+        return d
 
 def get_train_transforms_3d(
     img_size: int = 224,
     depth_size: int = 64,
+    use_pet: bool = False,
 ) -> Compose:
-    """Get the 3D training transforms pipeline for volumetric models.
+    load_keys = ["image", "mask"]
+    if use_pet:
+        load_keys.append("pet")
+        
+    val_keys = list(load_keys)
 
-    Keeps the volume as (C, D, H, W) for 3D Swin Transformer input.
-    Uses single-channel grayscale (no RGB conversion) on the FULL scan depth.
-    """
     transforms = [
-        LoadNiftiWithRGBSupportd(keys=["image"]),
+        LoadNiftiWithRGBSupportd(keys=load_keys, allow_missing_keys=True),
+        EnsureChannelFirstd(keys=load_keys, channel_dim="no_channel", allow_missing_keys=True),
+        
+        # 1. Standardize Orientation - Disabled due to malformed affines in some files
+        # Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
+        
+        # 2. Resample PET to perfectly match CT's affine coordinate grid
+        *( [ResampleToMatchd(keys="pet", key_dst="image")] if use_pet else [] ),
 
-        # Scale intensity to [0, 1] AND clip outliers dynamically
-        ScaleIntensityRanged(
-            keys=["image"],
-            a_min=-1024,
-            a_max=3071,
-            b_min=0,
-            b_max=1,
-            clip=True,
+        # 3. Standardize Physical Voxel Spacing (example: 1.5mm x 1.5mm x 2.0mm)
+        Spacingd(
+            keys=val_keys, 
+            pixdim=(1.5, 1.5, 2.0), 
+            mode=["bilinear", "nearest"] + (["bilinear"] if use_pet else []),
+            allow_missing_keys=True
         ),
 
-        # Extract a contiguous crop of depth_size from the center of the Z-axis
-        ExtractSubVolumed(keys=["image"], num_slices=depth_size),
+        ScaleIntensityRanged(keys=["image"], a_min=-1024, a_max=3071, b_min=0, b_max=1, clip=True),
+        *( [ScaleIntensityd(keys=["pet"], minv=0.0, maxv=1.0)] if use_pet else [] ),
+        AsDiscreted(keys=["mask"], threshold=0.5, allow_missing_keys=True),
+
+        ExtractSubVolumed(keys=val_keys, num_slices=depth_size, allow_missing_keys=True),
         
-        # Resize only X and Y down to img_size 
-        Resized(keys=["image"], spatial_size=(img_size, img_size, -1), mode="trilinear"),
+        # 4. Strict spatial sizes applied to both train and val
+        Resized(
+            keys=val_keys, 
+            spatial_size=(img_size, img_size, depth_size), 
+            mode=["trilinear", "nearest"] + (["trilinear"] if use_pet else []),
+            allow_missing_keys=True
+        ),
         
-        # Build 3D pseudo mask from the boxes for multi-task segmentation
-        BoxesToMaskd(keys=["boxes"], mask_key="mask", output_size=(img_size, img_size, depth_size)),
+        RandFlipd(keys=val_keys, prob=0.5, spatial_axis=0, allow_missing_keys=True),
+        RandFlipd(keys=val_keys, prob=0.5, spatial_axis=1, allow_missing_keys=True),
+        RandFlipd(keys=val_keys, prob=0.5, spatial_axis=2, allow_missing_keys=True),
         
-        RandFlipd(keys=["image", "mask"], prob=0.5, spatial_axis=0),
-        RandFlipd(keys=["image", "mask"], prob=0.5, spatial_axis=1),
-        RandFlipd(keys=["image", "mask"], prob=0.5, spatial_axis=2),
-        NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-        RandScaleIntensityd(keys="image", factors=0.1, prob=1.0),
-        RandShiftIntensityd(keys="image", offsets=0.1, prob=1.0),
+        # 5. Apply augmentations to PET as well if it exists
+        RandScaleIntensityd(keys=["image"] + (["pet"] if use_pet else []), factors=0.1, prob=1.0),
+        RandShiftIntensityd(keys=["image"] + (["pet"] if use_pet else []), offsets=0.1, prob=1.0),
+        
+        NormalizeIntensityd(keys=["image"] + (["pet"] if use_pet else []), nonzero=True, channel_wise=True),
+        
+        *( [ConcatItemsd(keys=["image", "pet"], name="image", dim=0)] if use_pet else [] ),
         AddPlaceholderTargetsd(keys=["image"]),
-        ToTensord(keys=["image", "mask"]),
+        ToTensord(keys=["image", "mask"], allow_missing_keys=True),
     ]
     return Compose(transforms)
 
@@ -506,12 +401,33 @@ def get_train_transforms_3d(
 def get_val_transforms_3d(
     img_size: int = 224,
     depth_size: int = 64,
+    use_pet: bool = False, 
 ) -> Compose:
-    """Get the 3D validation/test transforms pipeline for volumetric models."""
-    transforms = [
-        LoadNiftiWithRGBSupportd(keys=["image"]),
+    load_keys = ["image", "mask"]
+    if use_pet:
+        load_keys.append("pet")
+        
+    val_keys = list(load_keys)
 
-        # Scale intensity and clip outliers dynamically
+    transforms = [
+        LoadNiftiWithRGBSupportd(keys=load_keys, allow_missing_keys=True),
+        EnsureChannelFirstd(keys=load_keys, channel_dim="no_channel", allow_missing_keys=True),
+        
+        # 1. Standardize Orientation (Must match train) - Disabled due to malformed affines
+        # Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
+        
+        # Resample PET to perfectly match CT's affine coordinate grid
+        *( [ResampleToMatchd(keys="pet", key_dst="image")] if use_pet else [] ),
+
+        # 2. Standardize Physical Voxel Spacing (Must match train)
+        Spacingd(
+            keys=val_keys, 
+            pixdim=(1.5, 1.5, 2.0), 
+            mode=["bilinear", "nearest"] + (["bilinear"] if use_pet else []),
+            allow_missing_keys=True
+        ),
+
+        # Scale CT intensity to [0, 1] AND clip outliers
         ScaleIntensityRanged(
             keys=["image"],
             a_min=-1024,
@@ -520,16 +436,30 @@ def get_val_transforms_3d(
             b_max=1,
             clip=True,
         ),
-
-        ExtractSubVolumed(keys=["image"], num_slices=depth_size),
-
-        Resized(keys=["image"], spatial_size=(img_size, img_size, depth_size), mode="trilinear"),
         
-        # Build 3D pseudo mask from the boxes for multi-task segmentation
-        BoxesToMaskd(keys=["boxes"], mask_key="mask", output_size=(img_size, img_size, depth_size)),
+        # Optional: scale PET as well (typically PET includes very high values)
+        *( [ScaleIntensityd(keys=["pet"], minv=0.0, maxv=1.0)] if use_pet else [] ),
+
+        # Add allow_missing_keys=True here!
+        AsDiscreted(keys=["mask"], threshold=0.5, allow_missing_keys=True),
+
+        # Add allow_missing_keys=True here!
+        ExtractSubVolumed(keys=val_keys, num_slices=depth_size, allow_missing_keys=True),
         
+        # Add allow_missing_keys=True here!
+        Resized(
+            keys=val_keys, 
+            spatial_size=(img_size, img_size, -1), 
+            mode=["trilinear", "nearest"] + (["trilinear"] if use_pet else []),
+            allow_missing_keys=True
+        ),
+        
+        NormalizeIntensityd(keys=["image"] + (["pet"] if use_pet else []), nonzero=True, channel_wise=True),
+        
+        *( [ConcatItemsd(keys=["image", "pet"], name="image", dim=0)] if use_pet else [] ),
         AddPlaceholderTargetsd(keys=["image"]),
-        NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
-        ToTensord(keys=["image", "mask"]),
+        
+        # Add allow_missing_keys=True here!
+        ToTensord(keys=["image", "mask"], allow_missing_keys=True),
     ]
     return Compose(transforms)
