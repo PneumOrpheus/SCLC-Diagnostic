@@ -24,16 +24,35 @@ class AverageMeter(object):
 
 
 def simple_collate_fn(batch):
-    # Just extract the volume and the single target class logic
+    # Extract the volume and the single target class logic
     scans = torch.stack([item["image"] for item in batch], dim=0)
     
     # We want a 1D tensor of class indices for CrossEntropyLoss
     labels = torch.tensor([item["scan_label"] for item in batch], dtype=torch.long)
     
-    # Extract segmentation masks if available
+    # Extract segmentation masks if available, filling missing ones with zeros
     masks = None
-    if "mask" in batch[0]:
-        masks = torch.stack([item["mask"] for item in batch], dim=0)
+    if any("mask" in item for item in batch):
+        # Find the shape and type of the first valid mask in the batch
+        mask_shape = None
+        mask_dtype = None
+        mask_device = None
+        for item in batch:
+            if "mask" in item:
+                mask_shape = item["mask"].shape
+                mask_dtype = item["mask"].dtype
+                mask_device = item["mask"].device
+                break
+                
+        # Stack masks, generating an empty (all zeros) mask for items without one
+        masks_list = []
+        for item in batch:
+            if "mask" in item:
+                masks_list.append(item["mask"])
+            else:
+                masks_list.append(torch.zeros(mask_shape, dtype=mask_dtype, device=mask_device))
+                
+        masks = torch.stack(masks_list, dim=0)
         
     return scans, labels, masks
 
@@ -45,11 +64,7 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
     run_cls_loss = AverageMeter()
     run_seg_loss = AverageMeter()
     
-    if class_weights is not None:
-        class_weights = torch.tensor(class_weights, dtype=torch.float32).to(device)
-        criterion = DiceLoss(to_onehot_y=True, softmax=True, weight=class_weights)
-    else:
-        criterion = DiceLoss(to_onehot_y=True, softmax=True)
+    criterion = nn.CrossEntropyLoss()
 
     optimizer.zero_grad()  # 1. Zero gradients before the loop starts
 
@@ -66,10 +81,11 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
         with torch.amp.autocast(enabled=(scaler is not None), device_type='cuda'):
             if use_segmentation:
                 logits, seg_outputs = model(data, return_segmentation=True)
-                cls_loss = criterion(logits, target.view(-1, 1))
+                cls_loss = criterion(logits, target)
                 
                 seg_loss_val = 0.0
                 if masks is not None and torch.sum(masks) > 0:
+                    masks = masks.float()  # Make sure masks are float
                     seg_loss = nn.functional.binary_cross_entropy_with_logits(seg_outputs, masks)
                     loss = cls_loss + (0.5 * seg_loss)
                     seg_loss_val = seg_loss.item()
@@ -77,7 +93,7 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
                     loss = cls_loss
             else:
                 logits = model(data, return_segmentation=False)
-                loss = criterion(logits, target.view(-1, 1))
+                loss = criterion(logits, target)
                 cls_loss = loss
                 seg_loss_val = 0.0
             
@@ -126,7 +142,7 @@ def validate_epoch(model, loader, device, logger):
     run_loss = AverageMeter()
     correct = 0
     total = 0
-    criterion = DiceLoss(to_onehot_y=True, softmax=True)
+    criterion = nn.CrossEntropyLoss()
     
     all_preds = []
     all_targets = []
@@ -142,7 +158,7 @@ def validate_epoch(model, loader, device, logger):
             
         data, target = data.to(device), target.to(device)
         logits = model(data)
-        loss = criterion(logits, target.view(-1, 1))
+        loss = criterion(logits, target)
         
         run_loss.update(loss.item(), n=data.size(0))
         

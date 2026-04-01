@@ -12,7 +12,7 @@ from monai.transforms import Compose
 from tqdm import tqdm
 import torchvision
 
-from data.transforms import get_train_transforms, get_val_transforms, get_train_transforms_3d, get_val_transforms_3d
+from data.transforms import get_train_transforms_3d, get_val_transforms_3d
 
 # A: Adenocarcinoma (0), B: Small Cell Carcinoma (1), G: Squamous Cell Carcinoma (2)
 CLASS_MAP = {"A": 0, "B": 1, "G": 2}
@@ -23,80 +23,6 @@ NORWEGIAN_CLASS_MAP = {
     "Småcelletkarsinom": 1,
     "Plateepitelkarsinom": 2,
 }
-
-def load_patient_annotations(
-    annotation_dir: str,
-    patient_short_id: str,
-    series_uid: str,
-    orig_size: int = 512,
-    target_size: int = 224, 
-) -> Dict[str, torch.Tensor]:
-    """Load and aggregate bounding box annotations from per-slice XML files (for Lung-PET-CT-Dx)."""
-    patient_annot_dir = os.path.join(annotation_dir, patient_short_id)
-    empty = {
-        "boxes": [],
-        "labels": [],
-    }
-
-    if not os.path.isdir(patient_annot_dir):
-        return empty
-
-    # Only load annotations specific to the current series
-    xml_pattern = os.path.join(patient_annot_dir, f"*_{series_uid}_slice*.xml")
-    xml_files = glob.glob(xml_pattern)
-    if not xml_files:
-        return empty
-
-    all_boxes: List[tuple] = []
-    for xml_path in xml_files:
-        try:
-            tree = ET.parse(xml_path)
-            root = tree.getroot()
-            for obj in root.findall("object"):
-                name_elem = obj.find("name")
-                if name_elem is None:
-                    continue
-                letter = name_elem.text.strip()
-                if letter not in CLASS_MAP:
-                    continue
-                bbox = obj.find("bndbox")
-                if bbox is None:
-                    continue
-                xmin = float(bbox.find("xmin").text)
-                ymin = float(bbox.find("ymin").text)
-                xmax = float(bbox.find("xmax").text)
-                ymax = float(bbox.find("ymax").text)
-                slice_str = xml_path.split("_slice")[-1].replace(".xml", "")
-                slice_idx = int(slice_str)
-                all_boxes.append((xmin, ymin, xmax, ymax, slice_idx, CLASS_MAP[letter]))
-        except (ET.ParseError, AttributeError):
-            print(f"Warning: Failed to parse XML '{xml_path}'. Skipping.")
-            continue
-
-    if not all_boxes:
-        return empty
-
-    scale = target_size / orig_size
-    scaled_boxes = []
-    labels_list = []
-
-    for b in all_boxes:
-        xmin, ymin, xmax, ymax, slice_idx, class_id = b
-        zmin, zmax = float(slice_idx), float(slice_idx + 1)
-        scaled_boxes.append([xmin * scale, ymin * scale,zmin, xmax * scale, ymax * scale, zmax])
-        labels_list.append(class_id + 1) # Detection labels are 1-indexed (0 = background)
-
-    boxes_tensor = torch.tensor(scaled_boxes, dtype=torch.float32)
-    labels_tensor = torch.tensor(labels_list, dtype=torch.int64)
-    
-    # dont clamp the z dimension since it is used for slice indexing, but clamp x and y to be within the target image size 
-    boxes_tensor[:, [0, 3]] = boxes_tensor[:, [0, 3]].clamp(min=0, max=target_size)
-    boxes_tensor[:, [1, 4]] = boxes_tensor[:, [1, 4]].clamp(min=0, max=target_size)
-
-    return {
-        "boxes": boxes_tensor.tolist(), 
-        "labels": labels_tensor.tolist()
-    }
 
 def load_patient_labels(csv_path: str) -> Dict[int, int]:
     """Load patient ID -> class label mapping from CSV (for BigLunge)."""
@@ -116,7 +42,8 @@ def get_lung_pet_ct_dx_data_list(
     val_frac: float = 0.1,
     test_frac: float = 0.1,
     seed: int = 42,
-    annotation_dir: str = "",
+    pet_dir: str = "",
+    use_pet: bool = False,
     testing: bool = False,
     img_size: int = 224,    
 ) -> Dict[str, List[Dict[str, Any]]]:
@@ -125,23 +52,13 @@ def get_lung_pet_ct_dx_data_list(
         raise ValueError(f"Data path '{data_path}' does not exist or is not a directory.")
 
     data_root = Path(data_path)
-    valid_extensions = (".nii.gz", ".nii", ".npy", ".npz")
-    samples = [
-        f.name for f in data_root.iterdir()
-        if f.is_file() and any(f.name.endswith(ext) for ext in valid_extensions)
-    ]
+    
+    patient_folders = [p for p in data_root.iterdir() if p.is_dir()]
 
-    if not samples:
-        raise ValueError(f"No valid data files found in '{data_path}'. Supported: {valid_extensions}")
+    if not patient_folders:
+        raise ValueError(f"No valid patient folders found in '{data_path}'.")
 
-    patient_files: Dict[str, List[str]] = {}
-    for f in samples:
-        parts = f.split("_")
-        if len(parts) >= 2:
-            patient_id = f"{parts[0]}_{parts[1]}"
-            patient_files.setdefault(patient_id, []).append(f)
-
-    all_patients = sorted(patient_files.keys())
+    all_patients = sorted([p.name for p in patient_folders])
 
     rng = np.random.default_rng(seed)
     rng.shuffle(all_patients)
@@ -157,7 +74,6 @@ def get_lung_pet_ct_dx_data_list(
         "test": set(all_patients[n_train + n_val:]),
     }
 
-    annotation_cache: Dict[str, Dict[str, torch.Tensor]] = {}
     result: Dict[str, List[Dict[str, Any]]] = {}
     
     for split, selected in split_patients.items():
@@ -165,50 +81,53 @@ def get_lung_pet_ct_dx_data_list(
 
         data_list = []
         for pid in selected:
-            for f in patient_files.get(pid, []):
-                label = -1
-                for key, val in CLASS_MAP.items():
-                    if f"-{key}" in f:
-                        label = val
-                        break
-                if label == -1:
-                    continue
+            label = -1
+            for key, val in CLASS_MAP.items():
+                if f"-{key}" in pid:
+                    label = val
+                    break
+            if label == -1:
+                continue
+                
+            patient_dir = data_root / pid
+            images = [f for f in patient_dir.iterdir() if f.is_file() and f.name.endswith("_image.nii.gz")]
 
+            for img_path in images:
                 entry: Dict[str, Any] = {
-                    "image": str(data_root / f),
+                    "image": str(img_path),
                     "scan_label": label,
                 }
 
-                if annotation_dir and os.path.isdir(annotation_dir):
-                    short_id = pid.split("-")[-1] if "-" in pid else pid
-                    
-                    # Extract series_uid from the file name (assuming format: patientID_seriesUID.nii.gz)
-                    series_uid = f.replace(f"{pid}_", "").split(".nii")[0]
-                    cache_key = f"{short_id}_{series_uid}"
-                    
-                    if cache_key not in annotation_cache:
-                        annotation_cache[cache_key] = load_patient_annotations(
-                            annotation_dir, short_id, series_uid, orig_size=512, target_size=img_size
-                        )
-                    annot = annotation_cache[cache_key]
-                    entry["boxes"] = annot["boxes"]
-                    entry["labels"] = annot["labels"]
-
+                series_uid = img_path.name.replace("_image.nii.gz", "")
+                
+                # Check for mask in the same clean folder
+                mask_path = patient_dir / f"{series_uid}_mask.nii.gz"
+                if mask_path.exists():
+                    entry["mask"] = str(mask_path)
+                
+                # Check for PET if requested
+                if use_pet and pet_dir:
+                    # PET is {pet_dir}/{pid}_*.nii.gz
+                    pet_files = glob.glob(os.path.join(pet_dir, f"{pid}_*.nii.gz"))
+                    if pet_files:
+                        entry["pet"] = pet_files[0]
+                    else:
+                        # If use_pet is forced but this patient has no PET, skip this CT scan
+                        continue
+                        
                 data_list.append(entry)
-                if testing and len(data_list) >= 8:
+                if testing and len(data_list) >= 12:
                     break
-            if testing and len(data_list) >= 8:
+            if testing and len(data_list) >= 12:
                 break
                 
         class_counts: Dict[int, int] = {}
         for item in data_list:
             class_counts[item["scan_label"]] = class_counts.get(item["scan_label"], 0) + 1
 
-        if annotation_dir:
-            n_with = sum(1 for d in data_list if d.get("boxes") is not None and len(d["boxes"]) > 0)
-            print(f"  {len(data_list)} images ({n_with} with annotations), class distribution: {class_counts}")
-        else:
-            print(f"  {len(data_list)} images, class distribution: {class_counts}")
+        mask_count = sum(1 for d in data_list if 'mask' in d)
+        pet_count = sum(1 for d in data_list if 'pet' in d)
+        print(f"  {len(data_list)} images ({mask_count} w/ masks, {pet_count} w/ PET), class distribution: {class_counts}")
 
         result[split] = data_list
         
@@ -293,7 +212,8 @@ def create_dataset(
     use_multichannel_windowing: bool = False,
     cache_dir: Optional[str] = None,
     num_workers: int = 4,
-    annotation_dir: str = "",
+    pet_dir: str = "",
+    use_pet: bool = False,
     use_3d: bool = False,
     testing: bool = False,
     warm_cache: bool = False,
@@ -319,9 +239,9 @@ def create_dataset(
     elif dataset_type == "lung_pet_ct_dx":
         all_splits = get_lung_pet_ct_dx_data_list(
             data_path=data_path, val_frac=val_frac, test_frac=test_frac, seed=seed,
-            annotation_dir=annotation_dir, testing=testing, img_size=img_size
+            pet_dir=pet_dir, use_pet=use_pet, testing=testing, img_size=img_size
         )
-        cache_name = "monai_lung_pet_ct"
+        cache_name = "monai_lung_pet_ct_clean"
     else:
         raise ValueError(f"Unknown dataset_type: {dataset_type}")
 
@@ -335,34 +255,12 @@ def create_dataset(
 
         if use_3d:
             # Pre-filter to discard any volumes that don't have enough Z slices
-            min_allowed_slices = depth_size - 79 # May change this later 128 - 79 = 49
-            filtered_list = []
-            
-            print(f"[{split}] Filtering 3D volumes (min {min_allowed_slices} slices required)...")
-            for item in tqdm(data_list, desc="Checking depth"):
-                try:
-                    img = nib.load(item["image"])
-                    # Standard NIfTI has shape (X, Y, Z) or (X, Y, Z, T)
-                    if len(img.shape) >= 3 and img.shape[2] >= min_allowed_slices:
-                        filtered_list.append(item)
-                    else:
-                        print(f"Discarded {item['image']} (depth: {img.shape[2] if len(img.shape) >=3 else 0})")
-                except Exception as e:
-                    print(f"Skipping {item['image']} due to read error: {e}")
-                    
-            data_list = filtered_list
 
             if split == "train":
-                transforms = get_train_transforms_3d(img_size=img_size, depth_size=depth_size)
+                transforms = get_train_transforms_3d(img_size=img_size, depth_size=depth_size, use_pet=use_pet)
             else:
-                transforms = get_val_transforms_3d(img_size=img_size, depth_size=depth_size)
-        else:
-            get_transforms = get_train_transforms if split == "train" else get_val_transforms
-            transforms = get_transforms(
-                img_size=img_size,
-                convert_to_rgb=convert_to_rgb,
-                use_multichannel_windowing=use_multichannel_windowing,
-            )
+                transforms = get_val_transforms_3d(img_size=img_size, depth_size=depth_size, use_pet=use_pet)
+
 
         if cache_dir is None:
             mode_key = "3d" if use_3d else "2d"
@@ -378,19 +276,32 @@ def create_dataset(
             
         os.makedirs(current_cache_dir, exist_ok=True)
         print(f"PersistentDataset cache_dir='{current_cache_dir}'")
+        
+        valid_data_file = os.path.join(current_cache_dir, "valid_data.json")
+        import json
 
-        ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=current_cache_dir)
+        if os.path.exists(valid_data_file) and not warm_cache:
+            print(f"Loading verified valid dataset list from {valid_data_file}...")
+            with open(valid_data_file, "r") as f:
+                valid_data = json.load(f)
+            ds = PersistentDataset(data=valid_data, transform=transforms, cache_dir=current_cache_dir)
+        else:
+            ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=current_cache_dir)
 
-        # PersistentDataset automatically uses existing cache files. 
-        # We only explicitly loop (warm up) if the directory is empty or warm_cache is forced.
-        is_empty = len(os.listdir(current_cache_dir)) == 0 if os.path.exists(current_cache_dir) else True
-
-        if warm_cache or is_empty:
-            for i in tqdm(range(len(ds)), desc=f"Caching [{split}]", unit="img"):
+            valid_data = []
+            for i in tqdm(range(len(ds)), desc=f"Validating & Caching [{split}]", unit="img"):
                 try:
                     _ = ds[i]
+                    valid_data.append(data_list[i])
                 except Exception as e:
-                    print(f"Skipped caching sample {i} due to: {e}")
+                    print(f"Failed sample ({data_list[i].get('image', 'N/A')}) - skipping! Error: {e}")
+            
+            print(f"[{split}] Kept {len(valid_data)}/{len(data_list)} valid samples.")
+            with open(valid_data_file, "w") as f:
+                json.dump(valid_data, f)
+                
+            # Recreate dataset using only the valid subset
+            ds = PersistentDataset(data=valid_data, transform=transforms, cache_dir=current_cache_dir)
 
         datasets.append(ds)
 

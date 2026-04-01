@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.amp import GradScaler
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 from typing import Dict, Any, Tuple
 import argparse
 import time
@@ -27,8 +27,9 @@ def parse_args():
                         help="Pipeline mode")
     
     # Datasets
-    parser.add_argument("--dapt-dataset", type=str, default="/home/data/Lung-PET-CT-Dx")
-    parser.add_argument("--annotation-dir", type=str, default="/home/data/Annotation_ZMapped")
+    parser.add_argument("--dapt-dataset", type=str, default="/home/data/Lung-PET-CT-Dx-Clean")
+    parser.add_argument("--pet-dir", type=str, default="/home/data/Lung-PET-CT-Dx_PET", help="Directory containing the PET NIfTI files")
+    parser.add_argument("--use-pet", action="store_true", default=False, help="Include PET as the second input channel")
     parser.add_argument("--finetune-dataset", type=str, default="/home/data/BigLunge/pre_formatting_ws_iso1.0mm_croplungs_bb/1")
     parser.add_argument("--finetune-csv", type=str, default="/home/data/BigLunge/patients_parameters.csv")
     
@@ -53,8 +54,8 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--disable-amp", action="store_true")
     parser.add_argument("--testing", default=False, action="store_true", help="Run with a tiny subset for testing")
-    parser.add_argument("--anno", default=False, action="store_true", help="Use annotations for multi-task segmentation learning")
-    parser.add_argument("--depth-size", type=int, default=64, help="Depth size for the 3D images")
+    parser.add_argument("--anno", default=True, action="store_true", help="Use annotations for multi-task segmentation learning")
+    parser.add_argument("--depth-size", type=int, default=128, help="Depth size for the 3D images")
 
     return parser.parse_args()
 
@@ -69,13 +70,29 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
         convert_to_rgb=False,
         use_multichannel_windowing=False,
         num_workers=args.num_workers,
-        annotation_dir=args.annotation_dir if (dataset_type == "lung_pet_ct_dx" and args.anno) else "",
+        pet_dir=args.pet_dir if dataset_type == "lung_pet_ct_dx" else "",
+        use_pet=args.use_pet if dataset_type == "lung_pet_ct_dx" else False,
         use_3d=True,
         testing=args.testing,
         warm_cache=False,
     )
     
-    train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, collate_fn=simple_collate_fn, num_workers=args.num_workers)
+    if dataset_type == "lung_pet_ct_dx" and hasattr(train_ds, "data") and len(train_ds.data) > 0:
+        print(f"Applying WeightedRandomSampler for highly imbalanced dataset: {dataset_type}")
+        train_labels = [item["scan_label"] for item in train_ds.data]
+        class_counts = Counter(train_labels)
+        num_samples = len(train_labels)
+        
+        # Invert class frequencies to create weights
+        class_weights_dict = {cls: num_samples / count for cls, count in class_counts.items()}
+        sample_weights = [class_weights_dict[label] for label in train_labels]
+        
+        sampler = WeightedRandomSampler(weights=sample_weights, num_samples=num_samples, replacement=True)
+        # Note: shuffle must be False when using a sampler
+        train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler, collate_fn=simple_collate_fn, num_workers=args.num_workers)
+    else:
+        train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, collate_fn=simple_collate_fn, num_workers=args.num_workers)
+        
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, collate_fn=simple_collate_fn, num_workers=args.num_workers)
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, collate_fn=simple_collate_fn, num_workers=args.num_workers)
     
@@ -198,7 +215,8 @@ def main():
     logger.info(f"Running {args.model_type} 3D Classification Pipeline")
     logger.info(f"Mode: {args.mode} | Testing: {args.testing} | Device: {device} | AMP: {not args.disable_amp}")
     
-    model = get_sclc_model(args.initial_checkpoint, model_type=args.model_type).to(device)
+    in_channels = 2 if getattr(args, "use_pet", False) else 1
+    model = get_sclc_model(args.initial_checkpoint, model_type=args.model_type, in_channels=in_channels).to(device)
     num_params = sum(p.numel() for p in model.parameters())
     logger.info(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
     print(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
