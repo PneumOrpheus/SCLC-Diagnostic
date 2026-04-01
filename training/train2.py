@@ -64,7 +64,8 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
     run_cls_loss = AverageMeter()
     run_seg_loss = AverageMeter()
     
-    criterion = nn.CrossEntropyLoss()
+    # Apply label smoothing due to visual overlap in NSCLC/SCLC subtypes
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 
     optimizer.zero_grad()  # 1. Zero gradients before the loop starts
 
@@ -142,7 +143,7 @@ def validate_epoch(model, loader, device, logger):
     run_loss = AverageMeter()
     correct = 0
     total = 0
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     
     all_preds = []
     all_targets = []

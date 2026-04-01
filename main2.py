@@ -39,13 +39,13 @@ def parse_args():
     parser.add_argument("--model-checkpoint", type=str, default="")
     
     # Hyperparameters
-    parser.add_argument("--dapt-epochs", type=int, default=30)
+    parser.add_argument("--dapt-epochs", type=int, default=40)
     parser.add_argument("--dapt-lr", type=float, default=1e-4)
-    parser.add_argument("--finetune-epochs", type=int, default=30)
+    parser.add_argument("--finetune-epochs", type=int, default=40)
     parser.add_argument("--finetune-lr", type=float, default=3e-4)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--accumulation-steps", type=int, default=4, help="Gradient accumulation steps to increase effective batch size")
-    parser.add_argument("--weight-decay", type=float, default=1e-4)
+    parser.add_argument("--weight-decay", type=float, default=1e-3) # Var 1e-4
     
     # System
     parser.add_argument("--num-workers", type=int, default=4)
