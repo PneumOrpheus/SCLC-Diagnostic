@@ -13,7 +13,7 @@ import time
 from collections import Counter
 
 from model_selection2 import get_sclc_model
-from training.train2 import simple_collate_fn, train_epoch, validate_epoch
+from training.train import simple_collate_fn, train_epoch, validate_epoch
 from data.data_loader import create_dataset
 from logger import create_logger
 

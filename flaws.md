@@ -1,6 +1,6 @@
 # Pipeline Flaws — SCLC 3D Classification
 
-_Audit target: `main2.py`, `model_selection2.py`, `data/data_loader.py`, `data/transforms.py`, `training/train2.py`, plus the mask generator `data_exploration/create_masks_2.py` and the cached artifacts under `~/.cache/monai_lung_pet_ct_clean/`._
+_Audit target: `main.py`, `model_selection2.py`, `data/data_loader.py`, `data/transforms.py`, `training/train.py`, plus the mask generator `data_exploration/create_masks_2.py` and the cached artifacts under `~/.cache/monai_lung_pet_ct_clean/`._
 
 Ordered by severity. The first two items are, on their own, sufficient to explain "no model is learning anything." Everything below them is real but secondary — fix #1 and #2 before you touch the rest.
 
@@ -55,8 +55,8 @@ There is no invalidation logic anywhere in the pipeline. No checksum of `data_li
 1. **Immediately**: `rm -rf ~/.cache/monai_lung_pet_ct_clean/`. Re-run. Sanity-check the first epoch header says something closer to `[400+/400+]`. Re-check that the class weight print shows realistic values like `[0.47, 3.29, 1.82]` (that is what the 2026-03-31 run had).
 2. **Harden the cache**: include `testing` in the cache directory name (e.g., `3d_img224_d128_testfull` vs `3d_img224_d128_test12`). Alternatively, write a small `meta.json` next to `valid_data.json` containing the `data_list` length, the `testing` flag, `val_frac`, `test_frac`, `seed`, and the number of patients; on load, compare it to the current run and force rebuild on mismatch.
 3. **Make `--testing` less dangerous**: do not write `valid_data.json` at all in testing mode, or write it under a `_testing/` subdirectory. Testing mode should be non-destructive to real caches.
-4. **Add a `--clear-cache` flag** to `main2.py` so you never have to remember the raw cache path.
-5. **Assert non-zero per-class counts** in `main2.py` right after the dataset is built. If class 1 has zero training samples, abort with a clear message rather than silently training a broken model.
+4. **Add a `--clear-cache` flag** to `main.py` so you never have to remember the raw cache path.
+5. **Assert non-zero per-class counts** in `main.py` right after the dataset is built. If class 1 has zero training samples, abort with a clear message rather than silently training a broken model.
 
 Until you do this, **nothing else in this document matters**. Every other fix is downstream of having a real training set.
 
@@ -64,7 +64,7 @@ Until you do this, **nothing else in this document matters**. Every other fix is
 
 ## 2. (CRITICAL) `class_weights` is computed, logged, and then never actually used
 
-`main2.py::run_training_phase` calls `compute_class_weights`, prints the result to the log, and passes the tensor into `train_epoch` via the `class_weights=class_weights` keyword argument. `train_epoch` accepts it in the signature. Then, in `training/train2.py` line 68:
+`main.py::run_training_phase` calls `compute_class_weights`, prints the result to the log, and passes the tensor into `train_epoch` via the `class_weights=class_weights` keyword argument. `train_epoch` accepts it in the signature. Then, in `training/train.py` line 68:
 
 ```python
 criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
@@ -91,7 +91,7 @@ And decide whether you want label smoothing and class weighting and a weighted s
 
 ## 3. (HIGH) DAPT rebalances with a sampler; fine-tuning on BigLunge does not rebalance at all
 
-In `main2.py::create_dataloaders`, the `WeightedRandomSampler` branch is gated on `dataset_type == "lung_pet_ct_dx"`:
+In `main.py::create_dataloaders`, the `WeightedRandomSampler` branch is gated on `dataset_type == "lung_pet_ct_dx"`:
 
 ```python
 if dataset_type == "lung_pet_ct_dx" and hasattr(train_ds, "data") and len(train_ds.data) > 0:
@@ -124,7 +124,7 @@ If you keep `Orientationd` disabled, at minimum log a warning in `create_dataset
 
 ## 5. (HIGH) The segmentation auxiliary loss leaks into samples that have no real mask
 
-In `training/train2.py` lines 88–93:
+In `training/train.py` lines 88–93:
 
 ```python
 if masks is not None and torch.sum(masks) > 0:
@@ -182,7 +182,7 @@ Probability 1.0 means "apply to every training sample, every epoch." Combined wi
 
 ## 8. (MEDIUM) `best_ckpt` can be referenced before assignment
 
-In `main2.py::run_training_phase`:
+In `main.py::run_training_phase`:
 
 ```python
 best_acc = 0.0
@@ -223,7 +223,7 @@ Train uses `spatial_size=(img_size, img_size, depth_size)`. Val uses `spatial_si
 
 ## 11. (LOW) The default `--initial-checkpoint` is a SwinUNETR checkpoint, loaded for every model
 
-`main2.py` defaults `--initial-checkpoint` to `/home/data/temp/model_swin_unetr_btcv_segmentation_v1.pt`, and `get_sclc_model` is called unconditionally with it regardless of `--model-type`. For `resnet50` and the new `vit` path, the function happily runs `torch.load(...)` on this swin checkpoint and then calls `load_state_dict(state_dict, strict=False)` against a ResNet or a ViT. Zero keys match, every load is a no-op, and the log prints "Pretrained weights loaded successfully" as if something had happened. It hasn't.
+`main.py` defaults `--initial-checkpoint` to `/home/data/temp/model_swin_unetr_btcv_segmentation_v1.pt`, and `get_sclc_model` is called unconditionally with it regardless of `--model-type`. For `resnet50` and the new `vit` path, the function happily runs `torch.load(...)` on this swin checkpoint and then calls `load_state_dict(state_dict, strict=False)` against a ResNet or a ViT. Zero keys match, every load is a no-op, and the log prints "Pretrained weights loaded successfully" as if something had happened. It hasn't.
 
 Either make `--initial-checkpoint` model-type-aware (one default per architecture), or skip the load when the checkpoint filename clearly belongs to a different architecture, or at minimum log how many keys actually matched:
 
