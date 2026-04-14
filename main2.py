@@ -21,7 +21,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="SCLC Simplified 3D Classification Pipeline")
     
     # Mode selection
-    parser.add_argument("--model-type", type=str, default="swin_unetr", choices=["swin_unetr", "resnet50"],
+    parser.add_argument("--model-type", type=str, default="swin_unetr", choices=["swin_unetr", "resnet50", "resnet18", "vit", "densenet121", "models_genesis"],
                         help="Model architecture to use")
     parser.add_argument("--mode", type=str, default="full", choices=["full", "dapt", "finetune", "inference"],
                         help="Pipeline mode")
@@ -34,7 +34,7 @@ def parse_args():
     parser.add_argument("--finetune-csv", type=str, default="/home/data/BigLunge/patients_parameters.csv")
     
     # Checkpoints
-    parser.add_argument("--initial-checkpoint", type=str, default="/home/data/temp/model_swin_unetr_btcv_segmentation_v1.pt")
+    parser.add_argument("--initial-checkpoint", type=str, default="", help="Path to initial checkpoint. Defaults to Swin UNETR BTCV if model-type is swin_unetr")
     parser.add_argument("--pretrained-checkpoint", type=str, default="")
     parser.add_argument("--model-checkpoint", type=str, default="")
     
@@ -42,7 +42,7 @@ def parse_args():
     parser.add_argument("--dapt-epochs", type=int, default=40)
     parser.add_argument("--dapt-lr", type=float, default=1e-4)
     parser.add_argument("--finetune-epochs", type=int, default=40)
-    parser.add_argument("--finetune-lr", type=float, default=3e-4)
+    parser.add_argument("--finetune-lr", type=float, default=3e-5)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--accumulation-steps", type=int, default=4, help="Gradient accumulation steps to increase effective batch size")
     parser.add_argument("--weight-decay", type=float, default=1e-3) # Var 1e-4
@@ -50,7 +50,7 @@ def parse_args():
     # System
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--output-dir", type=str, default="output")
-    parser.add_argument("--checkpoint-dir", type=str, default="trained_models")
+    parser.add_argument("--checkpoint-dir", type=str, default="/home/data/trained_models")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--disable-amp", action="store_true")
     parser.add_argument("--testing", default=False, action="store_true", help="Run with a tiny subset for testing")
@@ -145,7 +145,7 @@ def run_training_phase(
         
         if acc > best_acc:
             best_acc = acc
-            best_ckpt = os.path.join(checkpoint_dir, f"best_{model_type}_{phase_prefix}.pth")
+            best_ckpt = os.path.join(checkpoint_dir, f"best_{model_type}_{phase_prefix}_new.pth")
             torch.save(model.state_dict(), best_ckpt)
             logger.info(f"[*] New best model saved! Accuracy: {best_acc:.4f}")
             epochs_no_improve = 0  # reset counter
@@ -154,7 +154,7 @@ def run_training_phase(
             
         # Save periodic checkpoint every 10 epochs
         if epoch % 10 == 0:
-            periodic_ckpt = os.path.join(checkpoint_dir, f"{phase_prefix}_{model_type}_epoch_{epoch}.pth")
+            periodic_ckpt = os.path.join(checkpoint_dir, f"{phase_prefix}_{model_type}_epoch_{epoch}_new.pth")
             torch.save(model.state_dict(), periodic_ckpt)
             logger.info(f"[*] Periodic checkpoint saved at epoch {epoch}: {periodic_ckpt}")
             
@@ -201,6 +201,9 @@ def compute_class_weights(data_loader: DataLoader, num_classes: int, device: tor
 def main():
     args = parse_args()
     
+    if not args.initial_checkpoint and args.model_type == "swin_unetr":
+        args.initial_checkpoint = "/home/data/temp/model_swin_unetr_btcv_segmentation_v1.pt"
+        
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(args.checkpoint_dir, exist_ok=True)
     
@@ -216,7 +219,7 @@ def main():
     logger.info(f"Mode: {args.mode} | Testing: {args.testing} | Device: {device} | AMP: {not args.disable_amp}")
     
     in_channels = 2 if getattr(args, "use_pet", False) else 1
-    model = get_sclc_model(args.initial_checkpoint, model_type=args.model_type, in_channels=in_channels).to(device)
+    model = get_sclc_model(args.initial_checkpoint, model_type=args.model_type, in_channels=in_channels, depth_size=args.depth_size).to(device)
     num_params = sum(p.numel() for p in model.parameters())
     logger.info(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
     print(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
@@ -248,7 +251,7 @@ def main():
             logger.info(f"Loaded DAPT checkpoint for fine-tuning.")
             
         logger.info(f"Setting up FineTuning Datasets from: {args.finetune_dataset}")
-        train_loader, val_loader, test_loader = create_dataloaders(args, "big_lunge", args.finetune_dataset, args.finetune_csv)
+        train_loader, val_loader, test_loader = create_dataloaders(args, "big_lunge", args.finetune_dataset, args.finetune_csv, depth_size=args.depth_size)
         
         best_finetune_ckpt = run_training_phase(
             model, train_loader, val_loader, device, 
@@ -272,7 +275,7 @@ def main():
             
             logger.info("Setting up Test Datasets...")
             if 'test_loader' not in locals() or test_loader is None:
-                _, _, test_loader = create_dataloaders(args, "big_lunge", args.finetune_dataset, args.finetune_csv)
+                _, _, test_loader = create_dataloaders(args, "big_lunge", args.finetune_dataset, args.finetune_csv, depth_size=args.depth_size)
             
         elif args.mode == "full":
             if 'best_finetune_ckpt' in locals() and best_finetune_ckpt:

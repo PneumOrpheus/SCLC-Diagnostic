@@ -59,19 +59,46 @@ def get_lung_pet_ct_dx_data_list(
         raise ValueError(f"No valid patient folders found in '{data_path}'.")
 
     all_patients = sorted([p.name for p in patient_folders])
+    
+    # Filter patients by valid class mapping and associate their labels
+    valid_patients = []
+    patient_labels = []
+    
+    for pid in all_patients:
+        label = -1
+        for key, val in CLASS_MAP.items():
+            if f"-{key}" in pid:
+                label = val
+                break
+        if label != -1:
+            valid_patients.append(pid)
+            patient_labels.append(label)
 
-    rng = np.random.default_rng(seed)
-    rng.shuffle(all_patients)
+    from sklearn.model_selection import train_test_split
 
-    n_total = len(all_patients)
-    n_test = int(n_total * test_frac)
-    n_val = int(n_total * val_frac)
-    n_train = n_total - n_test - n_val
+    val_test_frac = val_frac + test_frac
+    if val_test_frac > 0:
+        train_ids, temp_ids, train_labels, temp_labels = train_test_split(
+            valid_patients, patient_labels, test_size=val_test_frac, random_state=seed, stratify=patient_labels
+        )
+        
+        # Split temp into val and test
+        if test_frac > 0 and val_frac > 0:
+            test_ratio = test_frac / val_test_frac
+            val_ids, test_ids, val_labels, test_labels = train_test_split(
+                temp_ids, temp_labels, test_size=test_ratio, random_state=seed, stratify=temp_labels
+            )
+        elif test_frac > 0:
+            val_ids, test_ids = [], temp_ids
+        else:
+            val_ids, test_ids = temp_ids, []
+    else:
+        train_ids, val_ids, test_ids = valid_patients, [], []
 
     split_patients = {
-        "train": set(all_patients[:n_train]),
-        "val": set(all_patients[n_train:n_train + n_val]),
-        "test": set(all_patients[n_train + n_val:]),
+        "train": set(train_ids),
+        "val": set(val_ids),
+        "test": set(test_ids),
     }
 
     result: Dict[str, List[Dict[str, Any]]] = {}
@@ -161,19 +188,34 @@ def get_biglunge_data_list(
         raise ValueError(f"No valid patient folders found in '{data_path}'.")
 
     print(f"Found {len(patient_folders)} patients with labels.")
+    
+    patient_classes = [patient_labels[pid] for pid in patient_folders]
 
-    rng = np.random.default_rng(seed)
-    rng.shuffle(patient_folders)
+    from sklearn.model_selection import train_test_split
 
-    n_total = len(patient_folders)
-    n_test = int(n_total * test_frac)
-    n_val = int(n_total * val_frac)
-    n_train = n_total - n_test - n_val
+    val_test_frac = val_frac + test_frac
+    if val_test_frac > 0:
+        train_ids, temp_ids, train_classes, temp_classes = train_test_split(
+            patient_folders, patient_classes, test_size=val_test_frac, random_state=seed, stratify=patient_classes
+        )
+        
+        # Split temp into val and test
+        if test_frac > 0 and val_frac > 0:
+            test_ratio = test_frac / val_test_frac
+            val_ids, test_ids, val_classes, test_classes = train_test_split(
+                temp_ids, temp_classes, test_size=test_ratio, random_state=seed, stratify=temp_classes
+            )
+        elif test_frac > 0:
+            val_ids, test_ids = [], temp_ids
+        else:
+            val_ids, test_ids = temp_ids, []
+    else:
+        train_ids, val_ids, test_ids = patient_folders, [], []
 
     split_patients = {
-        "train": patient_folders[:n_train],
-        "val": patient_folders[n_train:n_train + n_val],
-        "test": patient_folders[n_train + n_val:],
+        "train": train_ids,
+        "val": val_ids,
+        "test": test_ids,
     }
 
     result: Dict[str, List[Dict[str, Any]]] = {}
@@ -264,11 +306,12 @@ def create_dataset(
 
         if cache_dir is None:
             mode_key = "3d" if use_3d else "2d"
+            test_suffix = "_testing" if testing else ""
             current_cache_dir = os.path.join(
                 os.path.expanduser("~"),
                 ".cache",
                 cache_name,
-                f"{mode_key}_img{img_size}_d{depth_size}",
+                f"{mode_key}_img{img_size}_d{depth_size}{test_suffix}",
                 split,
             )
         else:

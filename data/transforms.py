@@ -353,8 +353,8 @@ def get_train_transforms_3d(
         LoadNiftiWithRGBSupportd(keys=load_keys, allow_missing_keys=True),
         EnsureChannelFirstd(keys=load_keys, channel_dim="no_channel", allow_missing_keys=True),
         
-        # 1. Standardize Orientation - Disabled due to malformed affines in some files
-        # Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
+        # 1. Standardize Orientation 
+        Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
         
         # 2. Resample PET to perfectly match CT's affine coordinate grid
         *( [ResampleToMatchd(keys="pet", key_dst="image")] if use_pet else [] ),
@@ -386,8 +386,8 @@ def get_train_transforms_3d(
         RandFlipd(keys=val_keys, prob=0.5, spatial_axis=2, allow_missing_keys=True),
         
         # 5. Apply augmentations to PET as well if it exists
-        RandScaleIntensityd(keys=["image"] + (["pet"] if use_pet else []), factors=0.1, prob=1.0),
-        RandShiftIntensityd(keys=["image"] + (["pet"] if use_pet else []), offsets=0.1, prob=1.0),
+        RandScaleIntensityd(keys=["image"] + (["pet"] if use_pet else []), factors=0.1, prob=0.3),
+        RandShiftIntensityd(keys=["image"] + (["pet"] if use_pet else []), offsets=0.1, prob=0.3),
         
         NormalizeIntensityd(keys=["image"] + (["pet"] if use_pet else []), nonzero=True, channel_wise=True),
         
@@ -413,8 +413,8 @@ def get_val_transforms_3d(
         LoadNiftiWithRGBSupportd(keys=load_keys, allow_missing_keys=True),
         EnsureChannelFirstd(keys=load_keys, channel_dim="no_channel", allow_missing_keys=True),
         
-        # 1. Standardize Orientation (Must match train) - Disabled due to malformed affines
-        # Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
+        # 1. Standardize Orientation (Must match train)
+        Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
         
         # Resample PET to perfectly match CT's affine coordinate grid
         *( [ResampleToMatchd(keys="pet", key_dst="image")] if use_pet else [] ),
@@ -449,7 +449,7 @@ def get_val_transforms_3d(
         # Add allow_missing_keys=True here!
         Resized(
             keys=val_keys, 
-            spatial_size=(img_size, img_size, -1), 
+            spatial_size=(img_size, img_size, depth_size), 
             mode=["trilinear", "nearest"] + (["trilinear"] if use_pet else []),
             allow_missing_keys=True
         ),
