@@ -46,15 +46,23 @@ def simple_collate_fn(batch):
                 
         # Stack masks, generating an empty (all zeros) mask for items without one
         masks_list = []
+        has_mask_list = []
         for item in batch:
             if "mask" in item:
+                # Also check to make sure it's not an empty mask (all zeros)
+                is_empty = (item["mask"].sum() == 0)
                 masks_list.append(item["mask"])
+                has_mask_list.append(not is_empty)
             else:
                 masks_list.append(torch.zeros(mask_shape, dtype=mask_dtype, device=mask_device))
+                has_mask_list.append(False)
                 
         masks = torch.stack(masks_list, dim=0)
+        has_mask = torch.tensor(has_mask_list, dtype=torch.bool)
         
-    return scans, labels, masks
+        return scans, labels, masks, has_mask
+    
+    return scans, labels, None, None
 
 
 def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, use_segmentation=False, class_weights=None, accumulation_steps=1):
@@ -70,7 +78,11 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
     optimizer.zero_grad()  # 1. Zero gradients before the loop starts
 
     for idx, batch_data in enumerate(loader):
-        if len(batch_data) == 3:
+        has_mask_tensor = None
+        if len(batch_data) == 4:
+            data, target, masks, has_mask_tensor = batch_data
+            masks = masks.to(device) if masks is not None else None
+        elif len(batch_data) == 3:
             data, target, masks = batch_data
             masks = masks.to(device) if masks is not None else None
         else:
@@ -85,9 +97,14 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
                 cls_loss = criterion(logits, target)
                 
                 seg_loss_val = 0.0
-                if masks is not None and torch.sum(masks) > 0:
+                if masks is not None and has_mask_tensor is not None and has_mask_tensor.any():
+                    valid_mask_indices = has_mask_tensor.to(device)
                     masks = masks.float()  # Make sure masks are float
-                    seg_loss = nn.functional.binary_cross_entropy_with_logits(seg_outputs, masks)
+                    # Only compute BCE on samples that genuinely have a mask
+                    seg_loss = nn.functional.binary_cross_entropy_with_logits(
+                        seg_outputs[valid_mask_indices], 
+                        masks[valid_mask_indices]
+                    )
                     loss = cls_loss + (0.5 * seg_loss)
                     seg_loss_val = seg_loss.item()
                 else:
@@ -109,6 +126,12 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
             
         # 4. Only step the optimizer after 'accumulation_steps' batches OR at the end of the loader
         if (idx + 1) % accumulation_steps == 0 or (idx + 1) == len(loader):
+            if scaler is not None:
+                scaler.unscale_(optimizer)
+            
+            # Clip gradients to prevent exploding gradients
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            
             if scaler is not None:
                 scaler.step(optimizer)
                 scaler.update()
@@ -152,7 +175,9 @@ def validate_epoch(model, loader, device, logger):
     logger.info("Starting validation...")
 
     for batch_data in loader:
-        if len(batch_data) == 3:
+        if len(batch_data) == 4:
+            data, target, _, _ = batch_data
+        elif len(batch_data) == 3:
             data, target, _ = batch_data
         else:
             data, target = batch_data
