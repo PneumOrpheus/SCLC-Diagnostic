@@ -1,6 +1,6 @@
 # Pipeline Flaws — SCLC 3D Classification
 
-_Audit target: `main.py`, `model_selection2.py`, `data/data_loader.py`, `data/transforms.py`, `training/train.py`, plus the mask generator `data_exploration/create_masks_2.py` and the cached artifacts under `~/.cache/monai_lung_pet_ct_clean/`._
+_Audit target: `main.py`, `model_selection.py`, `data/data_loader.py`, `data/transforms.py`, `training/train.py`, plus the mask generator `data_exploration/create_masks_2.py` and the cached artifacts under `~/.cache/monai_lung_pet_ct_clean/`._
 
 Ordered by severity. The first two items are, on their own, sufficient to explain "no model is learning anything." Everything below them is real but secondary — fix #1 and #2 before you touch the rest.
 

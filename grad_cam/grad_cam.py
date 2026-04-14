@@ -30,7 +30,7 @@ from monai.transforms import (
 import os
 import sys
 
-from models.model_selection import get_sclc_model
+from models.model_selection_old import get_sclc_model
 
 class SCLCModelWrapper(nn.Module):
     """
