@@ -207,7 +207,7 @@ class AddPlaceholderTargetsd(MapTransform):
         if "labels" not in d:
             d["labels"] = []
         if "scan_label" not in d:
-            d["scan_label"] = 0
+            d["scan_label"] = -1
         return d
 
 
@@ -384,11 +384,30 @@ def get_train_transforms_3d(
         RandFlipd(keys=val_keys, prob=0.5, spatial_axis=0, allow_missing_keys=True),
         RandFlipd(keys=val_keys, prob=0.5, spatial_axis=1, allow_missing_keys=True),
         RandFlipd(keys=val_keys, prob=0.5, spatial_axis=2, allow_missing_keys=True),
-        
-        # 5. Apply augmentations to PET as well if it exists
-        RandScaleIntensityd(keys=["image"] + (["pet"] if use_pet else []), factors=0.1, prob=0.3),
-        RandShiftIntensityd(keys=["image"] + (["pet"] if use_pet else []), offsets=0.1, prob=0.3),
-        
+
+        # Round 3: stronger affine to synthesize more anatomic diversity than the
+        # ~26 SCLC train patients naturally provide. Applied to image/mask/pet
+        # jointly so spatial correspondence stays intact.
+        RandAffined(
+            keys=val_keys,
+            prob=0.5,
+            rotate_range=(0.1, 0.1, 0.1),       # ~5.7 deg on each axis
+            translate_range=(8, 8, 4),
+            scale_range=(0.1, 0.1, 0.1),
+            mode=["bilinear", "nearest"] + (["bilinear"] if use_pet else []),
+            padding_mode="zeros",
+            allow_missing_keys=True,
+        ),
+
+        # Intensity augmentations: raised prob from 0.3 → 0.5 per Round 3 plan.
+        RandScaleIntensityd(keys=["image"] + (["pet"] if use_pet else []), factors=0.1, prob=0.5),
+        RandShiftIntensityd(keys=["image"] + (["pet"] if use_pet else []), offsets=0.1, prob=0.5),
+        RandGaussianNoised(keys=["image"] + (["pet"] if use_pet else []), prob=0.3, mean=0.0, std=0.01),
+
+        # Round 3 included RandCoarseDropoutd here. Removed in Round 4: on sparse
+        # tumors a 20x20x10 cutout can erase the lesion outright, which was the
+        # main suspect for why Round 3 under-fit (train F1 stuck at ~0.44).
+
         NormalizeIntensityd(keys=["image"] + (["pet"] if use_pet else []), nonzero=True, channel_wise=True),
         
         *( [ConcatItemsd(keys=["image", "pet"], name="image", dim=0)] if use_pet else [] ),

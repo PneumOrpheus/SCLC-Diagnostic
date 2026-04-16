@@ -1,20 +1,19 @@
 # SCLC-Classification
 
-A deep learning diagnostic system for **lung cancer subtype classification** with a special focus on **Small Cell Lung Cancer (SCLC)** using CT scan data. The system implements a dual-head architecture combining object detection with global image classification, supporting multiple state-of-the-art backbone models including Swin Transformer V2.
+A deep learning pipeline for **3D lung cancer subtype classification** from CT volumes, with a focus on **Small Cell Lung Cancer (SCLC)**. The system performs volumetric classification with an optional auxiliary segmentation head, supports several 3D backbones (SwinUNETR, ResNet, ViT, DenseNet, Models Genesis), and follows a two-phase transfer learning recipe: **Domain-Adaptive Pre-Training (DAPT)** on Lung-PET-CT-Dx followed by **fine-tuning** on the BigLunge dataset.
 
 ## 🔬 Overview
 
-This project provides an end-to-end pipeline for:
-- **Domain-Adaptive Pre-Training (DAPT)** on Lung-PET-CT-Dx to learn lung CT-specific features
-- **Fine-tuning** on the BigLunge dataset for target classification
-- **CT scan preprocessing** with multi-channel windowing optimized for lung imaging
-- **Lesion detection** using Faster R-CNN with Feature Pyramid Networks (FPN)
-- **Global classification** for image-level lung cancer subtype diagnosis
-- **Transfer learning** from RadImageNet-pretrained or ImageNet-pretrained models
+End-to-end pipeline for:
+- **DAPT** on Lung-PET-CT-Dx to learn lung-CT-specific features
+- **Fine-tuning** on BigLunge for target classification
+- **3D volumetric preprocessing** with RAS reorientation, isotropic-ish resampling, HU windowing, and depth cropping around lesion masks when available
+- **Optional PET input** as a second channel (CT + PET co-registered)
+- **Optional auxiliary segmentation loss** when per-sample lesion masks are provided
 
 ### Target Classes
 
-The model classifies CT scans into **3 lung cancer subtypes**, aligned across both the DAPT and fine-tuning datasets:
+The model classifies CT scans into **3 lung cancer subtypes**, aligned across both training phases:
 
 | Index | Class | DAPT Label (Lung-PET-CT-Dx) | Fine-tune Label (BigLunge) |
 |-------|-------|------------------------------|----------------------------|
@@ -22,326 +21,268 @@ The model classifies CT scans into **3 lung cancer subtypes**, aligned across bo
 | 1 | Small Cell Carcinoma | `B` | `Småcelletkarsinom` |
 | 2 | Squamous Cell Carcinoma | `G` | `Plateepitelkarsinom` |
 
-> Irrelevant classes (e.g., Large Cell Carcinoma, Non-small Cell NOS) are excluded during data loading to ensure consistent class alignment between both training phases.
+> Other classes (e.g. Large Cell Carcinoma `E`) are filtered out during data loading to keep class alignment consistent between both phases.
 
 ## 🏗️ Architecture
 
-### Dual-Head Model
+### Model factory
 
-The system uses a composite architecture (`DualHeadSCLCModel`) that combines:
+`model_selection.get_sclc_model(checkpoint_path, model_type, in_channels, depth_size)` returns one of:
 
-1. **Flexible Backbone** - Supports multiple architectures:
-   - `swinv2` - Swin Transformer V2 (default, recommended)
-   - `swin` - Swin Transformer V1
-   - `resnet50` - ResNet-50
-   - `densenet121` - DenseNet-121
-
-2. **Feature Pyramid Network (FPN)** - Multi-scale feature extraction dynamically adapted to backbone output channels
-
-3. **Detection Head** - Faster R-CNN for lesion localization with:
-   - Region Proposal Network (RPN)
-   - Multi-scale ROI pooling
-
-4. **Global Classification Head** - For image-level cancer subtype classification with:
-   - Class-weighted cross-entropy loss (inverse-frequency weighting)
-   - Label smoothing (0.1) to prevent overconfident predictions and class collapse
-   - Automatic weight computation from training data distribution
-
-### Training Pipeline
-
-The training follows a two-phase transfer learning strategy:
-
-```
-RadImageNet Weights ──► DAPT (Lung-PET-CT-Dx) ──► Fine-tune (BigLunge) ──► Test
-```
-
-**Phase 1 — Domain-Adaptive Pre-Training (DAPT):**
-- Trains backbone + FPN + detection head on Lung-PET-CT-Dx (global classifier frozen)
-- **Real bounding box annotations** loaded from PASCAL VOC XML files and aggregated into per-patient union boxes
-- 30 epochs default, learning rate 1e-4
-- Linear warmup (5 epochs) followed by cosine annealing
-- Early stopping with configurable patience
-
-**Phase 2 — Fine-tuning on BigLunge:**
-- Unfreezes all layers for full model training
-- 50 epochs default, base learning rate 5e-5
-- **Differential learning rates**: backbone at 0.1× base LR, FPN/heads at 1× base LR
-- Linear warmup (5 epochs) followed by cosine annealing
-- Early stopping with configurable patience
-- Class-weighted loss recomputed for the fine-tuning dataset
-
-### Data Augmentation
-
-Training transforms include spatial and intensity augmentations (validation/test use no augmentation):
-
-| Augmentation | Parameters | Probability |
+| `--model-type` | Wrapper class | Backbone |
 |---|---|---|
-| Random Horizontal Flip | — | 0.5 |
-| Random Vertical Flip | — | 0.5 |
-| Random 90° Rotation | axes (0,1) | 0.5 |
-| Random Affine | rotate ±0.15 rad, scale ±0.1, translate ±10 px | 0.3 |
-| Random Scale Intensity | factors ±0.1 | 0.5 |
-| Random Shift Intensity | offsets ±0.1 | 0.5 |
-| Random Gaussian Noise | std=0.02 | 0.2 |
-| Random Adjust Contrast | gamma 0.8–1.2 | 0.3 |
+| `swin_unetr` (default) | `SwinUNETRClassifier` | MONAI SwinUNETR (v2), bottleneck features via forward hook |
+| `resnet50` | `ResNetClassifier` | MONAI 3D ResNet-50 (MedicalNet weights) |
+| `resnet18` | `ResNet18Classifier` | MONAI 3D ResNet-18 |
+| `vit` | `ViTClassifier` | MONAI 3D ViT (tiny: hidden 384, 6 layers, 6 heads) |
+| `densenet121` | `DenseNetClassifier` | MONAI 3D DenseNet-121 |
+| `models_genesis` | `ModelsGenesisClassifier` | UNet3D encoder (requires sibling `ModelsGenesis` repo) |
 
-### CT Preprocessing Pipeline
+All wrappers expose `forward(x, return_segmentation=False)`. When `return_segmentation=True`, they return `(cls_logits, seg_logits)`; models without a native decoder return a zero-tensor mask so the training loop stays uniform. SwinUNETR uses its real decoder output for segmentation and a forward hook on `swinViT` for classification features, bypassing the decoder entirely on classification-only runs for speed.
 
-The preprocessing module supports specialized multi-channel windowing for CT scans:
+Checkpoint loading is tolerant: it strips `state_dict` / `module.` wrappers, drops mismatched final-layer keys, and adapts the first-conv / patch-embed weights when switching from 1 to 2 input channels (CT → CT+PET) by copying the CT channel and mean-initializing the PET channel.
 
-| Channel | Window Center | Window Width | Purpose |
-|---------|---------------|--------------|---------|
-| Lung | -600 HU | 1500 HU | Nodules and parenchyma |
-| Mediastinal | 50 HU | 350 HU | Lymph nodes and soft tissue |
-| Bone/Wide | 300 HU | 2000 HU | Chest wall and spine context |
-
-## 📁 Project Structure
+### Training recipe
 
 ```
-data/ 
-├── Lung-PET-CT-Dx 
-│   └── {patient_id}_{series_uid}.nii.gz
+Pretrained weights ──► DAPT (Lung-PET-CT-Dx) ──► Fine-tune (BigLunge) ──► Test
+```
+
+**Phase 1 — DAPT (default 40 epochs, lr 1e-4)** on Lung-PET-CT-Dx. A `WeightedRandomSampler` with inverse-frequency weights compensates for the heavy class imbalance in this dataset.
+
+**Phase 2 — Fine-tune (default 40 epochs, lr 3e-5)** on BigLunge. Plain shuffling; class-weighted loss is recomputed from the fine-tuning split.
+
+Both phases use:
+- `AdamW` optimizer, weight decay `1e-3`
+- `CosineAnnealingLR` scheduler
+- `CrossEntropyLoss(label_smoothing=0.1)` (class-weighted from the training split) plus optional BCE-with-logits segmentation loss weighted at 0.5, applied only to samples that actually carry a non-empty mask
+- Mixed precision via `torch.amp.GradScaler` (disable with `--disable-amp`)
+- Gradient accumulation (default 4 steps — effective batch size `batch_size * accumulation_steps`)
+- Gradient clipping at norm 1.0
+- Best checkpoint by **validation accuracy**, saved as `best_{model_type}_{phase}_new.pth`; periodic checkpoints every 10 epochs
+
+### 3D data preprocessing
+
+Defined in `data/transforms.py` (`get_train_transforms_3d` / `get_val_transforms_3d`):
+
+1. `LoadNiftiWithRGBSupportd` — robust NIfTI loader handling structured RGB dtypes, 4D time-series, and degenerate shapes
+2. `EnsureChannelFirstd` + `Orientationd(axcodes="RAS")`
+3. `ResampleToMatchd` for PET → CT grid (when `--use-pet`)
+4. `Spacingd(pixdim=(1.5, 1.5, 2.0))`
+5. `ScaleIntensityRanged(a_min=-1024, a_max=3071)` on CT; `ScaleIntensityd` on PET
+6. `AsDiscreted(threshold=0.5)` on masks
+7. `ExtractSubVolumed` — crops `depth_size` slices centered on the lesion (uses mask extent when present, otherwise volume center)
+8. `Resized` to `(img_size, img_size, depth_size)` — default `224×224×128`
+9. **Train-only** augmentations: random flips on all 3 spatial axes (p=0.5 each), `RandScaleIntensityd` (±0.1, p=0.3), `RandShiftIntensityd` (±0.1, p=0.3)
+10. `NormalizeIntensityd(nonzero=True, channel_wise=True)`
+11. `ConcatItemsd` to fuse CT+PET into a 2-channel `image` when PET is enabled
+
+Samples are cached with MONAI `PersistentDataset` under `~/.cache/{monai_biglunge|monai_lung_pet_ct_clean}/3d_img{SZ}_d{D}[_testing]/{split}/`. On the first run the loader validates every sample, stores the surviving list in `valid_data.json`, and silently drops unreadable volumes.
+
+## 📁 Active pipeline files
+
+```
 SCLC-Classification/
-├── main.py                     # Main pipeline (DAPT → Fine-tune → Inference)
-├── logger.py                   # Logging utilities
-├── lr_scheduler.py             # Learning rate schedulers
-├── optimizer.py                # Optimizer utilities
+├── main.py                 # Pipeline orchestrator (DAPT → fine-tune → inference)
+├── model_selection.py      # get_sclc_model() factory + classifier wrappers
+├── logger.py               # Logging utilities
 ├── data/
-│   ├── biglunge_loader.py      # BigLunge dataset loader with class mapping
-│   ├── data_preprocessing.py   # CT preprocessing utilities
-│   └── transforms.py           # MONAI transforms (train/val/test pipelines)
-├── models/
-│   ├── build.py                # Model builder
-│   ├── config.py               # Configuration management (YACS)
-│   ├── model_selection.py      # Backbone & dual-head architecture
-│   ├── swin_transformer.py     # Swin Transformer V1
-│   └── swin_transformer_v2.py  # Swin Transformer V2
+│   ├── data_loader.py      # create_dataset(), split logic, class maps
+│   ├── transforms.py       # MONAI 3D train/val transforms
+│   └── data_preprocessing.py
 ├── training/
-│   └── train.py                # Training/validation epoch functions & dataset creation
-├── kernels/
-│   └── window_process/         # CUDA kernels for Swin window operations
-├── environment.yaml            # Conda environment specification
-├── requirements.txt            # Pip dependencies
-└── Dockerfile                  # Docker container setup
+│   └── train.py            # train_epoch, validate_epoch, simple_collate_fn
+├── models/                 # Legacy Swin Transformer V1/V2 2D implementation (not used by main.py)
+├── environment.yaml
+├── requirements.txt
+└── Dockerfile
 ```
 
-### Lung-PET-CT-Dx dataset
-Patients with Names/IDs containing the letter 'A' were diagnosed with Adenocarcinoma, 'B' with Small Cell Carcinoma, 'E' with Large Cell Carcinoma, and 'G' with Squamous Cell Carcinoma.
+### Dataset layout
+
+**Lung-PET-CT-Dx** (DAPT):
+```
+<dapt-dataset>/
+└── <patient_id>/                       # patient_id must contain "-A", "-B", or "-G"
+    ├── <series_uid>_image.nii.gz
+    └── <series_uid>_mask.nii.gz        # optional, enables segmentation aux loss
+```
+
+Optional PET (`--use-pet`) lives in a separate directory: `<pet-dir>/<patient_id>_*.nii.gz`. Patients without a PET file are skipped when PET is enabled.
+
+> Patient IDs containing `A` are Adenocarcinoma, `B` Small Cell Carcinoma, `G` Squamous Cell Carcinoma. IDs containing `E` (Large Cell) are excluded.
+
+**BigLunge** (fine-tune): patient folders named with digits, labels sourced from `patients_parameters.csv` via the `MorphologicalGroup` column. Any NIfTI file under a patient folder is used as a scan, except files containing `_label_` in their name.
+
+Splits are **patient-level** and stratified (default 80/10/10) via `sklearn.model_selection.train_test_split`.
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
 - Python 3.12+
-- CUDA 12.x compatible GPU (recommended)
-- Conda (for environment management)
+- CUDA 12.x GPU (recommended)
+- Conda
 
 ### Installation
 
-#### Option 1: Conda Environment
-
 ```bash
-# Clone the repository
 git clone https://github.com/Hansstem/SCLC-Classification.git
 cd SCLC-Classification
 
-# Create conda environment
 conda env create -f environment.yaml
 conda activate sclc
-
-# For GPU support, install CUDA toolkit
-conda install -c nvidia cuda-nvcc cuda-cudart "cuda-version=12.*"
 ```
 
-#### Option 2: Docker
+Docker:
 
 ```bash
-# Build the Docker image
 docker build -t sclc-classification .
-
-# Run container with GPU support
 docker run --gpus all -it --rm \
     --shm-size=8g \
-    -v /path/to/repo/location/SCLC-Classification:/workspace/SCLC-Classification \
-    -v /path/to/your/data:/workspace/data \
+    -v /path/to/SCLC-Classification:/workspace/SCLC-Classification \
+    -v /path/to/data:/workspace/data \
     sclc-classification
 ```
 
-### Tmux
-To run long training sessions without interruption, we recommend using `tmux` to create a persistent terminal session.
+### Data formats
 
-Example workflow:
-
-    tmux 
-    conda activate /path/to/your/conda/environment
-    python main.py \
-    --backbone swinv2 \
-    --config /path/to/rin_config.yaml \
-    --checkpoint /path/to/rin_swintf.pth \
-    --data-path /path/to/training/data \
-    --epochs 20
-
-Then you can detach from the session by Ctrl + B , D
-To attach to the session again:
-
-    tmux ls
-    tmux attach -t 0
-
-### Data Format
-
-The system supports the following input formats:
-- **NIfTI**: `.nii`, `.nii.gz`
-- **NumPy**: `.npy`, `.npz`
-
-Place your CT scan files in a data directory. Files should contain 3D volumetric data in Hounsfield Units.
+NIfTI (`.nii`, `.nii.gz`). Volumes should contain Hounsfield Units for CT. PET volumes are rescaled to `[0, 1]`.
 
 ## 💻 Usage
 
-### Full Pipeline (DAPT + Fine-tune + Test)
-
-Runs the complete training pipeline: domain-adaptive pre-training on Lung-PET-CT-Dx, fine-tuning on BigLunge, and test set evaluation.
+### Full pipeline (DAPT → fine-tune → test)
 
 ```bash
 python main.py --mode full \
-    --backbone swinv2 \
-    --dapt-backbone-dataset /path/to/Lung-PET-CT-Dx \
-    --fine-tuning-dataset /path/to/BigLunge \
-    --fine-tuning-csv /path/to/BigLunge/patients_parameters.csv \
-    --annotation-dir /path/to/Annotation
+    --model-type swin_unetr \
+    --dapt-dataset /path/to/Lung-PET-CT-Dx-Clean \
+    --finetune-dataset /path/to/BigLunge/pre_formatting_ws_iso1.0mm_croplungs_bb/1 \
+    --finetune-csv /path/to/BigLunge/patients_parameters.csv
 ```
 
-### DAPT Only (Backbone Pre-training)
-
-Pre-trains the backbone on Lung-PET-CT-Dx and saves the checkpoint.
+### DAPT only
 
 ```bash
 python main.py --mode dapt \
-    --backbone swinv2 \
-    --dapt-backbone-dataset /path/to/Lung-PET-CT-Dx \
-    --dapt-epochs 30 \
-    --dapt-lr 1e-4
+    --model-type swin_unetr \
+    --dapt-dataset /path/to/Lung-PET-CT-Dx-Clean \
+    --dapt-epochs 40 --dapt-lr 1e-4
 ```
 
-### Fine-tune Only (Requires Pre-trained Checkpoint)
-
-Fine-tunes a pre-trained model on BigLunge.
+### Fine-tune only (from an existing DAPT checkpoint)
 
 ```bash
 python main.py --mode finetune \
-    --backbone swinv2 \
-    --pretrained-checkpoint /path/to/dapt_swinv2_best.pth \
-    --fine-tuning-dataset /path/to/BigLunge/data \
-    --fine-tuning-csv /path/to/BigLunge/patients_parameters.csv \
-    --finetune-epochs 50 \
-    --finetune-lr 5e-5
+    --pretrained-checkpoint /path/to/best_swin_unetr_dapt_new.pth \
+    --finetune-dataset /path/to/BigLunge/.../1 \
+    --finetune-csv /path/to/BigLunge/patients_parameters.csv \
+    --finetune-epochs 40 --finetune-lr 3e-5
 ```
 
-### Inference Only
-
-Runs inference on the BigLunge test set using a trained model.
+### Inference only
 
 ```bash
 python main.py --mode inference \
-    --model-checkpoint /path/to/finetune_swinv2_best.pth \
-    --fine-tuning-dataset /path/to/BigLunge/data \
-    --fine-tuning-csv /path/to/BigLunge/patients_parameters.csv
+    --model-checkpoint /path/to/best_swin_unetr_finetune_new.pth \
+    --finetune-dataset /path/to/BigLunge/.../1 \
+    --finetune-csv /path/to/BigLunge/patients_parameters.csv
 ```
 
-### Command-Line Arguments
+### Enabling PET (CT + PET two-channel input)
 
-#### Mode & Model
+```bash
+python main.py --mode full --use-pet \
+    --dapt-dataset /path/to/Lung-PET-CT-Dx-Clean \
+    --pet-dir /path/to/Lung-PET-CT-Dx_PET
+```
 
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `--mode` | str | `full` | Pipeline mode: `full`, `dapt`, `finetune`, or `inference` |
-| `--backbone` | str | `swinv2` | Backbone architecture: `swin`, `swinv2`, `resnet50`, `densenet121` |
-| `--config` | str | *(RadImageNet config)* | Path to YAML config file for Swin models |
-| `--initial-checkpoint` | str | *(RadImageNet weights)* | Path to initial backbone checkpoint |
+The first-conv / patch-embed layer is automatically adapted from 1 → 2 channels when loading single-channel pretrained weights.
 
-#### Dataset Paths
+### Quick smoke test
 
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `--dapt-backbone-dataset` | str | `/home/data/Lung-PET-CT-Dx` | Path to DAPT dataset (Lung-PET-CT-Dx) |
-| `--fine-tuning-dataset` | str | `/home/data/BigLunge/...` | Path to fine-tuning dataset (BigLunge) |
-| `--fine-tuning-csv` | str | `/home/data/BigLunge/patients_parameters.csv` | Path to BigLunge patient labels CSV |
-| `--pretrained-checkpoint` | str | `""` | Path to pre-trained checkpoint (for `finetune` mode) |
-| `--model-checkpoint` | str | `""` | Path to final model checkpoint (for `inference` mode) |
+`--testing` truncates each split to a handful of samples so you can validate wiring end-to-end in a few minutes:
 
-#### Training Hyperparameters
+```bash
+python main.py --mode full --testing
+```
 
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `--dapt-epochs` | int | `30` | Number of DAPT epochs |
-| `--dapt-lr` | float | `1e-4` | Learning rate for DAPT phase |
-| `--finetune-epochs` | int | `50` | Number of fine-tuning epochs |
-| `--finetune-lr` | float | `5e-5` | Base learning rate for fine-tuning (backbone gets 0.1×) |
-| `--batch-size` | int | `8` | Batch size for training |
-| `--weight-decay` | float | `0.05` | Weight decay for AdamW optimizer |
-| `--patience` | int | `10` | Early stopping patience (epochs without val loss improvement) |
-| `--num-workers` | int | `4` | Number of data loading workers |
-| `--annotation-dir` | str | `/home/data/Annotation` | Path to annotation directory with per-patient XML bounding boxes |
+### Command-line arguments
 
-#### Output
+#### Mode & model
 
 | Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `--output-dir` | str | `output` | Output directory for logs and results |
-| `--checkpoint-dir` | str | `/home/data/trained_models` | Directory for saving model checkpoints |
+|---|---|---|---|
+| `--mode` | str | `full` | `full`, `dapt`, `finetune`, or `inference` |
+| `--model-type` | str | `swin_unetr` | `swin_unetr`, `resnet50`, `resnet18`, `vit`, `densenet121`, `models_genesis` |
+| `--depth-size` | int | `128` | Number of Z-slices extracted per volume |
+| `--anno` | flag | `True` | Use lesion masks for auxiliary segmentation loss |
 
+#### Datasets
 
-### Tmux
-````
-    tmux 
-    conda activate /home/hansstem/anaconda3/envs/sclc
-    python main.py \
-    --backbone swinv2 \
-    --config /path/to/rin_config.yaml \
-    --checkpoint /path/to/rin_swintf.pth \
-    --data-path /path/to/training/data \
-    --epochs 20
+| Argument | Default | Description |
+|---|---|---|
+| `--dapt-dataset` | `/home/data/Lung-PET-CT-Dx-Clean` | DAPT dataset root |
+| `--pet-dir` | `/home/data/Lung-PET-CT-Dx_PET` | PET NIfTI directory |
+| `--use-pet` | `False` | Enable CT+PET 2-channel input |
+| `--finetune-dataset` | `/home/data/BigLunge/pre_formatting_ws_iso1.0mm_croplungs_bb/1` | Fine-tune dataset root |
+| `--finetune-csv` | `/home/data/BigLunge/patients_parameters.csv` | BigLunge labels CSV |
 
-````
-Then you can detach from the session by Ctrl + B , D
-To attach to the session again
-````
-    tmux ls
-    tmux attach -t 0
-````
+#### Checkpoints
 
+| Argument | Description |
+|---|---|
+| `--initial-checkpoint` | Initial backbone weights. Defaults to `/home/data/temp/model_swin_unetr_btcv_segmentation_v1.pt` when `--model-type swin_unetr` |
+| `--pretrained-checkpoint` | DAPT checkpoint to load in `finetune` mode |
+| `--model-checkpoint` | Final model checkpoint for `inference` mode |
+| `--checkpoint-dir` | `/home/data/trained_models` | Where best/periodic checkpoints are saved |
 
-## 📦 Dependencies
+#### Training hyperparameters
 
-### Core Dependencies
-
-- `torch >= 2.0.0` - Deep learning framework
-- `torchvision >= 0.17.0` - Computer vision models
-- `timm >= 0.9.10` - Pretrained image models
-- `monai` - Medical Open Network for AI (transforms, data loading)
-- `numpy == 1.26.4` - Numerical computing
-- `nibabel >= 5.0.0` - NIfTI file handling
-- `scipy == 1.13.1` - Scientific computing
-- `yacs >= 0.1.8` - Configuration management
-
-### Medical Imaging
-
-- `pydicom == 2.4.4` - DICOM file handling
-- `dicom2nifti == 2.4.9` - DICOM to NIfTI conversion
+| Argument | Default |
+|---|---|
+| `--dapt-epochs` | `40` |
+| `--dapt-lr` | `1e-4` |
+| `--finetune-epochs` | `40` |
+| `--finetune-lr` | `3e-5` |
+| `--batch-size` | `2` |
+| `--accumulation-steps` | `4` |
+| `--weight-decay` | `1e-3` |
+| `--num-workers` | `4` |
+| `--seed` | `42` |
+| `--disable-amp` | off |
 
 ## 📊 Checkpoints
 
-Checkpoints are saved in two formats:
+Saved under `--checkpoint-dir`:
 
-1. **Best model weights** (`dapt_{backbone}_best.pth`, `finetune_{backbone}_best.pth`): Model state dict for the best validation loss, used for inference
-2. **Periodic full checkpoints** (every 5 epochs): Complete training state (model, optimizer, scheduler, best loss) for resuming interrupted training
+- `best_{model_type}_{phase}_new.pth` — state dict of the best validation-accuracy model for each phase (`dapt`, `finetune`)
+- `{phase}_{model_type}_epoch_{N}_new.pth` — periodic state-dict snapshots every 10 epochs
 
-## 🔧 Configuration
+All saves are `model.state_dict()` only (no optimizer/scheduler state).
 
-The system uses YACS for configuration management. Key configuration sections:
+## 📦 Dependencies
 
-- `DATA`: Dataset settings (batch size, image size, augmentation)
-- `MODEL`: Architecture settings (backbone type, number of classes, dropout)
-- `TRAIN`: Training hyperparameters (optimizer, learning rate, scheduler)
+Core:
+
+- `torch >= 2.0.0`, `torchvision`
+- `monai` — transforms, datasets, networks (SwinUNETR, ResNet, ViT, DenseNet)
+- `nibabel >= 5.0.0`, `scipy`, `numpy == 1.26.4`
+- `scikit-learn` — stratified patient-level splits
+- `pandas` — BigLunge CSV parsing
+- `tqdm`
+
+Medical imaging (optional): `pydicom`, `dicom2nifti`.
+
+## 🖥️ Running long jobs with tmux
+
+```bash
+tmux
+conda activate /home/hansstem/anaconda3/envs/sclc
+python main.py --mode full --model-type swin_unetr
+# Detach: Ctrl+B, D
+# Re-attach: tmux attach -t 0
+```
 
 ## 📝 License
 
@@ -350,8 +291,7 @@ This project builds upon the [Swin Transformer](https://github.com/microsoft/Swi
 ## 🙏 Acknowledgments
 
 - Our Master's thesis supervisor, Boban Vesin, for guidance and support
-- Researchers at SINTEF and St.Olavs Hospital for medical and technical insight and support
+- Researchers at SINTEF and St. Olavs Hospital for medical and technical insight
+- Project MONAI for the 3D imaging transforms and networks
 - Microsoft Research for the Swin Transformer architecture
-- RadImageNet for medical imaging pretrained weights
-- PyTorch and torchvision teams
-
+- MedicalNet and Models Genesis for 3D pretrained weights

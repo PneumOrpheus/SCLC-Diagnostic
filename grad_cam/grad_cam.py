@@ -1,249 +1,322 @@
-from matplotlib import pyplot as plt
-from monai.networks.nets import TorchVisionFCModel
-from monai.visualize import GradCAMpp
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any, Dict, Optional
+
 import nibabel as nib
-from monai.transforms import (
-    Compose,
-    LoadImage,
-    EnsureType,
-    NormalizeIntensity,
-    ToTensor,
-    RepeatChannel,
-    Resize,
-)
 import numpy as np
 import torch
 import torch.nn as nn
+from monai.visualize import GradCAM
 
-import cv2
-from monai.visualize import GradCAM, GradCAMpp
-from monai.transforms import (
-    Compose,
-    LoadImage,
-    EnsureType,
-    ScaleIntensity,
-    Resize,
-    ToTensor,
-    RepeatChannel,
-    EnsureChannelFirst
-)
-import os
-import sys
+# Allow running this file directly: `python grad_cam/grad_cam.py ...`
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+	sys.path.insert(0, str(PROJECT_ROOT))
 
-from models.model_selection_old import get_sclc_model
+from data.transforms import get_val_transforms_3d
+from model_selection import get_sclc_model
 
-class SCLCModelWrapper(nn.Module):
-    """
-    Wraps the SCLC model to make it compatible with MONAI GradCAM.
-    1. Accepts a Tensor input (B, C, H, W) instead of list[Tensor].
-    2. Returns only the probability tensor instead of (detections, probs).
-    """
-    def __init__(self, model):
-        super().__init__()
-        self.model = model
 
-    def forward(self, x):
-        # The SCLC model likely expects a list of tensors (one per image)
-        # MONAI GradCAM passes a batch tensor.
-        if isinstance(x, torch.Tensor):
-            # Convert batch tensor to list of 3D tensors (C, H, W)
-            input_list = [x[i] for i in range(x.shape[0])]
-        else:
-            input_list = x
-            
-        outputs = self.model(input_list)
-        
-        # Return only the classification probabilities/logits
-        # Assuming output is (detections, probabilities)
-        if isinstance(outputs, tuple):
-            return outputs[1]
-        return outputs
+CLASS_NAMES = ["Adenocarcinoma", "Small Cell", "Squamous"]
 
-def get_target_layer(model, backbone_type):
-    """
-    Find the target layer name (string) for MONAI GradCAM.
-    Targets the last FPN layer block, which produces the spatial feature map
-    used by the GlobalClassificationHead.
-    """
-    try:
-        # For DualHeadSCLCModel wrapped in SCLCModelWrapper:
-        # model.backbone.fpn.layer_blocks is a ModuleList
-        inner = model.model if hasattr(model, 'model') else model
-        if hasattr(inner, 'backbone') and hasattr(inner.backbone, 'fpn'):
-            # Find the string name matching the last FPN layer block
-            target_module = inner.backbone.fpn.layer_blocks[-1]
-            for name, mod in model.named_modules():
-                if mod is target_module:
-                    return name
-                
-        # Default fallback
-        print(f"Warning: Could not automatically identify target layer for {backbone_type}.")
-        print("Available top-level modules:", list(model._modules.keys()))
-        return None
-        
-    except (AttributeError, IndexError):
-        print("Error traversing model to find target layer.")
-        return None
+# Default target layers must output a spatial tensor [B, C, D, H, W].
+# MONAI's GradCAM registers forward/backward hooks here and does the
+# weighted sum + upsample + ReLU + normalize for us.
+#
+# - swin_unetr: layers4[0] is the last BasicLayer of the Swin encoder; its
+#   forward returns a single spatial tensor (not a list like swinViT does).
+# - resnet/densenet: the last conv stage is the canonical Grad-CAM target.
+# - vit / models_genesis: not supported here. ViT's final block outputs a
+#   token sequence [B, N, C] (would require a reshape wrapper), and
+#   ModelsGenesis' down_tr512 returns a tuple which MONAI's hook can't
+#   consume directly. Point at a different layer via --target-layer or
+#   add a wrapper module if you need them.
+DEFAULT_TARGET_LAYER = {
+	"swin_unetr": "swin_unetr.swinViT.layers4.0",
+	"resnet50": "resnet.layer4",
+	"resnet18": "resnet.layer4",
+	"densenet121": "densenet.features.denseblock4",
+}
 
-def preprocess_image(image_path, img_size=224, device="cpu"):
-    """
-    Load and preprocess image. For 3D volumes (NIfTI), extracts the middle
-    axial slice to produce a 2D image compatible with the model.
-    """
-    loader = LoadImage(image_only=True)
-    img = loader(image_path)
-    img_np = np.array(img)
-    
-    # Handle 3D volumes: extract middle axial slice
-    if img_np.ndim == 3:
-        mid = img_np.shape[-1] // 2
-        img_np = img_np[:, :, mid]
-    
-    transforms = Compose([
-        EnsureChannelFirst(channel_dim='no_channel'),
-        ScaleIntensity(),
-        Resize((img_size, img_size)),
-        ToTensor(),
-        RepeatChannel(repeats=3),
-        EnsureType()
-    ])
-    
-    img_tensor = transforms(img_np)
-    # Add batch dimension: (C, H, W) -> (1, C, H, W)
-    img_tensor = img_tensor.unsqueeze(0).to(device)
-    return img_tensor
+SUPPORTED_MODEL_TYPES = tuple(DEFAULT_TARGET_LAYER.keys())
 
-def _detect_class_counts(state_dict):
-    """
-    Auto-detect num_detection_classes and num_global_classes from checkpoint state dict.
-    """
-    num_det = 5  # default
-    num_global = 4  # default
-    
-    det_key = "detector.roi_heads.box_predictor.cls_score.weight"
-    if det_key in state_dict:
-        num_det = state_dict[det_key].shape[0]
-    
-    global_key = "global_classifier.fc.4.weight"
-    if global_key in state_dict:
-        num_global = state_dict[global_key].shape[0]
-    
-    return num_det, num_global
+
+def _strip_nii_suffix(path: str) -> str:
+	name = Path(path).name
+	if name.endswith(".nii.gz"):
+		return name[:-7]
+	if name.endswith(".nii"):
+		return name[:-4]
+	return Path(name).stem
+
+
+def _unwrap_state_dict(ckpt: Any) -> Dict[str, torch.Tensor]:
+	"""Extract a model state_dict from common checkpoint wrappers."""
+	state = ckpt
+	if isinstance(state, dict):
+		for key in ("state_dict", "model_state_dict", "model"):
+			if key in state and isinstance(state[key], dict):
+				state = state[key]
+				break
+
+	if not isinstance(state, dict):
+		raise ValueError("Checkpoint does not contain a valid state_dict.")
+
+	if any(k.startswith("module.") for k in state.keys()):
+		state = {k.replace("module.", "", 1): v for k, v in state.items()}
+	return state
+
+
+def _normalize_np_01(volume: np.ndarray, eps: float = 1e-8) -> np.ndarray:
+	vmin = float(np.min(volume))
+	vmax = float(np.max(volume))
+	return (volume - vmin) / (vmax - vmin + eps)
+
+
+def _save_nifti(volume: np.ndarray, out_path: str) -> None:
+	nii = nib.Nifti1Image(volume.astype(np.float32), np.eye(4))
+	nib.save(nii, out_path)
+
+
+def _build_input_tensor(
+	image_path: str,
+	use_pet: bool,
+	pet_path: str,
+	img_size: int,
+	depth_size: int,
+	device: torch.device,
+) -> torch.Tensor:
+	transforms = get_val_transforms_3d(img_size=img_size, depth_size=depth_size, use_pet=use_pet)
+
+	data: Dict[str, Any] = {"image": image_path}
+	if use_pet:
+		if not pet_path:
+			raise ValueError("--use-pet requires --pet-path.")
+		if not os.path.isfile(pet_path):
+			raise ValueError(f"PET file does not exist: {pet_path}")
+		data["pet"] = pet_path
+
+	transformed = transforms(data)
+	image_tensor = transformed["image"]
+	if not torch.is_tensor(image_tensor):
+		image_tensor = torch.as_tensor(image_tensor)
+
+	image_tensor = image_tensor.float()
+	if image_tensor.ndim == 4:
+		image_tensor = image_tensor.unsqueeze(0)
+	if image_tensor.ndim != 5:
+		raise RuntimeError(f"Expected transformed image shape [B,C,D,H,W]-like, got {tuple(image_tensor.shape)}")
+
+	return image_tensor.to(device)
+
+
+def _load_trained_model(
+	checkpoint_path: str,
+	model_type: str,
+	in_channels: int,
+	depth_size: int,
+	device: torch.device,
+) -> nn.Module:
+	model = get_sclc_model(
+		checkpoint_path="",
+		model_type=model_type,
+		in_channels=in_channels,
+		depth_size=depth_size,
+	)
+	ckpt = torch.load(checkpoint_path, map_location=device)
+	state_dict = _unwrap_state_dict(ckpt)
+	missing, unexpected = model.load_state_dict(state_dict, strict=False)
+
+	matched = len(state_dict) - len(unexpected)
+	print(f"Loaded checkpoint: matched {matched}/{len(state_dict)} keys.")
+	if missing:
+		print(f"Missing keys ({len(missing)}): {missing[:8]}{' ...' if len(missing) > 8 else ''}")
+	if unexpected:
+		print(f"Unexpected keys ({len(unexpected)}): {unexpected[:8]}{' ...' if len(unexpected) > 8 else ''}")
+	if matched == 0:
+		raise RuntimeError("0 keys matched from checkpoint. Check model type and checkpoint path.")
+
+	model = model.to(device)
+	model.eval()
+	return model
 
 
 def use_grad_cam(
-    model_path: str, 
-    image_path: str, 
-    backbone_type: str = "swinv2", 
-    output_dir: str = "grad_cam/gradcam_output",
-    target_class_idx: int = None,
-    config=None
-):
-    os.makedirs(output_dir, exist_ok=True)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    print(f"Loading model: {model_path}")
-    
-    # Load weights first to auto-detect architecture parameters
-    checkpoint = torch.load(model_path, map_location=device)
-    if 'model_state_dict' in checkpoint:
-        state_dict = checkpoint['model_state_dict']
-    else:
-        state_dict = checkpoint
-    
-    num_det, num_global = _detect_class_counts(state_dict)
-    print(f"Detected num_detection_classes={num_det}, num_global_classes={num_global}")
-    
-    # Initialize model with matching architecture
-    original_model = get_sclc_model(
-        backbone_type=backbone_type, 
-        checkpoint_path="", 
-        config=config, 
-        num_detection_classes=num_det,
-        num_global_classes=num_global,
-        train_backbone_only=False
-    )
-    
-    original_model.load_state_dict(state_dict, strict=False)
-    original_model.to(device)
-    original_model.eval()
-    
-    # Wrap model first, then find target layer name within the wrapper
-    model_wrapper = SCLCModelWrapper(original_model)
-    
-    # Identify target layer (returns string name relative to model_wrapper)
-    target_layer_name = get_target_layer(model_wrapper, backbone_type)
-    if target_layer_name is None:
-        raise ValueError("Could not define target layer. Please check model structure.")
-    print(f"Target layer found: {target_layer_name}")
-    
-    # Initialize MONAI GradCAM
-    cam = GradCAMpp(nn_module=model_wrapper, target_layers=target_layer_name)
-    
-    # Load Image
-    print(f"Processing image: {image_path}")
-    input_tensor = preprocess_image(image_path, device=device)
-    
-    # Run Inference to get prediction first
-    with torch.no_grad():
-        probs = model_wrapper(input_tensor)
-        pred_idx = torch.argmax(probs, dim=1).item()
-        
-    class_idx = target_class_idx if target_class_idx is not None else pred_idx
-    print(f"Generating GradCAM for class index: {class_idx}")
+	image_path: str,
+	checkpoint_path: str,
+	model_type: str = "swin_unetr",
+	class_index: Optional[int] = None,
+	target_layer: Optional[str] = None,
+	output_dir: Optional[str] = None,
+	img_size: int = 224,
+	depth_size: int = 128,
+	use_pet: bool = False,
+	pet_path: str = "",
+	alpha: float = 0.35,
+	device: Optional[str] = None,
+) -> Dict[str, Any]:
+	"""Generate a 3D Grad-CAM heatmap via monai.visualize.GradCAM and save as NIfTI.
 
-    # Generate CAM
-    # GradCAM result shape: (B, 1, H, W)
-    result = cam(x=input_tensor, class_idx=class_idx)
-    
-    # Visualization
-    img_np = input_tensor.cpu().numpy()[0, 0, :, :] # Get first channel of original image
-    heatmap = result.cpu().numpy()[0, 0, :, :]
-    
-    plt.figure(figsize=(10, 5))
-    
-    # Original
-    plt.subplot(1, 3, 1)
-    plt.imshow(img_np, cmap='gray')
-    plt.title("Original Image")
-    plt.axis("off")
-    
-    # Heatmap
-    plt.subplot(1, 3, 2)
-    plt.imshow(heatmap, cmap='jet')
-    plt.title("GradCAM Heatmap")
-    plt.axis("off")
-    
-    # Overlay
-    plt.subplot(1, 3, 3)
-    plt.imshow(img_np, cmap='gray')
-    plt.imshow(heatmap, cmap='jet', alpha=0.5)
-    plt.title(f"Overlay (Class {class_idx})")
-    plt.axis("off")
-    
-    save_path = os.path.join(output_dir, f"gradcam_{os.path.basename(image_path)}.png")
-    plt.savefig(save_path)
-    print(f"Result saved to: {save_path}")
-    plt.close()
+	Outputs are saved in `output_dir` (default: this `grad_cam/` folder):
+	- preprocessed input volume
+	- grad-cam heatmap
+	- heatmap overlay on input
+	- json metadata (prediction probabilities)
+	"""
+	if not os.path.isfile(image_path):
+		raise ValueError(f"Image file does not exist: {image_path}")
+	if not os.path.isfile(checkpoint_path):
+		raise ValueError(f"Checkpoint file does not exist: {checkpoint_path}")
+
+	model_type = model_type.lower()
+	if model_type not in SUPPORTED_MODEL_TYPES:
+		raise ValueError(
+			f"Unsupported model_type '{model_type}'. Supported: {list(SUPPORTED_MODEL_TYPES)}. "
+			f"(ViT emits a token sequence and ModelsGenesis returns tuples from its encoder "
+			f"blocks — both need a wrapper module before they can feed monai.visualize.GradCAM.)"
+		)
+
+	run_device = torch.device(device) if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+	out_dir = Path(output_dir) if output_dir else Path(__file__).resolve().parent
+	out_dir.mkdir(parents=True, exist_ok=True)
+
+	in_channels = 2 if use_pet else 1
+	model = _load_trained_model(
+		checkpoint_path=checkpoint_path,
+		model_type=model_type,
+		in_channels=in_channels,
+		depth_size=depth_size,
+		device=run_device,
+	)
+
+	input_tensor = _build_input_tensor(
+		image_path=image_path,
+		use_pet=use_pet,
+		pet_path=pet_path,
+		img_size=img_size,
+		depth_size=depth_size,
+		device=run_device,
+	)
+
+	target = target_layer or DEFAULT_TARGET_LAYER[model_type]
+
+	# Grad-CAM requires gradients even though the model is in eval() mode.
+	# MONAI's GradCAM handles hook registration, backward pass, spatial
+	# reshape, ReLU, upsample to input resolution, and per-sample 0-1
+	# normalization internally — we only need to call it.
+	with torch.enable_grad():
+		with torch.no_grad():
+			logits = model(input_tensor)
+		if logits.ndim == 1:
+			logits = logits.unsqueeze(0)
+		pred_class = int(torch.argmax(logits, dim=1).item())
+		target_class = pred_class if class_index is None else int(class_index)
+		if target_class < 0 or target_class >= logits.shape[1]:
+			raise ValueError(f"class_index={target_class} is out of range [0, {logits.shape[1] - 1}].")
+
+		cam_engine = GradCAM(nn_module=model, target_layers=target)
+		heatmap = cam_engine(x=input_tensor, class_idx=target_class)  # [B, 1, D, H, W]
+
+	cam_np = heatmap[0, 0].detach().cpu().numpy()
+	base_np = input_tensor[0, 0].detach().cpu().numpy()
+	base_np = _normalize_np_01(base_np)
+	overlay_np = np.clip((1.0 - alpha) * base_np + alpha * cam_np, 0.0, 1.0)
+
+	probs = torch.softmax(logits.detach(), dim=1)
+
+	stem = _strip_nii_suffix(image_path)
+	cam_out = out_dir / f"{stem}_gradcam_target{target_class}_pred{pred_class}.nii.gz"
+	overlay_out = out_dir / f"{stem}_gradcam_overlay_target{target_class}_pred{pred_class}.nii.gz"
+	preproc_out = out_dir / f"{stem}_preprocessed_input.nii.gz"
+	info_out = out_dir / f"{stem}_gradcam_info.json"
+
+	_save_nifti(cam_np, str(cam_out))
+	_save_nifti(overlay_np, str(overlay_out))
+	_save_nifti(base_np, str(preproc_out))
+
+	class_probs = probs[0].detach().cpu().tolist()
+	info = {
+		"image_path": image_path,
+		"checkpoint_path": checkpoint_path,
+		"model_type": model_type,
+		"target_layer": target,
+		"pred_class": pred_class,
+		"target_class": target_class,
+		"pred_label": CLASS_NAMES[pred_class] if pred_class < len(CLASS_NAMES) else str(pred_class),
+		"target_label": CLASS_NAMES[target_class] if target_class < len(CLASS_NAMES) else str(target_class),
+		"probabilities": class_probs,
+		"logits": logits[0].detach().cpu().tolist(),
+		"saved_files": {
+			"gradcam": str(cam_out),
+			"overlay": str(overlay_out),
+			"preprocessed_input": str(preproc_out),
+		},
+	}
+
+	with open(info_out, "w", encoding="utf-8") as f:
+		json.dump(info, f, indent=2)
+
+	print("\nGrad-CAM complete")
+	print(f"  Predicted class: {pred_class} ({info['pred_label']})")
+	print(f"  Target class:    {target_class} ({info['target_label']})")
+	print(f"  Target layer:    {target}")
+	print(f"  Saved heatmap:   {cam_out}")
+	print(f"  Saved overlay:   {overlay_out}")
+	print(f"  Saved input:     {preproc_out}")
+	print(f"  Saved metadata:  {info_out}")
+
+	return info
+
+
+def _parse_args() -> argparse.Namespace:
+	parser = argparse.ArgumentParser(description="Generate 3D Grad-CAM via monai.visualize and save as NIfTI.")
+	parser.add_argument("--image", required=True, help="Path to CT NIfTI (.nii or .nii.gz)")
+	parser.add_argument("--checkpoint", required=True, help="Path to trained model checkpoint (.pth)")
+	parser.add_argument(
+		"--model-type",
+		default="swin_unetr",
+		choices=list(SUPPORTED_MODEL_TYPES),
+		help="Model type used for the checkpoint",
+	)
+	parser.add_argument("--class-index", type=int, default=None, help="Target class for Grad-CAM (default: predicted class)")
+	parser.add_argument("--target-layer", type=str, default=None, help="Override target layer path (must output a spatial tensor)")
+	parser.add_argument("--img-size", type=int, default=224, help="Input XY size used by transforms")
+	parser.add_argument("--depth-size", type=int, default=128, help="Input depth used by transforms")
+	parser.add_argument("--use-pet", action="store_true", help="Use PET as second channel")
+	parser.add_argument("--pet-path", type=str, default="", help="PET NIfTI path when --use-pet is enabled")
+	parser.add_argument("--alpha", type=float, default=0.35, help="Overlay blend factor (0..1)")
+	parser.add_argument(
+		"--output-dir",
+		type=str,
+		default=str(Path(__file__).resolve().parent),
+		help="Directory for saved NIfTI outputs (default: this grad_cam folder)",
+	)
+	parser.add_argument("--device", type=str, default=None, help="Torch device (e.g. cuda, cuda:0, cpu)")
+	return parser.parse_args()
+
+
+def main() -> None:
+	args = _parse_args()
+	use_grad_cam(
+		image_path=args.image,
+		checkpoint_path=args.checkpoint,
+		model_type=args.model_type,
+		class_index=args.class_index,
+		target_layer=args.target_layer,
+		output_dir=args.output_dir,
+		img_size=args.img_size,
+		depth_size=args.depth_size,
+		use_pet=args.use_pet,
+		pet_path=args.pet_path,
+		alpha=args.alpha,
+		device=args.device,
+	)
+
 
 if __name__ == "__main__":
-    # Example Usage
-    # You can call this script directly to test
-    import argparse
-    from models.config import get_config
-    
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", required=True, help="Path to .pth model file")
-    parser.add_argument("--image", required=True, help="Path to image file (nii/png/npy)")
-    parser.add_argument("--backbone", default="swinv2", help="Backbone type")
-    parser.add_argument("--config", default="", help="Path to model config YAML (required for custom Swin models)")
-    args = parser.parse_args()
-    
-    config = None
-    if args.config and os.path.exists(args.config):
-        config = get_config(args)
-    
-    use_grad_cam(args.model, args.image, args.backbone, config=config)
-
-
-# python -m grad_cam.grad_cam --model /home/data/trained_models/finetune_swinv2_best.pth --image /home/data/Lung-PET-CT-Dx/Lung_Dx-A0263_1.3.6.1.4.1.14519.5.2.1.6655.2359.594718314657441527730748498440.nii.gz --config /home/data/RadImageNet/RadImageNet_swin/rin_config.yaml
+	main()

@@ -59,15 +59,13 @@ class SwinUNETRClassifier(nn.Module):
         )
         
         # In MONAI's SwinUNETR, the deepest feature channel size is feature_size * 16 (i.e., 768)
-        bottleneck_channels = 48 * 16  
-        
+        bottleneck_channels = 48 * 16
+
         self.global_pool = nn.AdaptiveMaxPool3d(1)
-        self.classification_head = nn.Sequential(
-            nn.Linear(bottleneck_channels, 256),
-            nn.GELU(),
-            nn.Dropout(0.3),
-            nn.Linear(256, num_classes)
-        )
+        # Single linear head: with ~300 training volumes and 3 classes, a 2-layer
+        # head (197K params) overfits. The pretrained encoder features should be
+        # linearly separable if they encode the right information.
+        self.classification_head = nn.Linear(bottleneck_channels, num_classes)
         
         # Register a hook to capture the deepest features during full forward pass
         self.deepest_features = None
@@ -76,6 +74,7 @@ class SwinUNETRClassifier(nn.Module):
         self.swin_unetr.swinViT.register_forward_hook(vit_hook)
 
     def forward(self, x, return_segmentation=False):
+        self.deepest_features = None
         if return_segmentation:
             # populates self.deepest_features with the final encoder bottleneck before the decoder.
             seg_logits = self.swin_unetr(x)
@@ -287,17 +286,11 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
             if matched == 0:
                 print(f"[!] Warning: 0 keys matched! Checkpoint {checkpoint_path} is likely for a different architecture.")
     elif model_type.lower() == "vit":
-        model = ViTClassifier(in_channels=in_channels, num_classes=3, img_size=(224, 224, depth_size))
-        if checkpoint_path and os.path.exists(checkpoint_path):
-            print(f"[*] Loading pretrained ViT weights from {checkpoint_path}")
-            state_dict = torch.load(checkpoint_path, map_location="cpu")
-            if "state_dict" in state_dict:
-                state_dict = state_dict["state_dict"]
-            missing, unexpected = model.vit.load_state_dict(state_dict, strict=False)
-            matched = len(state_dict) - len(unexpected)
-            print(f"[*] Pretrained weights loaded. Matched {matched}/{len(state_dict)} keys.")
-            if matched == 0:
-                print(f"[!] Warning: 0 keys matched! Checkpoint {checkpoint_path} is likely for a different architecture.")
+        raise ValueError(
+            "model_type='vit' is disabled: a 27M-param transformer cannot learn a "
+            "3-way label from ~300 CT volumes from scratch, and no 3D-ViT pretrained "
+            "checkpoint is wired up. Use swin_unetr or resnet18/50 instead."
+        )
     elif model_type.lower() == "densenet121":
         model = DenseNetClassifier(in_channels=in_channels, num_classes=3)
         if checkpoint_path and os.path.exists(checkpoint_path):

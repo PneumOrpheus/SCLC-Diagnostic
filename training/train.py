@@ -2,8 +2,10 @@ import time
 import torch
 import torch.nn as nn
 import numpy as np
-from monai.metrics import ConfusionMatrixMetric
 from monai.losses import DiceLoss
+
+NUM_CLASSES = 3
+CLASS_NAMES = ["Adenocarcinoma", "Small Cell", "Squamous"]
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -21,6 +23,58 @@ class AverageMeter(object):
         self.sum += val * n
         self.count += n
         self.avg = np.where(self.count > 0, self.sum / self.count, self.sum)
+
+
+def _compute_classification_metrics(targets, preds, min_num_classes=NUM_CLASSES):
+    """Compute confusion-matrix-derived metrics for multiclass single-label data."""
+    if len(targets) == 0 or len(preds) == 0:
+        num_classes = int(min_num_classes)
+        conf_matrix = np.zeros((num_classes, num_classes), dtype=np.int64)
+    else:
+        max_observed = int(max(max(targets), max(preds))) + 1
+        num_classes = max(int(min_num_classes), max_observed)
+        conf_matrix = np.zeros((num_classes, num_classes), dtype=np.int64)
+        for t, p in zip(targets, preds):
+            conf_matrix[int(t), int(p)] += 1
+
+    per_class_precision = np.zeros(num_classes, dtype=np.float64)
+    per_class_recall = np.zeros(num_classes, dtype=np.float64)
+    per_class_f1 = np.zeros(num_classes, dtype=np.float64)
+    for c in range(num_classes):
+        tp = conf_matrix[c, c]
+        fp = conf_matrix[:, c].sum() - tp
+        fn = conf_matrix[c, :].sum() - tp
+        per_class_precision[c] = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        per_class_recall[c] = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        p, r = per_class_precision[c], per_class_recall[c]
+        per_class_f1[c] = (2 * p * r / (p + r)) if (p + r) > 0 else 0.0
+
+    support = conf_matrix.sum(axis=1)
+    present = support > 0
+    if present.any():
+        macro_precision = per_class_precision[present].mean()
+        macro_recall = per_class_recall[present].mean()
+        macro_f1 = per_class_f1[present].mean()
+        balanced_accuracy = per_class_recall[present].mean()
+    else:
+        macro_precision = macro_recall = macro_f1 = balanced_accuracy = 0.0
+
+    total = int(conf_matrix.sum())
+    accuracy = float(np.trace(conf_matrix) / total) if total > 0 else 0.0
+
+    return {
+        "num_classes": num_classes,
+        "conf_matrix": conf_matrix,
+        "support": support,
+        "accuracy": accuracy,
+        "balanced_accuracy": balanced_accuracy,
+        "macro_precision": macro_precision,
+        "macro_recall": macro_recall,
+        "macro_f1": macro_f1,
+        "per_class_precision": per_class_precision,
+        "per_class_recall": per_class_recall,
+        "per_class_f1": per_class_f1,
+    }
 
 
 def simple_collate_fn(batch):
@@ -65,15 +119,34 @@ def simple_collate_fn(batch):
     return scans, labels, None, None
 
 
-def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, use_segmentation=False, class_weights=None, accumulation_steps=1):
+def train_epoch(
+    model,
+    loader,
+    optimizer,
+    epoch,
+    device,
+    logger,
+    scaler=None,
+    use_segmentation=False,
+    accumulation_steps=1,
+    seg_loss_weight=0.1,
+):
     model.train()
     start_time = time.time()
     run_loss = AverageMeter()
     run_cls_loss = AverageMeter()
     run_seg_loss = AverageMeter()
-    
+    seg_loss_weight = max(0.0, float(seg_loss_weight))
+    all_preds = []
+    all_targets = []
+
     # Apply label smoothing due to visual overlap in NSCLC/SCLC subtypes
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    # Tumor masks are extremely sparse; raw BCE pushes the decoder toward
+    # "predict all zeros". Combining BCE with Dice gives a foreground-aware
+    # signal that actually teaches the encoder *where* the lesion is —
+    # which is the whole reason DAPT exists (BigLunge has no masks).
+    dice_loss_fn = DiceLoss(sigmoid=True)
 
     optimizer.zero_grad()  # 1. Zero gradients before the loop starts
 
@@ -100,12 +173,18 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
                 if masks is not None and has_mask_tensor is not None and has_mask_tensor.any():
                     valid_mask_indices = has_mask_tensor.to(device)
                     masks = masks.float()  # Make sure masks are float
-                    # Only compute BCE on samples that genuinely have a mask
-                    seg_loss = nn.functional.binary_cross_entropy_with_logits(
-                        seg_outputs[valid_mask_indices], 
-                        masks[valid_mask_indices]
+                    # Compute the aux seg loss only on samples that genuinely
+                    # have a mask. BCE gives a pixel-wise signal, Dice gives
+                    # a region-overlap signal — combined they are substantially
+                    # more stable on sparse tumor foregrounds than either alone.
+                    seg_logits_valid = seg_outputs[valid_mask_indices]
+                    masks_valid = masks[valid_mask_indices]
+                    bce_seg = nn.functional.binary_cross_entropy_with_logits(
+                        seg_logits_valid, masks_valid
                     )
-                    loss = cls_loss + (0.5 * seg_loss)
+                    dice_seg = dice_loss_fn(seg_logits_valid, masks_valid)
+                    seg_loss = 0.5 * bce_seg + 0.5 * dice_seg
+                    loss = cls_loss + (seg_loss_weight * seg_loss)
                     seg_loss_val = seg_loss.item()
                 else:
                     loss = cls_loss
@@ -114,6 +193,10 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
                 loss = criterion(logits, target)
                 cls_loss = loss
                 seg_loss_val = 0.0
+
+            preds = torch.argmax(logits.detach(), dim=1)
+            all_preds.extend(preds.cpu().tolist())
+            all_targets.extend(target.detach().cpu().tolist())
             
             unscaled_loss = loss.item()  # Save true loss value for metric tracking
             loss = loss / accumulation_steps  # 2. Scale the loss down
@@ -144,7 +227,7 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
         run_seg_loss.update(seg_loss_val, n=data.size(0))
         
         # Log every 10 steps and on the last step
-        if (idx + 1) % 10 == 0 or (idx + 1) == len(loader):
+        if (idx + 1) % 20 == 0 or (idx + 1) == len(loader):
             if use_segmentation:
                 msg = (f"Epoch {epoch} [{idx + 1}/{len(loader)}] "
                        f"Loss: {run_loss.avg:.4f} (Cls: {run_cls_loss.avg:.4f} / Seg: {run_seg_loss.avg:.4f}) "
@@ -156,16 +239,23 @@ def train_epoch(model, loader, optimizer, epoch, device, logger, scaler=None, us
             print(msg)
             logger.info(msg)
             start_time = time.time()
-            
-    return run_loss.avg
+
+    train_metrics = _compute_classification_metrics(all_targets, all_preds)
+    train_summary = (
+        f"Train Epoch {epoch} Summary => Loss: {run_loss.avg:.4f}, "
+        f"Accuracy: {train_metrics['accuracy']:.4f}, "
+        f"MacroF1: {train_metrics['macro_f1']:.4f}"
+    )
+    print(train_summary)
+    logger.info(train_summary)
+
+    return run_loss.avg, train_metrics["macro_f1"]
 
 
 @torch.no_grad()
 def validate_epoch(model, loader, device, logger):
     model.eval()
     run_loss = AverageMeter()
-    correct = 0
-    total = 0
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     
     all_preds = []
@@ -188,87 +278,77 @@ def validate_epoch(model, loader, device, logger):
         
         run_loss.update(loss.item(), n=data.size(0))
         
-        # Calculate Classification Accuracy
         preds = torch.argmax(logits, dim=1)
-        correct += (preds == target).sum().item()
-        total += target.size(0)
         
-        all_preds.extend(preds.cpu().numpy())
-        all_targets.extend(target.cpu().numpy())
+        all_preds.extend(preds.cpu().tolist())
+        all_targets.extend(target.cpu().tolist())
 
-    accuracy = correct / total if total > 0 else 0.0
-    
-    # Calculate precision, recall, and f1 (dice for classification)
-    if len(all_targets) > 0:
-        metric = ConfusionMatrixMetric(
-            include_background=True,
-            metric_name=["precision", "recall", "f1 score"], 
-            compute_sample=False, 
-            reduction="mean"
-        )
-        all_targets_t = torch.tensor(all_targets, dtype=torch.long)
-        all_preds_t = torch.tensor(all_preds, dtype=torch.long)
-        
-        max_observed = max(all_targets_t.max().item(), all_preds_t.max().item()) + 1
-        num_classes = max(3, max_observed)
-        
-        target_onehot = nn.functional.one_hot(all_targets_t, num_classes=num_classes)
-        pred_onehot = nn.functional.one_hot(all_preds_t, num_classes=num_classes)
-        
-        metric(y_pred=pred_onehot, y=target_onehot)
-        metrics_res = metric.aggregate()
-        
-        precision = metrics_res[0].item() if not torch.isnan(metrics_res[0]) else 0.0
-        recall = metrics_res[1].item() if not torch.isnan(metrics_res[1]) else 0.0
-        f1 = metrics_res[2].item() if not torch.isnan(metrics_res[2]) else 0.0
-    else:
-        precision, recall, f1 = 0.0, 0.0, 0.0
-        num_classes = 3
-        
-    val_msg = f"Validation Complete => Loss: {run_loss.avg:.4f}, Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, Dice/F1: {f1:.4f}"
+    metrics = _compute_classification_metrics(all_targets, all_preds)
+    num_classes = metrics["num_classes"]
+    conf_matrix = metrics["conf_matrix"]
+    support = metrics["support"]
+    accuracy = metrics["accuracy"]
+    balanced_accuracy = metrics["balanced_accuracy"]
+    macro_precision = metrics["macro_precision"]
+    macro_recall = metrics["macro_recall"]
+    macro_f1 = metrics["macro_f1"]
+    per_class_precision = metrics["per_class_precision"]
+    per_class_recall = metrics["per_class_recall"]
+    per_class_f1 = metrics["per_class_f1"]
+
+    val_msg = (
+        f"Validation Complete => Loss: {run_loss.avg:.4f}, "
+        f"Accuracy: {accuracy:.4f}, BalancedAcc: {balanced_accuracy:.4f}, "
+        f"MacroPrecision: {macro_precision:.4f}, MacroRecall: {macro_recall:.4f}, "
+        f"MacroF1: {macro_f1:.4f}"
+    )
     print(val_msg)
     logger.info(val_msg)
-    
+
+    # Per-class breakdown — the actionable signal for the imbalanced val set.
+    for c in range(num_classes):
+        name = CLASS_NAMES[c] if c < len(CLASS_NAMES) else f"Class{c}"
+        logger.info(
+            f"  [{name:<16}] support={int(support[c]):<4} "
+            f"precision={per_class_precision[c]:.4f} "
+            f"recall={per_class_recall[c]:.4f} "
+            f"f1={per_class_f1[c]:.4f}"
+        )
+
     if torch.cuda.is_available():
         allocated = torch.cuda.memory_allocated(device) / (1024 ** 3)
         reserved = torch.cuda.memory_reserved(device) / (1024 ** 3)
         mem_msg = f"VRAM Usage - Allocated: {allocated:.2f} GB, Reserved: {reserved:.2f} GB"
         print(mem_msg)
         logger.info(mem_msg)
-    
-    # Generate and print confusion matrix
+
+    # Pretty-print the confusion matrix.
     if len(all_targets) > 0:
-        names = ["Adenocarcinoma", "Small Cell", "Squamous"]
-        
-        # Ensure we cover at least 3 classes
-        max_observed = max(max(all_targets), max(all_preds)) + 1
-        num_classes = max(3, max_observed)
-            
-        conf_matrix = np.zeros((num_classes, num_classes), dtype=int)
-        for t, p in zip(all_targets, all_preds):
-            conf_matrix[t, p] += 1
-            
+        display_names = [
+            CLASS_NAMES[i] if i < len(CLASS_NAMES) else f"Class{i}"
+            for i in range(num_classes)
+        ]
         print("\nConfusion Matrix (Rows: Actual Class, Columns: Predicted Class):")
         logger.info("\nConfusion Matrix (Rows: Actual Class, Columns: Predicted Class):")
-        
-        # Format names safely based on indices 
-        display_names = [names[i] if i < len(names) else f"Class{i}" for i in range(num_classes)]
-        
-        # Header row (Columns = Model's Predictions)
         header = f"{'True \\ Pred':<18}" + "".join([f"{display_names[j]:<16}" for j in range(num_classes)])
         print(header)
         logger.info(header)
-        
-        # Rows (Rows = Actual Ground Truth)
         for i in range(num_classes):
             row_str = f"Y:{display_names[i]:<16}"
             for j in range(num_classes):
-                # conf_matrix[True, Pred]
-                count = conf_matrix[i, j]
-                row_str += f"{count:<16}"
+                row_str += f"{int(conf_matrix[i, j]):<16}"
             print(row_str)
             logger.info(row_str)
         print("\n")
-    
-    # Return metrics as a dict (matching what main.py expects)
-    return {"loss": run_loss.avg, "accuracy": accuracy}
+
+    return {
+        "loss": run_loss.avg,
+        "accuracy": accuracy,
+        "balanced_accuracy": balanced_accuracy,
+        "macro_precision": macro_precision,
+        "macro_recall": macro_recall,
+        "macro_f1": macro_f1,
+        "per_class_precision": per_class_precision.tolist(),
+        "per_class_recall": per_class_recall.tolist(),
+        "per_class_f1": per_class_f1.tolist(),
+    }

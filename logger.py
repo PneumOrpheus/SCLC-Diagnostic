@@ -39,7 +39,7 @@ def create_logger(output_dir, dist_rank=0, name=''):
         
     # Create a timestamped filename
     now_str = datetime.datetime.now().strftime('%Y-%m-%d_%H')
-    log_filename = f'{now_str}_logs.txt'
+    log_filename = f'{name}_{now_str}_logs.txt'
     
     file_handler = logging.FileHandler(os.path.join(output_dir, log_filename), mode='a')
     file_handler.setLevel(logging.DEBUG)
