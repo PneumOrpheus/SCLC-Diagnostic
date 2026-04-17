@@ -1,5 +1,4 @@
 import os
-import glob
 import pandas as pd
 import numpy as np
 import torch
@@ -14,38 +13,49 @@ import torchvision
 
 from data.transforms import get_train_transforms_3d, get_val_transforms_3d
 
+from sklearn.model_selection import train_test_split
+
 # A: Adenocarcinoma (0), B: Small Cell Carcinoma (1), G: Squamous Cell Carcinoma (2)
 CLASS_MAP = {"A": 0, "B": 1, "G": 2}
 CLASS_NAMES = ["Adenocarcinoma", "Small Cell Carcinoma", "Squamous Cell Carcinoma"]
 
-NORWEGIAN_CLASS_MAP = {
+BIGLUNGE_CLASS_MAP = {
+    # English labels used by /home/data/TrainingData/patients_parameters.csv
+    "Adenocarcinoma": 0,
+    "Small cell carcinoma": 1,
+    "Squamous cell carcinoma": 2,
+    # Norwegian labels kept for backward compatibility with the old BigLunge CSV
     "Adenokarsinom": 0,
     "Småcelletkarsinom": 1,
     "Plateepitelkarsinom": 2,
 }
 
-def load_patient_labels(csv_path: str) -> Dict[int, int]:
-    """Load patient ID -> class label mapping from CSV (for BigLunge)."""
+def load_patient_labels(csv_path: str) -> Dict[str, int]:
+    """Load patient ID -> class label mapping from CSV (for BigLunge).
+
+    Patient IDs are kept as strings (e.g. ``patient_087599``) to match the
+    folder naming in /home/data/TrainingData. Rows whose MorphologicalGroup is
+    not one of the three target classes (e.g. ``Non-small cell carcinoma``)
+    are skipped.
+    """
     df = pd.read_csv(csv_path)
-    labels = {}
+    labels: Dict[str, int] = {}
     for _, row in df.iterrows():
-        pid = int(row["Patient"])
-        group = row["MorphologicalGroup"]
-        if group in NORWEGIAN_CLASS_MAP:
-            labels[pid] = NORWEGIAN_CLASS_MAP[group]
+        pid = str(row["Patient"]).strip()
+        group = str(row["MorphologicalGroup"]).strip()
+        if group in BIGLUNGE_CLASS_MAP:
+            labels[pid] = BIGLUNGE_CLASS_MAP[group]
         else:
-            print(f"Warning: Unknown morphological group '{group}' for patient {pid}")
+            print(f"Warning: Unknown morphological group '{group}' for patient {pid} — skipping")
     return labels
 
 def get_lung_pet_ct_dx_data_list(
     data_path: str,
-    val_frac: float = 0.1,
-    test_frac: float = 0.1,
+    val_frac: float = 0.15,
+    test_frac: float = 0.15,
     seed: int = 42,
-    pet_dir: str = "",
-    use_pet: bool = False,
     testing: bool = False,
-    img_size: int = 224,    
+    max_scans_per_patient: int = 2,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Build {split: data_list} dict with patient-level splitting for Lung-PET-CT-Dx."""
     if not os.path.isdir(data_path):
@@ -73,8 +83,6 @@ def get_lung_pet_ct_dx_data_list(
         if label != -1:
             valid_patients.append(pid)
             patient_labels.append(label)
-
-    from sklearn.model_selection import train_test_split
 
     val_test_frac = val_frac + test_frac
     if val_test_frac > 0:
@@ -117,7 +125,16 @@ def get_lung_pet_ct_dx_data_list(
                 continue
                 
             patient_dir = data_root / pid
-            images = [f for f in patient_dir.iterdir() if f.is_file() and f.name.endswith("_image.nii.gz")]
+            images = sorted(
+                [f for f in patient_dir.iterdir() if f.is_file() and f.name.endswith("_image.nii.gz")],
+                key=lambda f: f.name,
+            )
+            # Flatten adeno dominance (~8 scans/patient) so WeightedRandomSampler
+            # doesn't repeat-sample the same SCLC volumes dozens of times per epoch.
+            # Deterministic: sorted by filename, take first N.
+            # SCLC (class 1) is exempt — it's too rare to cap.
+            if max_scans_per_patient is not None and max_scans_per_patient > 0 and label != 1:
+                images = images[:max_scans_per_patient]
 
             for img_path in images:
                 entry: Dict[str, Any] = {
@@ -131,16 +148,6 @@ def get_lung_pet_ct_dx_data_list(
                 mask_path = patient_dir / f"{series_uid}_mask.nii.gz"
                 if mask_path.exists():
                     entry["mask"] = str(mask_path)
-                
-                # Check for PET if requested
-                if use_pet and pet_dir:
-                    # PET is {pet_dir}/{pid}_*.nii.gz
-                    pet_files = glob.glob(os.path.join(pet_dir, f"{pid}_*.nii.gz"))
-                    if pet_files:
-                        entry["pet"] = pet_files[0]
-                    else:
-                        # If use_pet is forced but this patient has no PET, skip this CT scan
-                        continue
                         
                 data_list.append(entry)
                 if testing and len(data_list) >= 12:
@@ -153,8 +160,7 @@ def get_lung_pet_ct_dx_data_list(
             class_counts[item["scan_label"]] = class_counts.get(item["scan_label"], 0) + 1
 
         mask_count = sum(1 for d in data_list if 'mask' in d)
-        pet_count = sum(1 for d in data_list if 'pet' in d)
-        print(f"  {len(data_list)} images ({mask_count} w/ masks, {pet_count} w/ PET), class distribution: {class_counts}")
+        print(f"  {len(data_list)} images ({mask_count} w/ masks), class distribution: {class_counts}")
 
         result[split] = data_list
         
@@ -165,8 +171,8 @@ def get_lung_pet_ct_dx_data_list(
 def get_biglunge_data_list(
     data_path: str,
     csv_path: str,
-    val_frac: float = 0.1,
-    test_frac: float = 0.1,
+    val_frac: float = 0.15,
+    test_frac: float = 0.15,
     seed: int = 42,
     testing: bool = False,
 ) -> Dict[str, List[Dict[str, Any]]]:
@@ -180,12 +186,15 @@ def get_biglunge_data_list(
 
     data_root = Path(data_path)
     patient_folders = sorted(
-        int(e.name) for e in data_root.iterdir()
-        if e.is_dir() and e.name.isdigit() and int(e.name) in patient_labels
+        e.name for e in data_root.iterdir()
+        if e.is_dir() and e.name in patient_labels
     )
 
     if not patient_folders:
-        raise ValueError(f"No valid patient folders found in '{data_path}'.")
+        raise ValueError(
+            f"No labeled patient folders found in '{data_path}'. "
+            f"Folder names are expected to match the 'Patient' column in '{csv_path}'."
+        )
 
     print(f"Found {len(patient_folders)} patients with labels.")
     
@@ -227,11 +236,22 @@ def get_biglunge_data_list(
             if not patient_dir.is_dir():
                 continue
             label = patient_labels[pid]
+            # New TrainingData layout: {pid}_input.nii.gz (CT) and
+            # {pid}_label_lungs.nii.gz (algorithmic lung-chamber mask).
             for nii in patient_dir.glob("*.nii*"):
-                if "_label_" not in nii.name:
-                    data_list.append({"image": str(nii), "scan_label": label, "patient_id": pid})
-                    if testing and len(data_list) >= 32:
-                        break
+                if "_label_" in nii.name:
+                    continue
+                entry: Dict[str, Any] = {
+                    "image": str(nii),
+                    "scan_label": label,
+                    "patient_id": pid,
+                }
+                lung_mask_path = patient_dir / f"{pid}_label_lungs.nii.gz"
+                if lung_mask_path.exists():
+                    entry["lung_mask"] = str(lung_mask_path)
+                data_list.append(entry)
+                if testing and len(data_list) >= 32:
+                    break
             if testing and len(data_list) >= 32:
                 break
 
@@ -254,13 +274,11 @@ def create_dataset(
     use_multichannel_windowing: bool = False,
     cache_dir: Optional[str] = None,
     num_workers: int = 4,
-    pet_dir: str = "",
-    use_pet: bool = False,
     use_3d: bool = False,
     testing: bool = False,
     warm_cache: bool = False,
-    val_frac: float = 0.1,
-    test_frac: float = 0.1,
+    val_frac: float = 0.15,
+    test_frac: float = 0.15,
     seed: int = 42,
     **kwargs: Any,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
@@ -281,7 +299,7 @@ def create_dataset(
     elif dataset_type == "lung_pet_ct_dx":
         all_splits = get_lung_pet_ct_dx_data_list(
             data_path=data_path, val_frac=val_frac, test_frac=test_frac, seed=seed,
-            pet_dir=pet_dir, use_pet=use_pet, testing=testing, img_size=img_size
+            testing=testing
         )
         cache_name = "monai_lung_pet_ct_clean"
     else:
@@ -296,12 +314,21 @@ def create_dataset(
         data_list = all_splits[split]
 
         if use_3d:
-            # Pre-filter to discard any volumes that don't have enough Z slices
+            # BigLunge ships per-patient algorithmic lung-chamber masks; use
+            # them to crop a generous lung-bbox so the limited spatial budget
+            # focuses on lung tissue and adjacent mediastinum.
+            use_lung_crop = (dataset_type == "big_lunge")
 
             if split == "train":
-                transforms = get_train_transforms_3d(img_size=img_size, depth_size=depth_size, use_pet=use_pet)
+                transforms = get_train_transforms_3d(
+                    img_size=img_size, depth_size=depth_size,
+                    use_lung_crop=use_lung_crop,
+                )
             else:
-                transforms = get_val_transforms_3d(img_size=img_size, depth_size=depth_size, use_pet=use_pet)
+                transforms = get_val_transforms_3d(
+                    img_size=img_size, depth_size=depth_size,
+                    use_lung_crop=use_lung_crop,
+                )
 
 
         if cache_dir is None:
@@ -319,16 +346,51 @@ def create_dataset(
             
         os.makedirs(current_cache_dir, exist_ok=True)
         print(f"PersistentDataset cache_dir='{current_cache_dir}'")
-        
+
         valid_data_file = os.path.join(current_cache_dir, "valid_data.json")
+        meta_file = os.path.join(current_cache_dir, "meta.json")
         import json
 
-        if os.path.exists(valid_data_file) and not warm_cache:
+        # Cache key covers everything that can change the split or preprocessing shape.
+        # If any of these drift from what's on disk, the cache is rebuilt.
+        current_meta = {
+            "dataset_type": dataset_type,
+            "data_list_len": len(data_list),
+            "testing": bool(testing),
+            "val_frac": float(val_frac),
+            "test_frac": float(test_frac),
+            "seed": int(seed),
+            "img_size": int(img_size),
+            "depth_size": int(depth_size),
+            "split": split,
+        }
+
+        cached_meta = None
+        if os.path.exists(meta_file):
+            try:
+                with open(meta_file, "r") as f:
+                    cached_meta = json.load(f)
+            except Exception:
+                cached_meta = None
+
+        cache_valid = (
+            os.path.exists(valid_data_file)
+            and not warm_cache
+            and cached_meta == current_meta
+        )
+
+        if cache_valid:
             print(f"Loading verified valid dataset list from {valid_data_file}...")
             with open(valid_data_file, "r") as f:
                 valid_data = json.load(f)
             ds = PersistentDataset(data=valid_data, transform=transforms, cache_dir=current_cache_dir)
         else:
+            if os.path.exists(valid_data_file) and cached_meta != current_meta:
+                print(
+                    f"[{split}] Cache meta mismatch — rebuilding.\n"
+                    f"  on disk: {cached_meta}\n"
+                    f"  current: {current_meta}"
+                )
             ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=current_cache_dir)
 
             valid_data = []
@@ -338,11 +400,13 @@ def create_dataset(
                     valid_data.append(data_list[i])
                 except Exception as e:
                     print(f"Failed sample ({data_list[i].get('image', 'N/A')}) - skipping! Error: {e}")
-            
+
             print(f"[{split}] Kept {len(valid_data)}/{len(data_list)} valid samples.")
             with open(valid_data_file, "w") as f:
                 json.dump(valid_data, f)
-                
+            with open(meta_file, "w") as f:
+                json.dump(current_meta, f, indent=2)
+
             # Recreate dataset using only the valid subset
             ds = PersistentDataset(data=valid_data, transform=transforms, cache_dir=current_cache_dir)
 
