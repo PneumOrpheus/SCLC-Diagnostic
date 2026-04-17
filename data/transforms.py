@@ -33,6 +33,8 @@ from monai.transforms import (
     RandShiftIntensityd,
     Orientationd,
     Spacingd,
+    CropForegroundd,
+    DeleteItemsd,
 )
 from monai.data import MetaTensor
 
@@ -113,79 +115,6 @@ class LoadNiftiWithRGBSupportd(MapTransform):
             # 2. Wrap the numpy array into a MetaTensor with spatial metadata
             d[key] = MetaTensor(arr, affine=affine)
             
-        return d
-
-
-class CreateMultiChannelCTd(MapTransform):
-    """Create a 3-channel representation using different CT windows.
-    
-    Creates three channels optimized for different anatomical structures:
-    - Lung window (L:-600, W:1500): Nodules and parenchyma
-    - Mediastinal window (L:50, W:350): Lymph nodes and soft tissue
-    - Bone/Wide window (L:300, W:2000): Chest wall and spine context
-    """
-    
-    def __init__(
-        self,
-        keys: KeysCollection,
-        allow_missing_keys: bool = False
-    ) -> None:
-        super().__init__(keys, allow_missing_keys)
-        # Define window parameters: (center, width)
-        self.windows = [
-            (-600, 1500),   # Lung window
-            (50, 350),      # Mediastinal window
-            (300, 2000),    # Bone window
-        ]
-    
-    def _apply_windowing(self, volume: np.ndarray, center: float, width: float) -> np.ndarray:
-        img_min = center - (width / 2)
-        img_max = center + (width / 2)
-        windowed = np.clip(volume, img_min, img_max)
-        return ((windowed - img_min) / (img_max - img_min)).astype(np.float32)
-    
-    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
-        d: Dict[Hashable, Any] = dict(data)
-        for key in self.key_iterator(d):
-            volume = d[key]
-            
-            # Remove channel dimension if present for windowing
-            if hasattr(volume, 'ndim'):
-                if volume.ndim == 4 and volume.shape[0] == 1:
-                    volume = volume[0]
-                elif volume.ndim == 3 and volume.shape[0] == 1:
-                    volume = volume[0]
-            
-            channels = [
-                self._apply_windowing(np.asarray(volume), center, width)
-                for center, width in self.windows
-            ]
-            
-            # Stack channels: (3, ...) for channel-first format
-            d[key] = np.stack(channels, axis=0)
-        return d
-
-
-class EnsureRGBd(MapTransform):
-    """Ensure the image has 3 channels (RGB) by repeating grayscale if needed."""
-    
-    def __init__(
-        self,
-        keys: KeysCollection,
-        allow_missing_keys: bool = False
-    ) -> None:
-        super().__init__(keys, allow_missing_keys)
-    
-    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
-        d: Dict[Hashable, Any] = dict(data)
-        for key in self.key_iterator(d):
-            img = d[key]
-            if isinstance(img, torch.Tensor):
-                if img.shape[0] == 1:
-                    d[key] = img.expand(3, -1, -1)
-            else:
-                if img.shape[0] == 1:
-                    d[key] = np.repeat(img, 3, axis=0)
         return d
 
 
@@ -287,85 +216,83 @@ class ExtractSubVolumed(MapTransform):
                 
         return d
 
-class ConvertRGBToTargetd(MapTransform):
-    """Detects RGB/structured arrays from LoadImaged and converts to standard float32 grayscale."""
-    def __init__(self, keys: KeysCollection, allow_missing_keys: bool = False) -> None:
-        super().__init__(keys, allow_missing_keys)
-        
-    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
-        d: Dict[Hashable, Any] = dict(data)
-        for key in self.key_iterator(d):
-            img_tensor = d[key]
-            
-            # If the underlying data is a structured numpy array (like nibabel RGB)
-            if hasattr(img_tensor, "dtype") and hasattr(img_tensor.dtype, "names") and img_tensor.dtype.names is not None:
-                if set(img_tensor.dtype.names) == {'R', 'G', 'B'} or 'R' in img_tensor.dtype.names:
-                    # Convert to grayscale
-                    raw = np.asanyarray(img_tensor)
-                    r = raw['R'].astype(np.float32)
-                    g = raw['G'].astype(np.float32)
-                    b = raw['B'].astype(np.float32)
-                    gray = 0.299 * r + 0.587 * g + 0.114 * b
-                    arr = (gray / 255.0) * 4095 - 1024
-                    
-                    # Re-wrap into MetaTensor to keep affine info intact
-                    d[key] = MetaTensor(arr, meta=img_tensor.meta)
-            
-            # Squeeze and format dims (D, H, W)
-            arr = d[key]
-            if arr.ndim == 4:
-                arr = arr[..., 0] # take first time instance
-                
-            while arr.ndim > 3:
-                for ax in range(arr.ndim - 1, 2, -1):
-                    if arr.shape[ax] == 1:
-                        if isinstance(arr, torch.Tensor):
-                            arr = arr.squeeze(dim=ax)
-                        else:
-                            arr = arr.squeeze(axis=ax)
-                        break
-                else:
-                    break
-                    
-            if arr.ndim == 3 and arr.shape[2] < 3:
-                reps = (3 // arr.shape[2]) + 1
-                if isinstance(arr, torch.Tensor):
-                    arr = torch.repeat_interleave(arr, reps, dim=2)
-                else:
-                    arr = np.repeat(arr, reps, axis=2)
-                
-            d[key] = arr
-            
-        return d
+def _build_lung_crop_transforms(
+    img_keys: list,
+    spacing_modes: list,
+):
+    """Crop spatially to the algorithmic lung mask + a generous margin.
+
+    The mask in /home/data/TrainingData is auto-generated lung-chamber
+    segmentation, not a tumor mask, and is not perfectly tight. SCLC frequently
+    sits in the mediastinum (between the lungs) and at the apex; both are
+    mostly inside an axis-aligned bbox over the two lungs, but to absorb mask
+    errors and keep peri-lung context we add a large margin.
+
+    Margin is in voxels at the post-Spacingd resolution (1.5×1.5×2.0 mm), so
+    (30, 30, 20) ≈ 45×45×40 mm of context beyond the lung bbox in R/L, A/P
+    and I/S respectively.
+    """
+    crop_keys = list(img_keys) + ["lung_mask"]
+    crop_modes = list(spacing_modes) + ["nearest"]
+    return [
+        # Load and align the lung mask through the same spatial pipeline as
+        # the CT (and tumor mask / PET if present), so its bbox lines up
+        # voxel-for-voxel with the data we'll crop.
+        LoadNiftiWithRGBSupportd(keys=["lung_mask"], allow_missing_keys=True),
+        EnsureChannelFirstd(keys=["lung_mask"], channel_dim="no_channel", allow_missing_keys=True),
+        Orientationd(keys=["lung_mask"], axcodes="RAS", allow_missing_keys=True),
+        Spacingd(
+            keys=["lung_mask"], pixdim=(1.5, 1.5, 2.0),
+            mode=["nearest"], allow_missing_keys=True,
+        ),
+        CropForegroundd(
+            keys=crop_keys,
+            source_key="lung_mask",
+            select_fn=lambda x: x > 0.5,
+            margin=(30, 30, 20),
+            allow_smaller=True,
+            allow_missing_keys=True,
+        ),
+        # Drop the lung mask once it's served its purpose; the model never
+        # consumes it, and keeping it would waste cache + collate memory.
+        DeleteItemsd(keys=["lung_mask"]),
+    ]
+
 
 def get_train_transforms_3d(
     img_size: int = 224,
     depth_size: int = 64,
     use_pet: bool = False,
+    use_lung_crop: bool = False,
 ) -> Compose:
     load_keys = ["image", "mask"]
     if use_pet:
         load_keys.append("pet")
-        
+
     val_keys = list(load_keys)
+    spacing_modes = ["bilinear", "nearest"] + (["bilinear"] if use_pet else [])
 
     transforms = [
         LoadNiftiWithRGBSupportd(keys=load_keys, allow_missing_keys=True),
         EnsureChannelFirstd(keys=load_keys, channel_dim="no_channel", allow_missing_keys=True),
-        
-        # 1. Standardize Orientation 
+
+        # 1. Standardize Orientation
         Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
-        
+
         # 2. Resample PET to perfectly match CT's affine coordinate grid
         *( [ResampleToMatchd(keys="pet", key_dst="image")] if use_pet else [] ),
 
         # 3. Standardize Physical Voxel Spacing (example: 1.5mm x 1.5mm x 2.0mm)
         Spacingd(
-            keys=val_keys, 
-            pixdim=(1.5, 1.5, 2.0), 
-            mode=["bilinear", "nearest"] + (["bilinear"] if use_pet else []),
+            keys=val_keys,
+            pixdim=(1.5, 1.5, 2.0),
+            mode=spacing_modes,
             allow_missing_keys=True
         ),
+
+        # 3b. Lung-bbox crop (BigLunge only). Done before intensity scaling so
+        # the original HU values still flow through ScaleIntensityRanged below.
+        *( _build_lung_crop_transforms(val_keys, spacing_modes) if use_lung_crop else [] ),
 
         ScaleIntensityRanged(keys=["image"], a_min=-1024, a_max=3071, b_min=0, b_max=1, clip=True),
         *( [ScaleIntensityd(keys=["pet"], minv=0.0, maxv=1.0)] if use_pet else [] ),
@@ -420,31 +347,36 @@ def get_train_transforms_3d(
 def get_val_transforms_3d(
     img_size: int = 224,
     depth_size: int = 64,
-    use_pet: bool = False, 
+    use_pet: bool = False,
+    use_lung_crop: bool = False,
 ) -> Compose:
     load_keys = ["image", "mask"]
     if use_pet:
         load_keys.append("pet")
-        
+
     val_keys = list(load_keys)
+    spacing_modes = ["bilinear", "nearest"] + (["bilinear"] if use_pet else [])
 
     transforms = [
         LoadNiftiWithRGBSupportd(keys=load_keys, allow_missing_keys=True),
         EnsureChannelFirstd(keys=load_keys, channel_dim="no_channel", allow_missing_keys=True),
-        
+
         # 1. Standardize Orientation (Must match train)
         Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
-        
+
         # Resample PET to perfectly match CT's affine coordinate grid
         *( [ResampleToMatchd(keys="pet", key_dst="image")] if use_pet else [] ),
 
         # 2. Standardize Physical Voxel Spacing (Must match train)
         Spacingd(
-            keys=val_keys, 
-            pixdim=(1.5, 1.5, 2.0), 
-            mode=["bilinear", "nearest"] + (["bilinear"] if use_pet else []),
+            keys=val_keys,
+            pixdim=(1.5, 1.5, 2.0),
+            mode=spacing_modes,
             allow_missing_keys=True
         ),
+
+        # 2b. Lung-bbox crop (BigLunge only).
+        *( _build_lung_crop_transforms(val_keys, spacing_modes) if use_lung_crop else [] ),
 
         # Scale CT intensity to [0, 1] AND clip outliers
         ScaleIntensityRanged(

@@ -20,23 +20,34 @@ from sklearn.model_selection import train_test_split
 CLASS_MAP = {"A": 0, "B": 1, "G": 2}
 CLASS_NAMES = ["Adenocarcinoma", "Small Cell Carcinoma", "Squamous Cell Carcinoma"]
 
-NORWEGIAN_CLASS_MAP = {
+BIGLUNGE_CLASS_MAP = {
+    # English labels used by /home/data/TrainingData/patients_parameters.csv
+    "Adenocarcinoma": 0,
+    "Small cell carcinoma": 1,
+    "Squamous cell carcinoma": 2,
+    # Norwegian labels kept for backward compatibility with the old BigLunge CSV
     "Adenokarsinom": 0,
     "Småcelletkarsinom": 1,
     "Plateepitelkarsinom": 2,
 }
 
-def load_patient_labels(csv_path: str) -> Dict[int, int]:
-    """Load patient ID -> class label mapping from CSV (for BigLunge)."""
+def load_patient_labels(csv_path: str) -> Dict[str, int]:
+    """Load patient ID -> class label mapping from CSV (for BigLunge).
+
+    Patient IDs are kept as strings (e.g. ``patient_087599``) to match the
+    folder naming in /home/data/TrainingData. Rows whose MorphologicalGroup is
+    not one of the three target classes (e.g. ``Non-small cell carcinoma``)
+    are skipped.
+    """
     df = pd.read_csv(csv_path)
-    labels = {}
+    labels: Dict[str, int] = {}
     for _, row in df.iterrows():
-        pid = int(row["Patient"])
-        group = row["MorphologicalGroup"]
-        if group in NORWEGIAN_CLASS_MAP:
-            labels[pid] = NORWEGIAN_CLASS_MAP[group]
+        pid = str(row["Patient"]).strip()
+        group = str(row["MorphologicalGroup"]).strip()
+        if group in BIGLUNGE_CLASS_MAP:
+            labels[pid] = BIGLUNGE_CLASS_MAP[group]
         else:
-            print(f"Warning: Unknown morphological group '{group}' for patient {pid}")
+            print(f"Warning: Unknown morphological group '{group}' for patient {pid} — skipping")
     return labels
 
 def get_lung_pet_ct_dx_data_list(
@@ -190,12 +201,15 @@ def get_biglunge_data_list(
 
     data_root = Path(data_path)
     patient_folders = sorted(
-        int(e.name) for e in data_root.iterdir()
-        if e.is_dir() and e.name.isdigit() and int(e.name) in patient_labels
+        e.name for e in data_root.iterdir()
+        if e.is_dir() and e.name in patient_labels
     )
 
     if not patient_folders:
-        raise ValueError(f"No valid patient folders found in '{data_path}'.")
+        raise ValueError(
+            f"No labeled patient folders found in '{data_path}'. "
+            f"Folder names are expected to match the 'Patient' column in '{csv_path}'."
+        )
 
     print(f"Found {len(patient_folders)} patients with labels.")
     
@@ -237,11 +251,22 @@ def get_biglunge_data_list(
             if not patient_dir.is_dir():
                 continue
             label = patient_labels[pid]
+            # New TrainingData layout: {pid}_input.nii.gz (CT) and
+            # {pid}_label_lungs.nii.gz (algorithmic lung-chamber mask).
             for nii in patient_dir.glob("*.nii*"):
-                if "_label_" not in nii.name:
-                    data_list.append({"image": str(nii), "scan_label": label, "patient_id": pid})
-                    if testing and len(data_list) >= 32:
-                        break
+                if "_label_" in nii.name:
+                    continue
+                entry: Dict[str, Any] = {
+                    "image": str(nii),
+                    "scan_label": label,
+                    "patient_id": pid,
+                }
+                lung_mask_path = patient_dir / f"{pid}_label_lungs.nii.gz"
+                if lung_mask_path.exists():
+                    entry["lung_mask"] = str(lung_mask_path)
+                data_list.append(entry)
+                if testing and len(data_list) >= 32:
+                    break
             if testing and len(data_list) >= 32:
                 break
 
@@ -306,12 +331,21 @@ def create_dataset(
         data_list = all_splits[split]
 
         if use_3d:
-            # Pre-filter to discard any volumes that don't have enough Z slices
+            # BigLunge ships per-patient algorithmic lung-chamber masks; use
+            # them to crop a generous lung-bbox so the limited spatial budget
+            # focuses on lung tissue and adjacent mediastinum.
+            use_lung_crop = (dataset_type == "big_lunge")
 
             if split == "train":
-                transforms = get_train_transforms_3d(img_size=img_size, depth_size=depth_size, use_pet=use_pet)
+                transforms = get_train_transforms_3d(
+                    img_size=img_size, depth_size=depth_size,
+                    use_pet=use_pet, use_lung_crop=use_lung_crop,
+                )
             else:
-                transforms = get_val_transforms_3d(img_size=img_size, depth_size=depth_size, use_pet=use_pet)
+                transforms = get_val_transforms_3d(
+                    img_size=img_size, depth_size=depth_size,
+                    use_pet=use_pet, use_lung_crop=use_lung_crop,
+                )
 
 
         if cache_dir is None:

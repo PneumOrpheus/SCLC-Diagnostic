@@ -48,8 +48,8 @@ def parse_args():
     parser.add_argument("--dapt-dataset", type=str, default="/home/data/Lung-PET-CT-Dx-Clean")
     parser.add_argument("--pet-dir", type=str, default="/home/data/Lung-PET-CT-Dx_PET", help="Directory containing the PET NIfTI files")
     parser.add_argument("--use-pet", action="store_true", default=False, help="Include PET as the second input channel")
-    parser.add_argument("--finetune-dataset", type=str, default="/home/data/BigLunge/pre_formatting_ws_iso1.0mm_croplungs_bb/1")
-    parser.add_argument("--finetune-csv", type=str, default="/home/data/BigLunge/patients_parameters.csv")
+    parser.add_argument("--finetune-dataset", type=str, default="/home/data/TrainingData")
+    parser.add_argument("--finetune-csv", type=str, default="/home/data/TrainingData/patients_parameters.csv")
     
     # Checkpoints
     parser.add_argument("--initial-checkpoint", type=str, default="", help="Path to initial checkpoint. Defaults to Swin UNETR BTCV if model-type is swin_unetr")
