@@ -253,13 +253,14 @@ def train_epoch(
 
 
 @torch.no_grad()
-def validate_epoch(model, loader, device, logger):
+def validate_epoch(model, loader, device, logger, return_probabilities=False):
     model.eval()
     run_loss = AverageMeter()
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     
     all_preds = []
     all_targets = []
+    all_probs = []
     
     print("\nStarting validation...")
     logger.info("Starting validation...")
@@ -277,6 +278,10 @@ def validate_epoch(model, loader, device, logger):
         loss = criterion(logits, target)
         
         run_loss.update(loss.item(), n=data.size(0))
+
+        if return_probabilities:
+            probs = torch.softmax(logits, dim=1)
+            all_probs.extend(probs.cpu().tolist())
         
         preds = torch.argmax(logits, dim=1)
         
@@ -341,7 +346,68 @@ def validate_epoch(model, loader, device, logger):
             logger.info(row_str)
         print("\n")
 
-    return {
+    inference_payload = None
+    if return_probabilities:
+        class_prob_sums = np.zeros(num_classes, dtype=np.float64)
+        pred_hist = np.zeros(num_classes, dtype=np.int64)
+        samples = []
+
+        for idx, (true_label, pred_label, probs_row) in enumerate(zip(all_targets, all_preds, all_probs)):
+            probs_np = np.asarray(probs_row, dtype=np.float64)
+            if probs_np.shape[0] != num_classes:
+                aligned = np.zeros(num_classes, dtype=np.float64)
+                n_copy = min(num_classes, probs_np.shape[0])
+                aligned[:n_copy] = probs_np[:n_copy]
+                probs_np = aligned
+
+            class_prob_sums += probs_np
+            if 0 <= int(pred_label) < num_classes:
+                pred_hist[int(pred_label)] += 1
+
+            samples.append({
+                "sample_index": int(idx),
+                "true_label": int(true_label),
+                "true_name": display_names[int(true_label)] if 0 <= int(true_label) < num_classes else f"Class{int(true_label)}",
+                "pred_label": int(pred_label),
+                "pred_name": display_names[int(pred_label)] if 0 <= int(pred_label) < num_classes else f"Class{int(pred_label)}",
+                "confidence": float(np.max(probs_np)) if probs_np.size > 0 else 0.0,
+                "probabilities": {
+                    display_names[c]: float(probs_np[c])
+                    for c in range(num_classes)
+                },
+            })
+
+        num_samples = len(samples)
+        if num_samples > 0:
+            mean_probs = class_prob_sums / float(num_samples)
+            pred_fracs = pred_hist.astype(np.float64) / float(num_samples)
+        else:
+            mean_probs = np.zeros(num_classes, dtype=np.float64)
+            pred_fracs = np.zeros(num_classes, dtype=np.float64)
+
+        mean_probs_dict = {display_names[c]: float(mean_probs[c]) for c in range(num_classes)}
+        pred_counts_dict = {display_names[c]: int(pred_hist[c]) for c in range(num_classes)}
+        pred_fracs_dict = {display_names[c]: float(pred_fracs[c]) for c in range(num_classes)}
+
+        logger.info(
+            "Inference probability summary => " +
+            ", ".join([f"mean P({name})={mean_probs_dict[name]:.4f}" for name in display_names])
+        )
+        logger.info(
+            "Inference predicted class distribution => " +
+            ", ".join([f"{name}: {pred_counts_dict[name]} ({pred_fracs_dict[name]:.3f})" for name in display_names])
+        )
+
+        inference_payload = {
+            "num_samples": int(num_samples),
+            "class_names": display_names,
+            "mean_probability_per_class": mean_probs_dict,
+            "predicted_class_counts": pred_counts_dict,
+            "predicted_class_fractions": pred_fracs_dict,
+            "samples": samples,
+        }
+
+    result = {
         "loss": run_loss.avg,
         "accuracy": accuracy,
         "balanced_accuracy": balanced_accuracy,
@@ -352,3 +418,8 @@ def validate_epoch(model, loader, device, logger):
         "per_class_recall": per_class_recall.tolist(),
         "per_class_f1": per_class_f1.tolist(),
     }
+
+    if inference_payload is not None:
+        result["inference_probabilities"] = inference_payload
+
+    return result

@@ -2,6 +2,7 @@ import os
 import sys
 import shutil
 import random
+import json
 import numpy as np
 import torch
 import torch.nn as nn
@@ -18,6 +19,21 @@ from model_selection import get_sclc_model
 from training.train import simple_collate_fn, train_epoch, validate_epoch
 from data.data_loader import create_dataset
 from logger import create_logger
+
+
+def _save_inference_probabilities(output_dir: str, model_type: str, payload: Dict[str, Any], logger) -> str:
+    """Persist inference softmax probabilities to disk for post-hoc analysis."""
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    out_path = os.path.join(output_dir, f"{model_type}_{timestamp}_inference_probabilities.json")
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+
+    mean_probs = payload.get("mean_probability_per_class", {})
+    if mean_probs:
+        msg = ", ".join([f"mean P({k})={float(v):.4f}" for k, v in mean_probs.items()])
+        logger.info(f"Inference probability means: {msg}")
+    logger.info(f"Saved inference probabilities to: {out_path}")
+    return out_path
 
 def parse_args():
     parser = argparse.ArgumentParser(description="SCLC Simplified 3D Classification Pipeline")
@@ -368,7 +384,7 @@ def main():
     args = parse_args()
     
     if not args.initial_checkpoint and args.model_type == "swin_unetr":
-        args.initial_checkpoint = "/home/data/temp/model_swin_unetr_btcv_segmentation_v1.pt"
+        args.initial_checkpoint = "/home/data/pre_trained_models/model_swin_unetr_btcv_segmentation_v1.pt"
         
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(args.checkpoint_dir, exist_ok=True)
@@ -484,8 +500,13 @@ def main():
                 
         if 'test_loader' in locals():
             logger.info("Running evaluation on the Test Set...")
-            test_metrics = validate_epoch(model, test_loader, device, logger)
+            test_metrics = validate_epoch(model, test_loader, device, logger, return_probabilities=True)
             logger.info(f"Final Test Set Accuracy: {test_metrics['accuracy']:.4f}")
+
+            prob_payload = test_metrics.get("inference_probabilities")
+            if prob_payload is not None:
+                probs_file = _save_inference_probabilities(args.output_dir, args.model_type, prob_payload, logger)
+                print(f"Saved inference probabilities to: {probs_file}")
         else:
             logger.error("Test loader not available. Skipping inference.")
             

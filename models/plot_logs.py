@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ROOT = PROJECT_ROOT / "output"
-DEFAULT_LOG = "swin_unetr_2026-04-15_14_logs.txt"
+DEFAULT_LOG = "swin_unetr_2026-04-16_10_logs.txt"
 
 FLOAT_RE = r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?"
 
