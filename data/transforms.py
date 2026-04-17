@@ -13,9 +13,6 @@ from typing import Any, Dict, Hashable, Mapping, Optional, Union
 from monai.config import KeysCollection  # type: ignore[attr-defined]
 from monai.transforms import (
     AsDiscreted,
-    ScaleIntensityd,
-    ResampleToMatchd,
-    ConcatItemsd,  # type: ignore[attr-defined]
     MapTransform,
     Compose,
     LoadImaged,
@@ -218,7 +215,6 @@ class ExtractSubVolumed(MapTransform):
 
 def _build_lung_crop_transforms(
     img_keys: list,
-    spacing_modes: list,
 ):
     """Crop spatially to the algorithmic lung mask + a generous margin.
 
@@ -233,10 +229,9 @@ def _build_lung_crop_transforms(
     and I/S respectively.
     """
     crop_keys = list(img_keys) + ["lung_mask"]
-    crop_modes = list(spacing_modes) + ["nearest"]
     return [
         # Load and align the lung mask through the same spatial pipeline as
-        # the CT (and tumor mask / PET if present), so its bbox lines up
+        # the CT (and tumor mask if present), so its bbox lines up
         # voxel-for-voxel with the data we'll crop.
         LoadNiftiWithRGBSupportd(keys=["lung_mask"], allow_missing_keys=True),
         EnsureChannelFirstd(keys=["lung_mask"], channel_dim="no_channel", allow_missing_keys=True),
@@ -262,15 +257,12 @@ def _build_lung_crop_transforms(
 def get_train_transforms_3d(
     img_size: int = 224,
     depth_size: int = 64,
-    use_pet: bool = False,
     use_lung_crop: bool = False,
 ) -> Compose:
     load_keys = ["image", "mask"]
-    if use_pet:
-        load_keys.append("pet")
 
     val_keys = list(load_keys)
-    spacing_modes = ["bilinear", "nearest"] + (["bilinear"] if use_pet else [])
+    spacing_modes = ["bilinear", "nearest"]
 
     transforms = [
         LoadNiftiWithRGBSupportd(keys=load_keys, allow_missing_keys=True),
@@ -278,9 +270,6 @@ def get_train_transforms_3d(
 
         # 1. Standardize Orientation
         Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
-
-        # 2. Resample PET to perfectly match CT's affine coordinate grid
-        *( [ResampleToMatchd(keys="pet", key_dst="image")] if use_pet else [] ),
 
         # 3. Standardize Physical Voxel Spacing (example: 1.5mm x 1.5mm x 2.0mm)
         Spacingd(
@@ -292,10 +281,9 @@ def get_train_transforms_3d(
 
         # 3b. Lung-bbox crop (BigLunge only). Done before intensity scaling so
         # the original HU values still flow through ScaleIntensityRanged below.
-        *( _build_lung_crop_transforms(val_keys, spacing_modes) if use_lung_crop else [] ),
+        *( _build_lung_crop_transforms(val_keys) if use_lung_crop else [] ),
 
         ScaleIntensityRanged(keys=["image"], a_min=-1024, a_max=3071, b_min=0, b_max=1, clip=True),
-        *( [ScaleIntensityd(keys=["pet"], minv=0.0, maxv=1.0)] if use_pet else [] ),
         AsDiscreted(keys=["mask"], threshold=0.5, allow_missing_keys=True),
 
         ExtractSubVolumed(keys=val_keys, num_slices=depth_size, allow_missing_keys=True),
@@ -304,7 +292,7 @@ def get_train_transforms_3d(
         Resized(
             keys=val_keys, 
             spatial_size=(img_size, img_size, depth_size), 
-            mode=["trilinear", "nearest"] + (["trilinear"] if use_pet else []),
+            mode=["trilinear", "nearest"],
             allow_missing_keys=True
         ),
         
@@ -313,31 +301,30 @@ def get_train_transforms_3d(
         RandFlipd(keys=val_keys, prob=0.5, spatial_axis=2, allow_missing_keys=True),
 
         # Round 3: stronger affine to synthesize more anatomic diversity than the
-        # ~26 SCLC train patients naturally provide. Applied to image/mask/pet
-        # jointly so spatial correspondence stays intact.
+        # ~26 SCLC train patients naturally provide. Applied jointly to
+        # image+mask so spatial correspondence stays intact.
         RandAffined(
             keys=val_keys,
             prob=0.5,
             rotate_range=(0.1, 0.1, 0.1),       # ~5.7 deg on each axis
             translate_range=(8, 8, 4),
             scale_range=(0.1, 0.1, 0.1),
-            mode=["bilinear", "nearest"] + (["bilinear"] if use_pet else []),
+            mode=["bilinear", "nearest"],
             padding_mode="zeros",
             allow_missing_keys=True,
         ),
 
         # Intensity augmentations: raised prob from 0.3 → 0.5 per Round 3 plan.
-        RandScaleIntensityd(keys=["image"] + (["pet"] if use_pet else []), factors=0.1, prob=0.5),
-        RandShiftIntensityd(keys=["image"] + (["pet"] if use_pet else []), offsets=0.1, prob=0.5),
-        RandGaussianNoised(keys=["image"] + (["pet"] if use_pet else []), prob=0.3, mean=0.0, std=0.01),
+        RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
+        RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
+        RandGaussianNoised(keys=["image"], prob=0.3, mean=0.0, std=0.01),
 
         # Round 3 included RandCoarseDropoutd here. Removed in Round 4: on sparse
         # tumors a 20x20x10 cutout can erase the lesion outright, which was the
         # main suspect for why Round 3 under-fit (train F1 stuck at ~0.44).
 
-        NormalizeIntensityd(keys=["image"] + (["pet"] if use_pet else []), nonzero=True, channel_wise=True),
-        
-        *( [ConcatItemsd(keys=["image", "pet"], name="image", dim=0)] if use_pet else [] ),
+        NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
+
         AddPlaceholderTargetsd(keys=["image"]),
         ToTensord(keys=["image", "mask"], allow_missing_keys=True),
     ]
@@ -347,15 +334,12 @@ def get_train_transforms_3d(
 def get_val_transforms_3d(
     img_size: int = 224,
     depth_size: int = 64,
-    use_pet: bool = False,
     use_lung_crop: bool = False,
 ) -> Compose:
     load_keys = ["image", "mask"]
-    if use_pet:
-        load_keys.append("pet")
 
     val_keys = list(load_keys)
-    spacing_modes = ["bilinear", "nearest"] + (["bilinear"] if use_pet else [])
+    spacing_modes = ["bilinear", "nearest"]
 
     transforms = [
         LoadNiftiWithRGBSupportd(keys=load_keys, allow_missing_keys=True),
@@ -363,9 +347,6 @@ def get_val_transforms_3d(
 
         # 1. Standardize Orientation (Must match train)
         Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
-
-        # Resample PET to perfectly match CT's affine coordinate grid
-        *( [ResampleToMatchd(keys="pet", key_dst="image")] if use_pet else [] ),
 
         # 2. Standardize Physical Voxel Spacing (Must match train)
         Spacingd(
@@ -376,7 +357,7 @@ def get_val_transforms_3d(
         ),
 
         # 2b. Lung-bbox crop (BigLunge only).
-        *( _build_lung_crop_transforms(val_keys, spacing_modes) if use_lung_crop else [] ),
+        *( _build_lung_crop_transforms(val_keys) if use_lung_crop else [] ),
 
         # Scale CT intensity to [0, 1] AND clip outliers
         ScaleIntensityRanged(
@@ -388,9 +369,6 @@ def get_val_transforms_3d(
             clip=True,
         ),
         
-        # Optional: scale PET as well (typically PET includes very high values)
-        *( [ScaleIntensityd(keys=["pet"], minv=0.0, maxv=1.0)] if use_pet else [] ),
-
         # Add allow_missing_keys=True here!
         AsDiscreted(keys=["mask"], threshold=0.5, allow_missing_keys=True),
 
@@ -401,13 +379,12 @@ def get_val_transforms_3d(
         Resized(
             keys=val_keys, 
             spatial_size=(img_size, img_size, depth_size), 
-            mode=["trilinear", "nearest"] + (["trilinear"] if use_pet else []),
+            mode=["trilinear", "nearest"],
             allow_missing_keys=True
         ),
         
-        NormalizeIntensityd(keys=["image"] + (["pet"] if use_pet else []), nonzero=True, channel_wise=True),
-        
-        *( [ConcatItemsd(keys=["image", "pet"], name="image", dim=0)] if use_pet else [] ),
+        NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
+
         AddPlaceholderTargetsd(keys=["image"]),
         
         # Add allow_missing_keys=True here!

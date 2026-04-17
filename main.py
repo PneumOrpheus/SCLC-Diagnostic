@@ -46,15 +46,22 @@ def parse_args():
     
     # Datasets
     parser.add_argument("--dapt-dataset", type=str, default="/home/data/Lung-PET-CT-Dx-Clean")
-    parser.add_argument("--pet-dir", type=str, default="/home/data/Lung-PET-CT-Dx_PET", help="Directory containing the PET NIfTI files")
-    parser.add_argument("--use-pet", action="store_true", default=False, help="Include PET as the second input channel")
     parser.add_argument("--finetune-dataset", type=str, default="/home/data/TrainingData")
     parser.add_argument("--finetune-csv", type=str, default="/home/data/TrainingData/patients_parameters.csv")
     
     # Checkpoints
-    parser.add_argument("--initial-checkpoint", type=str, default="", help="Path to initial checkpoint. Defaults to Swin UNETR BTCV if model-type is swin_unetr")
-    parser.add_argument("--pretrained-checkpoint", type=str, default="")
-    parser.add_argument("--model-checkpoint", type=str, default="")
+    parser.add_argument(
+        "--initial-checkpoint",
+        type=str,
+        default="",
+        help="Base initialization checkpoint. Defaults to Swin UNETR BTCV when model-type is swin_unetr.",
+    )
+    parser.add_argument(
+        "--model-checkpoint",
+        type=str,
+        default="",
+        help="Checkpoint to load in --mode finetune or --mode inference (e.g., best DAPT checkpoint).",
+    )
     
     # Hyperparameters
     parser.add_argument("--dapt-epochs", type=int, default=30)
@@ -88,7 +95,7 @@ def parse_args():
     parser.add_argument("--clear-cache", default=False, action="store_true",
                         help="Delete the MONAI PersistentDataset cache before building datasets")
     parser.add_argument("--anno", default=True, action="store_true", help="Use annotations for multi-task segmentation learning")
-    parser.add_argument("--depth-size", type=int, default=128, help="Depth size for the 3D images")
+    parser.add_argument("--depth-size", type=int, default=28, help="Depth size for the 3D images")
 
     return parser.parse_args()
 
@@ -103,8 +110,6 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
         convert_to_rgb=False,
         use_multichannel_windowing=False,
         num_workers=args.num_workers,
-        pet_dir=args.pet_dir if dataset_type == "lung_pet_ct_dx" else "",
-        use_pet=args.use_pet if dataset_type == "lung_pet_ct_dx" else False,
         use_3d=True,
         testing=args.testing,
         warm_cache=False,
@@ -267,7 +272,7 @@ def run_training_phase(
 
     monitor_window = max(1, int(monitor_window))
     phase_prefix = phase_name.lower().replace(' ', '_').replace('_phase', '')
-    stamp_day_month = datetime.now().strftime("%d_%m")
+    stamp_day_month = datetime.now().strftime("%h_%d_%m")
     # Keep phase in the model tag so DAPT/finetune checkpoints do not overwrite each other.
     model_tag = f"{model_type}_{phase_prefix}"
 
@@ -407,6 +412,11 @@ def main():
     logger = create_logger(output_dir=args.output_dir, dist_rank=-1, name=f"{args.model_type}")
     logger.info(f"Running {args.model_type} 3D Classification Pipeline")
     logger.info(f"Mode: {args.mode} | Testing: {args.testing} | Device: {device} | AMP: {not args.disable_amp}")
+    if args.model_checkpoint and args.mode in ["full", "dapt"]:
+        logger.warning(
+            "--model-checkpoint is ignored in modes 'full' and 'dapt'. "
+            "It is only used in modes 'finetune' and 'inference'."
+        )
     
     # Segmentation aux loss only flows gradient through SwinUNETR — the other
     # wrappers return a zero-tensor seg head with no graph connection, so the
@@ -418,8 +428,7 @@ def main():
             f"to swin_unetr or drop --anno."
         )
 
-    in_channels = 2 if getattr(args, "use_pet", False) else 1
-    model = get_sclc_model(args.initial_checkpoint, model_type=args.model_type, in_channels=in_channels, depth_size=args.depth_size).to(device)
+    model = get_sclc_model(args.initial_checkpoint, model_type=args.model_type, in_channels=1, depth_size=args.depth_size).to(device)
     num_params = sum(p.numel() for p in model.parameters())
     logger.info(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
     print(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
@@ -445,16 +454,16 @@ def main():
         
     # --- PHASE 2: FINETUNE ---
     if args.mode in ["full", "finetune"]:
-        if args.mode == "finetune" and args.pretrained_checkpoint:
-            model.load_state_dict(torch.load(args.pretrained_checkpoint, map_location=device))
-            logger.info(f"Loaded pretrained checkpoint from: {args.pretrained_checkpoint}")
+        if args.mode == "finetune" and args.model_checkpoint:
+            model.load_state_dict(torch.load(args.model_checkpoint, map_location=device))
+            logger.info(f"Loaded model checkpoint for fine-tuning: {args.model_checkpoint}")
         elif current_checkpoint and current_checkpoint != args.initial_checkpoint and os.path.isfile(current_checkpoint):
             # DAPT produced a checkpoint in full mode — load it.
             model.load_state_dict(torch.load(current_checkpoint, map_location=device))
             logger.info(f"Loaded DAPT checkpoint for fine-tuning: {current_checkpoint}")
         else:
             # No DAPT checkpoint — fine-tune from in-memory weights.
-            # In --mode finetune without --pretrained-checkpoint this means the
+            # In --mode finetune without --model-checkpoint this means the
             # model still has the initial backbone weights (e.g. BTCV) loaded by
             # get_sclc_model(), which is a valid starting point.
             logger.info("Fine-tuning from initial in-memory weights (no DAPT checkpoint).")

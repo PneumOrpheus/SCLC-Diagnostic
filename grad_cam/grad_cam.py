@@ -11,7 +11,7 @@ import nibabel as nib
 import numpy as np
 import torch
 import torch.nn as nn
-from monai.visualize import GradCAM
+from monai.visualize import GradCAMpp as GradCAM
 
 # Allow running this file directly: `python grad_cam/grad_cam.py ...`
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -83,23 +83,21 @@ def _save_nifti(volume: np.ndarray, out_path: str) -> None:
 	nib.save(nii, out_path)
 
 
+def _patient_name_from_image_path(image_path: str) -> str:
+	"""Return patient folder name from an input image path."""
+	parent_name = Path(image_path).resolve().parent.name.strip()
+	return parent_name if parent_name else "unknown_patient"
+
+
 def _build_input_tensor(
 	image_path: str,
-	use_pet: bool,
-	pet_path: str,
 	img_size: int,
 	depth_size: int,
 	device: torch.device,
 ) -> torch.Tensor:
-	transforms = get_val_transforms_3d(img_size=img_size, depth_size=depth_size, use_pet=use_pet)
+	transforms = get_val_transforms_3d(img_size=img_size, depth_size=depth_size)
 
 	data: Dict[str, Any] = {"image": image_path}
-	if use_pet:
-		if not pet_path:
-			raise ValueError("--use-pet requires --pet-path.")
-		if not os.path.isfile(pet_path):
-			raise ValueError(f"PET file does not exist: {pet_path}")
-		data["pet"] = pet_path
 
 	transformed = transforms(data)
 	image_tensor = transformed["image"]
@@ -118,14 +116,13 @@ def _build_input_tensor(
 def _load_trained_model(
 	checkpoint_path: str,
 	model_type: str,
-	in_channels: int,
 	depth_size: int,
 	device: torch.device,
 ) -> nn.Module:
 	model = get_sclc_model(
 		checkpoint_path="",
 		model_type=model_type,
-		in_channels=in_channels,
+		in_channels=1,
 		depth_size=depth_size,
 	)
 	ckpt = torch.load(checkpoint_path, map_location=device)
@@ -155,14 +152,15 @@ def use_grad_cam(
 	output_dir: Optional[str] = None,
 	img_size: int = 224,
 	depth_size: int = 128,
-	use_pet: bool = False,
-	pet_path: str = "",
 	alpha: float = 0.35,
 	device: Optional[str] = None,
 ) -> Dict[str, Any]:
 	"""Generate a 3D Grad-CAM heatmap via monai.visualize.GradCAM and save as NIfTI.
 
-	Outputs are saved in `output_dir` (default: this `grad_cam/` folder):
+	Outputs are saved in `output_dir/<patient_name>` where patient_name is inferred
+	from the parent folder of --image. Default root is `grad_cam/gradcam_output/`.
+
+	Saved files:
 	- preprocessed input volume
 	- grad-cam heatmap
 	- heatmap overlay on input
@@ -182,22 +180,20 @@ def use_grad_cam(
 		)
 
 	run_device = torch.device(device) if device else torch.device("cuda" if torch.cuda.is_available() else "cpu")
-	out_dir = Path(output_dir) if output_dir else Path(__file__).resolve().parent
+	output_root = Path(output_dir) if output_dir else (Path(__file__).resolve().parent / "gradcam_output")
+	patient_name = _patient_name_from_image_path(image_path)
+	out_dir = output_root / patient_name
 	out_dir.mkdir(parents=True, exist_ok=True)
 
-	in_channels = 2 if use_pet else 1
 	model = _load_trained_model(
 		checkpoint_path=checkpoint_path,
 		model_type=model_type,
-		in_channels=in_channels,
 		depth_size=depth_size,
 		device=run_device,
 	)
 
 	input_tensor = _build_input_tensor(
 		image_path=image_path,
-		use_pet=use_pet,
-		pet_path=pet_path,
 		img_size=img_size,
 		depth_size=depth_size,
 		device=run_device,
@@ -243,6 +239,7 @@ def use_grad_cam(
 	info = {
 		"image_path": image_path,
 		"checkpoint_path": checkpoint_path,
+		"patient_name": patient_name,
 		"model_type": model_type,
 		"target_layer": target,
 		"pred_class": pred_class,
@@ -265,6 +262,7 @@ def use_grad_cam(
 	print(f"  Predicted class: {pred_class} ({info['pred_label']})")
 	print(f"  Target class:    {target_class} ({info['target_label']})")
 	print(f"  Target layer:    {target}")
+	print(f"  Output folder:   {out_dir}")
 	print(f"  Saved heatmap:   {cam_out}")
 	print(f"  Saved overlay:   {overlay_out}")
 	print(f"  Saved input:     {preproc_out}")
@@ -287,14 +285,12 @@ def _parse_args() -> argparse.Namespace:
 	parser.add_argument("--target-layer", type=str, default=None, help="Override target layer path (must output a spatial tensor)")
 	parser.add_argument("--img-size", type=int, default=224, help="Input XY size used by transforms")
 	parser.add_argument("--depth-size", type=int, default=128, help="Input depth used by transforms")
-	parser.add_argument("--use-pet", action="store_true", help="Use PET as second channel")
-	parser.add_argument("--pet-path", type=str, default="", help="PET NIfTI path when --use-pet is enabled")
 	parser.add_argument("--alpha", type=float, default=0.35, help="Overlay blend factor (0..1)")
 	parser.add_argument(
 		"--output-dir",
 		type=str,
-		default=str(Path(__file__).resolve().parent),
-		help="Directory for saved NIfTI outputs (default: this grad_cam folder)",
+		default=str(Path(__file__).resolve().parent / "gradcam_output"),
+		help="Root directory for saved outputs; files are written to <output-dir>/<patient_name>/.",
 	)
 	parser.add_argument("--device", type=str, default=None, help="Torch device (e.g. cuda, cuda:0, cpu)")
 	return parser.parse_args()
@@ -311,8 +307,6 @@ def main() -> None:
 		output_dir=args.output_dir,
 		img_size=args.img_size,
 		depth_size=args.depth_size,
-		use_pet=args.use_pet,
-		pet_path=args.pet_path,
 		alpha=args.alpha,
 		device=args.device,
 	)

@@ -1,5 +1,4 @@
 import os
-import glob
 import pandas as pd
 import numpy as np
 import torch
@@ -55,10 +54,7 @@ def get_lung_pet_ct_dx_data_list(
     val_frac: float = 0.15,
     test_frac: float = 0.15,
     seed: int = 42,
-    pet_dir: str = "",
-    use_pet: bool = False,
     testing: bool = False,
-    img_size: int = 224,
     max_scans_per_patient: int = 2,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Build {split: data_list} dict with patient-level splitting for Lung-PET-CT-Dx."""
@@ -152,16 +148,6 @@ def get_lung_pet_ct_dx_data_list(
                 mask_path = patient_dir / f"{series_uid}_mask.nii.gz"
                 if mask_path.exists():
                     entry["mask"] = str(mask_path)
-                
-                # Check for PET if requested
-                if use_pet and pet_dir:
-                    # PET is {pet_dir}/{pid}_*.nii.gz
-                    pet_files = glob.glob(os.path.join(pet_dir, f"{pid}_*.nii.gz"))
-                    if pet_files:
-                        entry["pet"] = pet_files[0]
-                    else:
-                        # If use_pet is forced but this patient has no PET, skip this CT scan
-                        continue
                         
                 data_list.append(entry)
                 if testing and len(data_list) >= 12:
@@ -174,8 +160,7 @@ def get_lung_pet_ct_dx_data_list(
             class_counts[item["scan_label"]] = class_counts.get(item["scan_label"], 0) + 1
 
         mask_count = sum(1 for d in data_list if 'mask' in d)
-        pet_count = sum(1 for d in data_list if 'pet' in d)
-        print(f"  {len(data_list)} images ({mask_count} w/ masks, {pet_count} w/ PET), class distribution: {class_counts}")
+        print(f"  {len(data_list)} images ({mask_count} w/ masks), class distribution: {class_counts}")
 
         result[split] = data_list
         
@@ -289,8 +274,6 @@ def create_dataset(
     use_multichannel_windowing: bool = False,
     cache_dir: Optional[str] = None,
     num_workers: int = 4,
-    pet_dir: str = "",
-    use_pet: bool = False,
     use_3d: bool = False,
     testing: bool = False,
     warm_cache: bool = False,
@@ -316,7 +299,7 @@ def create_dataset(
     elif dataset_type == "lung_pet_ct_dx":
         all_splits = get_lung_pet_ct_dx_data_list(
             data_path=data_path, val_frac=val_frac, test_frac=test_frac, seed=seed,
-            pet_dir=pet_dir, use_pet=use_pet, testing=testing, img_size=img_size
+            testing=testing
         )
         cache_name = "monai_lung_pet_ct_clean"
     else:
@@ -339,12 +322,12 @@ def create_dataset(
             if split == "train":
                 transforms = get_train_transforms_3d(
                     img_size=img_size, depth_size=depth_size,
-                    use_pet=use_pet, use_lung_crop=use_lung_crop,
+                    use_lung_crop=use_lung_crop,
                 )
             else:
                 transforms = get_val_transforms_3d(
                     img_size=img_size, depth_size=depth_size,
-                    use_pet=use_pet, use_lung_crop=use_lung_crop,
+                    use_lung_crop=use_lung_crop,
                 )
 
 
@@ -379,7 +362,6 @@ def create_dataset(
             "seed": int(seed),
             "img_size": int(img_size),
             "depth_size": int(depth_size),
-            "use_pet": bool(use_pet),
             "split": split,
         }
 

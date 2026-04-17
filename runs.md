@@ -173,3 +173,54 @@ Notes:
 - Run the already-implemented `--mode finetune` (BTCV → BigLunge, no DAPT) to measure DAPT's actual contribution. If finetune-only matches or beats Round 5, DAPT on Adeno-heavy Lung-PET-CT-Dx is at best neutral for BigLunge transfer.
 - If continuing with DAPT, cap `--dapt-epochs` at ~20 and stop treating DAPT val F1 as a quality signal — use it only for picking *among* candidates, not as the goal.
 - Consider evaluating two or three DAPT checkpoints (e.g. the periodic ep10/ep20 saves plus the "best" one) through the same fine-tune and comparing downstream test scores. That is the only way to disentangle DAPT encoder quality from DAPT val noise.
+
+---
+
+## Round 7 — 2026-04-17 (finetune-only: BTCV → BigLunge, no DAPT)
+
+**Goal tested:** Does DAPT on Lung-PET-CT-Dx actually help BigLunge fine-tune, or is BTCV a strong enough starting point on its own? Uses the newly-wired `--mode finetune` standalone path.
+
+**Command used:**
+`python main.py --mode finetune`
+
+### SwinUNETR (`swin_unetr_2026-04-17_07_logs_finetune_only.txt`)
+- Starting weights: BTCV segmentation (`model_swin_unetr_btcv_segmentation_v1.pt`), loaded in-memory by `get_sclc_model()`
+- Fine-tune best checkpoint: `/home/data/trained_models/17_04_swin_unetr_finetune_best.pth`
+- Fine-tune val rolling-3 best: **0.4145 (epoch 1)** — peaks immediately, drifts down thereafter
+- Fine-tune val rolling-3 trajectory: ep1=0.4145, ep2=0.3941, ep3=0.3850, ep4=0.3784, ep5=0.3714, ep6=0.3514, ep7=0.3382, ep8=0.3463, ep9=0.3782, ep10=0.3970, ep11=0.3929
+- Train MacroF1: 0.26–0.38 band across all 11 epochs, no clear upward trend (peak 0.3676 at ep2)
+- Train/val loss both stuck at ~1.09–1.11 (3-class CE with label smoothing 0.1 has a floor near 1.03)
+- Early stopped at ep11 (10 epochs no rolling improvement since ep1)
+- Periodic ep10 checkpoint saved: `17_04_swin_unetr_finetune_epoch_10.pth`
+- **No test inference was run** — the current `--mode finetune` path ends after fine-tune without triggering the test loader
+
+### Analysis
+
+**Headline:** Inconclusive on the DAPT-vs-BTCV question, but revealing about the training dynamics.
+
+**Side-by-side with Round 5's fine-tune phase:**
+
+| | val rolling-3 best | best epoch | train F1 peak | n train batches | test F1 |
+|---|---|---|---|---|---|
+| Round 5 (DAPT → finetune) | 0.2980 | ep16 | ~0.44 | same loader | 0.4740 |
+| Round 7 (BTCV → finetune) | **0.4145** | **ep1** | ~0.38 | same loader | not measured |
+
+On the surface Round 7's val looks better. Read carefully and it's the opposite of a good training curve:
+- The **peak is at epoch 1**. The model's best state is essentially "BTCV backbone + a single-epoch-trained linear head." Nine more epochs of training make it slightly worse.
+- Train F1 never rises. There is no fitting signal — the optimizer is not meaningfully moving either the backbone (LR 3e-6) or the head.
+- Round 5's fine-tune, in contrast, actually learned: train F1 climbed to ~0.44 and val slowly approached its ep16 peak.
+
+Combined with the 32-sample val set (12 Adeno, 9 SCLC, 11 Squamous), the 0.4145 number is almost certainly **noise on a favourable random init of the head**, not a real advantage over DAPT. A single SCLC flip moves val F1 by ~3%.
+
+**What this run does establish:**
+1. The `--mode finetune` standalone path works end-to-end from BTCV weights — no key-mismatch errors, checkpoint saves, early stopping triggers correctly.
+2. The **differential LR is too conservative for a cold-start finetune.** With `backbone=3e-6, head=3e-5` the backbone is effectively frozen and the head saturates within one epoch. This LR schedule was tuned for the DAPT → finetune handoff (where the backbone has already seen the domain) and is not appropriate when starting from BTCV.
+3. The **test inference step is missing from the finetune-only path** — a gap in the current `main.py` control flow. Round 5's test F1 only exists because `--mode full` chains through inference; `--mode finetune` doesn't.
+
+**What this run does *not* establish:**
+- Whether DAPT helps or hurts downstream test performance. Without the test pass, the only comparable number is val F1 on a 32-sample set, which is too noisy to trust for small differences.
+
+**Suggested next steps (but hold until the ~300-patient BigLunge arrives):**
+- Add a test-inference pass to `--mode finetune`, or add a `--mode test --pretrained-checkpoint <path>` entry point, so this checkpoint can be scored on the same test split as Round 5.
+- If we do rerun the BTCV-vs-DAPT A/B on current data, raise the fine-tune backbone LR for the BTCV starting point (e.g. backbone=1e-5, head=1e-4) — otherwise we're not measuring "BTCV features" against "DAPT features," we're measuring "frozen BTCV + 1-epoch head" against "fully fine-tuned DAPT model."
+- With 32 val samples, tuning decisions on this split should have roughly the confidence interval of a coin flip. Defer the real A/B until the expanded BigLunge provides a val set where a ~0.03 F1 gap actually means something.

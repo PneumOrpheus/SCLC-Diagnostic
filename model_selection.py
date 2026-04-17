@@ -101,7 +101,6 @@ class ResNetClassifier(nn.Module):
         self.resnet = resnet50(
             pretrained=True,
             spatial_dims=3,
-            # If the input channels differ from 1, we cannot use the pre-trained. So we need to change if were going to use PET images.
             n_input_channels=1,
             feed_forward=False,
             shortcut_type="B",
@@ -244,17 +243,6 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
             state_dict = torch.load(checkpoint_path, map_location="cpu")
             if "state_dict" in state_dict:
                 state_dict = state_dict["state_dict"]
-            
-            # Handle in_channels mismatch gracefully for the first conv layer
-            if in_channels != 1 and "resnet.conv1.weight" in state_dict:
-                ckpt_weight = state_dict["resnet.conv1.weight"]
-                if ckpt_weight.shape[1] != in_channels:
-                    print(f"[*] Adapting resnet.conv1.weight from {ckpt_weight.shape[1]} to {in_channels} channels")
-                    new_weight = torch.zeros((ckpt_weight.shape[0], in_channels, *ckpt_weight.shape[2:]), dtype=ckpt_weight.dtype)
-                    new_weight[:, 0:1] = ckpt_weight  # Copy CT channel
-                    if in_channels > 1:
-                        new_weight[:, 1:] = ckpt_weight.mean(dim=1, keepdim=True).repeat(1, in_channels-1, 1, 1, 1) # duplicate/mean for PET
-                    state_dict["resnet.conv1.weight"] = new_weight
 
             missing, unexpected = model.resnet.load_state_dict(state_dict, strict=False)
             matched = len(state_dict) - len(unexpected)
@@ -268,17 +256,6 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
             state_dict = torch.load(checkpoint_path, map_location="cpu")
             if "state_dict" in state_dict:
                 state_dict = state_dict["state_dict"]
-            
-            # Handle in_channels mismatch gracefully for the first conv layer
-            if in_channels != 1 and "resnet.conv1.weight" in state_dict:
-                ckpt_weight = state_dict["resnet.conv1.weight"]
-                if ckpt_weight.shape[1] != in_channels:
-                    print(f"[*] Adapting resnet.conv1.weight from {ckpt_weight.shape[1]} to {in_channels} channels")
-                    new_weight = torch.zeros((ckpt_weight.shape[0], in_channels, *ckpt_weight.shape[2:]), dtype=ckpt_weight.dtype)
-                    new_weight[:, 0:1] = ckpt_weight
-                    if in_channels > 1:
-                        new_weight[:, 1:] = ckpt_weight.mean(dim=1, keepdim=True).repeat(1, in_channels-1, 1, 1, 1)
-                    state_dict["resnet.conv1.weight"] = new_weight
 
             missing, unexpected = model.resnet.load_state_dict(state_dict, strict=False)
             matched = len(state_dict) - len(unexpected)
@@ -342,18 +319,6 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
                     state_dict.pop('out.conv.conv.weight')
                 if 'out.conv.conv.bias' in state_dict:
                     state_dict.pop('out.conv.conv.bias')
-                    
-                # Handle in_channels mismatch gracefully (e.g. BTCV pretraining relies on 1 channel)
-                patch_embed_key = 'swinViT.patch_embed.proj.weight'
-                if in_channels != 1 and patch_embed_key in state_dict:
-                    ckpt_weight = state_dict[patch_embed_key]
-                    if ckpt_weight.shape[1] != in_channels:
-                        print(f"[*] Adapting {patch_embed_key} from {ckpt_weight.shape[1]} to {in_channels} channels")
-                        new_weight = torch.zeros((ckpt_weight.shape[0], in_channels, *ckpt_weight.shape[2:]), dtype=ckpt_weight.dtype)
-                        new_weight[:, 0:1] = ckpt_weight  # Copy CT channel
-                        if in_channels > 1:
-                            new_weight[:, 1:] = ckpt_weight.mean(dim=1, keepdim=True).repeat(1, in_channels-1, 1, 1, 1) # init PET channel
-                        state_dict[patch_embed_key] = new_weight
                         
                 missing, unexpected = model.swin_unetr.load_state_dict(state_dict, strict=False)
                 matched = len(state_dict) - len(unexpected)

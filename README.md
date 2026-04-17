@@ -8,7 +8,6 @@ End-to-end pipeline for:
 - **DAPT** on Lung-PET-CT-Dx to learn lung-CT-specific features
 - **Fine-tuning** on BigLunge for target classification
 - **3D volumetric preprocessing** with RAS reorientation, isotropic-ish resampling, HU windowing, and depth cropping around lesion masks when available
-- **Optional PET input** as a second channel (CT + PET co-registered)
 - **Optional auxiliary segmentation loss** when per-sample lesion masks are provided
 
 ### Target Classes
@@ -40,7 +39,7 @@ The model classifies CT scans into **3 lung cancer subtypes**, aligned across bo
 
 All wrappers expose `forward(x, return_segmentation=False)`. When `return_segmentation=True`, they return `(cls_logits, seg_logits)`; models without a native decoder return a zero-tensor mask so the training loop stays uniform. SwinUNETR uses its real decoder output for segmentation and a forward hook on `swinViT` for classification features, bypassing the decoder entirely on classification-only runs for speed.
 
-Checkpoint loading is tolerant: it strips `state_dict` / `module.` wrappers, drops mismatched final-layer keys, and adapts the first-conv / patch-embed weights when switching from 1 to 2 input channels (CT → CT+PET) by copying the CT channel and mean-initializing the PET channel.
+Checkpoint loading is tolerant: it strips `state_dict` / `module.` wrappers and drops mismatched final-layer keys.
 
 ### Training recipe
 
@@ -67,15 +66,13 @@ Defined in `data/transforms.py` (`get_train_transforms_3d` / `get_val_transforms
 
 1. `LoadNiftiWithRGBSupportd` — robust NIfTI loader handling structured RGB dtypes, 4D time-series, and degenerate shapes
 2. `EnsureChannelFirstd` + `Orientationd(axcodes="RAS")`
-3. `ResampleToMatchd` for PET → CT grid (when `--use-pet`)
-4. `Spacingd(pixdim=(1.5, 1.5, 2.0))`
-5. `ScaleIntensityRanged(a_min=-1024, a_max=3071)` on CT; `ScaleIntensityd` on PET
-6. `AsDiscreted(threshold=0.5)` on masks
-7. `ExtractSubVolumed` — crops `depth_size` slices centered on the lesion (uses mask extent when present, otherwise volume center)
-8. `Resized` to `(img_size, img_size, depth_size)` — default `224×224×128`
-9. **Train-only** augmentations: random flips on all 3 spatial axes (p=0.5 each), `RandScaleIntensityd` (±0.1, p=0.3), `RandShiftIntensityd` (±0.1, p=0.3)
-10. `NormalizeIntensityd(nonzero=True, channel_wise=True)`
-11. `ConcatItemsd` to fuse CT+PET into a 2-channel `image` when PET is enabled
+3. `Spacingd(pixdim=(1.5, 1.5, 2.0))`
+4. `ScaleIntensityRanged(a_min=-1024, a_max=3071)` on CT
+5. `AsDiscreted(threshold=0.5)` on masks
+6. `ExtractSubVolumed` — crops `depth_size` slices centered on the lesion (uses mask extent when present, otherwise volume center)
+7. `Resized` to `(img_size, img_size, depth_size)` — default `224×224×128`
+8. **Train-only** augmentations: random flips on all 3 spatial axes (p=0.5 each), `RandScaleIntensityd` (±0.1, p=0.3), `RandShiftIntensityd` (±0.1, p=0.3)
+9. `NormalizeIntensityd(nonzero=True, channel_wise=True)`
 
 Samples are cached with MONAI `PersistentDataset` under `~/.cache/{monai_biglunge|monai_lung_pet_ct_clean}/3d_img{SZ}_d{D}[_testing]/{split}/`. On the first run the loader validates every sample, stores the surviving list in `valid_data.json`, and silently drops unreadable volumes.
 
@@ -107,8 +104,6 @@ SCLC-Classification/
     ├── <series_uid>_image.nii.gz
     └── <series_uid>_mask.nii.gz        # optional, enables segmentation aux loss
 ```
-
-Optional PET (`--use-pet`) lives in a separate directory: `<pet-dir>/<patient_id>_*.nii.gz`. Patients without a PET file are skipped when PET is enabled.
 
 > Patient IDs containing `A` are Adenocarcinoma, `B` Small Cell Carcinoma, `G` Squamous Cell Carcinoma. IDs containing `E` (Large Cell) are excluded.
 
@@ -147,7 +142,7 @@ docker run --gpus all -it --rm \
 
 ### Data formats
 
-NIfTI (`.nii`, `.nii.gz`). Volumes should contain Hounsfield Units for CT. PET volumes are rescaled to `[0, 1]`.
+NIfTI (`.nii`, `.nii.gz`). Volumes should contain Hounsfield Units for CT.
 
 ## 💻 Usage
 
@@ -174,7 +169,7 @@ python main.py --mode dapt \
 
 ```bash
 python main.py --mode finetune \
-    --pretrained-checkpoint /path/to/best_swin_unetr_dapt_new.pth \
+    --model-checkpoint /path/to/best_swin_unetr_dapt_new.pth \
     --finetune-dataset /path/to/BigLunge/.../1 \
     --finetune-csv /path/to/BigLunge/patients_parameters.csv \
     --finetune-epochs 40 --finetune-lr 3e-5
@@ -188,16 +183,6 @@ python main.py --mode inference \
     --finetune-dataset /path/to/BigLunge/.../1 \
     --finetune-csv /path/to/BigLunge/patients_parameters.csv
 ```
-
-### Enabling PET (CT + PET two-channel input)
-
-```bash
-python main.py --mode full --use-pet \
-    --dapt-dataset /path/to/Lung-PET-CT-Dx-Clean \
-    --pet-dir /path/to/Lung-PET-CT-Dx_PET
-```
-
-The first-conv / patch-embed layer is automatically adapted from 1 → 2 channels when loading single-channel pretrained weights.
 
 ### Quick smoke test
 
@@ -223,8 +208,6 @@ python main.py --mode full --testing
 | Argument | Default | Description |
 |---|---|---|
 | `--dapt-dataset` | `/home/data/Lung-PET-CT-Dx-Clean` | DAPT dataset root |
-| `--pet-dir` | `/home/data/Lung-PET-CT-Dx_PET` | PET NIfTI directory |
-| `--use-pet` | `False` | Enable CT+PET 2-channel input |
 | `--finetune-dataset` | `/home/data/BigLunge/pre_formatting_ws_iso1.0mm_croplungs_bb/1` | Fine-tune dataset root |
 | `--finetune-csv` | `/home/data/BigLunge/patients_parameters.csv` | BigLunge labels CSV |
 
@@ -233,8 +216,7 @@ python main.py --mode full --testing
 | Argument | Description |
 |---|---|
 | `--initial-checkpoint` | Initial backbone weights. Defaults to `/home/data/temp/model_swin_unetr_btcv_segmentation_v1.pt` when `--model-type swin_unetr` |
-| `--pretrained-checkpoint` | DAPT checkpoint to load in `finetune` mode |
-| `--model-checkpoint` | Final model checkpoint for `inference` mode |
+| `--model-checkpoint` | Checkpoint to load in `finetune` or `inference` mode |
 | `--checkpoint-dir` | `/home/data/trained_models` | Where best/periodic checkpoints are saved |
 
 #### Training hyperparameters
