@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -9,6 +10,12 @@ import nibabel as nib
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from grad_cam.colorize import colorize_heatmap, colorize_overlay, save_rgb_nifti
 
 
 DEFAULT_PATIENT_DIR = "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0043"
@@ -73,58 +80,67 @@ def _elliptical_gaussian(shape: Tuple[int, int, int], center: Tuple[float, float
     return (gx * gy * gz).astype(np.float32)
 
 
+def _connected_components(mask_bin: np.ndarray) -> List[np.ndarray]:
+    """Return a list of boolean 3D arrays, one per connected component."""
+    try:
+        from scipy.ndimage import label as ndi_label  # type: ignore
+    except ImportError:
+        return [mask_bin > 0] if mask_bin.any() else []
+    labeled, n_lab = ndi_label(mask_bin > 0)
+    return [(labeled == i) for i in range(1, int(n_lab) + 1)]
+
+
 def _build_mock_gradcam(ct: np.ndarray, mask: np.ndarray, rng: np.random.Generator) -> Tuple[np.ndarray, Dict[str, float]]:
+    """Mock a Grad-CAM-looking heatmap:
+      - One ellipsoidal Gaussian blob per connected component of ``mask``, sized
+        from the component's bbox so the FWHM roughly matches the lesion.
+      - Low-frequency noise modulation so the blob has organic, wavy edges
+        instead of a textbook ellipse.
+      - Body-mask gating so intensity stays inside the patient.
+    The old blurred-bbox terms are dropped entirely — they were the reason the
+    output looked rectangular, because bbox masks are axis-aligned boxes.
+    """
     ct_norm = _robust_norm_ct(ct)
     mask_bin = (mask > 0.5).astype(np.float32)
+    total_mask_voxels = float(mask_bin.sum())
 
-    has_mask = float(mask_bin.sum()) > 0.0
-    if has_mask:
-        nz = np.argwhere(mask_bin > 0.0)
-        mins = nz.min(axis=0)
-        maxs = nz.max(axis=0)
-        extents = np.maximum((maxs - mins + 1).astype(np.float32), 1.0)
-        center = nz.mean(axis=0).astype(np.float32)
+    cam = np.zeros_like(ct_norm, dtype=np.float32)
+    blob_count = 0
 
-        sigma_xyz = (
-            max(6.0, float(extents[0] * 0.9)),
-            max(6.0, float(extents[1] * 0.9)),
-            max(4.0, float(extents[2] * 0.9)),
-        )
-
-        lesion_core = _gaussian_blur3d(mask_bin, sigma=2.2)
-        lesion_halo = _gaussian_blur3d(mask_bin, sigma=6.0)
-        center_bump = _elliptical_gaussian(mask_bin.shape, tuple(center.tolist()), sigma_xyz)
-
-        lesion_core = _norm_01(lesion_core)
-        lesion_halo = _norm_01(lesion_halo)
-        center_bump = _norm_01(center_bump)
+    if total_mask_voxels > 0.0:
+        for comp in _connected_components(mask_bin):
+            nz = np.argwhere(comp)
+            if nz.size == 0:
+                continue
+            mins = nz.min(axis=0).astype(np.float32)
+            maxs = nz.max(axis=0).astype(np.float32)
+            extents = np.maximum((maxs - mins + 1), 3.0)
+            center = nz.mean(axis=0).astype(np.float32)
+            # sigma ~ 0.55 * extent makes the blob ~lesion-sized at its FWHM
+            # while fading smoothly outside — same order across X/Y/Z so the
+            # blob is near-spherical when extents are isotropic.
+            sigma_xyz = tuple(float(max(4.0, e * 0.55)) for e in extents)
+            blob = _elliptical_gaussian(mask_bin.shape, tuple(center.tolist()), sigma_xyz)
+            cam = np.maximum(cam, blob)
+            blob_count += 1
     else:
-        # Fallback for missing masks: make a plausible central hotspot.
+        # No mask: drop a plausible central hotspot so the mock still renders.
         shape = np.array(ct_norm.shape, dtype=np.float32)
-        center = shape * np.array([0.52, 0.48, 0.50], dtype=np.float32)
-        sigma_xyz = (shape[0] * 0.10, shape[1] * 0.10, shape[2] * 0.12)
-        center_bump = _elliptical_gaussian(ct_norm.shape, tuple(center.tolist()), sigma_xyz)
-        lesion_core = _norm_01(center_bump)
-        lesion_halo = _norm_01(_gaussian_blur3d(center_bump, sigma=5.0))
+        center = tuple((shape * np.array([0.52, 0.48, 0.50])).tolist())
+        sigma_xyz = tuple(float(s * 0.10) for s in shape)
+        cam = _elliptical_gaussian(ct_norm.shape, center, sigma_xyz)
 
-    # Keep attention inside patient/body region and near lesion context.
+    # Body mask keeps attention inside the patient silhouette.
     body_mask = (ct > np.percentile(ct, 5.0)).astype(np.float32)
     body_soft = _norm_01(_gaussian_blur3d(body_mask, sigma=2.0))
 
-    # Add realistic texture so it looks like model attention, not a perfect blob.
-    texture = rng.normal(loc=0.0, scale=0.06, size=ct_norm.shape).astype(np.float32)
-    texture = _gaussian_blur3d(texture, sigma=1.0)
+    # Low-frequency noise modulation: multiplies the blob by 1 ± ~35%, breaking
+    # the perfect-ellipse look without changing its rough circular footprint.
+    noise = rng.normal(loc=0.0, scale=1.0, size=ct_norm.shape).astype(np.float32)
+    noise = _gaussian_blur3d(noise, sigma=3.0)
+    noise = _norm_01(noise) - 0.5  # centered on 0, range ~[-0.5, 0.5]
+    cam = cam * (1.0 + 0.35 * noise)
 
-    # Slight preference for mid-high CT intensities around lesion surroundings.
-    ct_prior = np.clip(ct_norm ** 1.15, 0.0, 1.0)
-
-    cam = (
-        0.52 * lesion_core
-        + 0.28 * center_bump
-        + 0.12 * lesion_halo
-        + 0.08 * ct_prior * (0.3 + 0.7 * lesion_halo)
-    )
-    cam = cam + texture * np.clip(lesion_halo * 1.4, 0.0, 1.0)
     cam = cam * body_soft
     cam = np.clip(cam, 0.0, None)
     cam = _norm_01(cam)
@@ -133,7 +149,8 @@ def _build_mock_gradcam(ct: np.ndarray, mask: np.ndarray, rng: np.random.Generat
         "cam_mean": float(cam.mean()),
         "cam_max": float(cam.max()),
         "cam_q95": float(np.quantile(cam, 0.95)),
-        "mask_voxels": float(mask_bin.sum()),
+        "mask_voxels": total_mask_voxels,
+        "blobs": int(blob_count),
     }
     return cam.astype(np.float32), stats
 
@@ -200,16 +217,17 @@ def generate_mock_gradcam(
 
         cam, stats = _build_mock_gradcam(ct=ct, mask=mask, rng=rng)
         ct_norm = _robust_norm_ct(ct)
-        overlay = np.clip((1.0 - alpha) * ct_norm + alpha * cam, 0.0, 1.0)
 
         stem = _strip_nii_suffix(image_path)
         cam_out = output_dir / f"{stem}_mock_gradcam.nii.gz"
-        overlay_out = output_dir / f"{stem}_mock_overlay.nii.gz"
+        overlay_out = output_dir / f"{stem}_mock_overlay_rgb.nii.gz"
+        heatmap_out = output_dir / f"{stem}_mock_gradcam_rgb.nii.gz"
         ct_out = output_dir / f"{stem}_ct_norm.nii.gz"
 
         _save_like_reference(cam, ct_nii, cam_out)
-        _save_like_reference(overlay, ct_nii, overlay_out)
         _save_like_reference(ct_norm, ct_nii, ct_out)
+        save_rgb_nifti(colorize_heatmap(cam), heatmap_out, reference=ct_nii)
+        save_rgb_nifti(colorize_overlay(ct_norm, cam, alpha=alpha), overlay_out, reference=ct_nii)
 
         info = {
             "patient_dir": str(patient_dir),
@@ -221,7 +239,8 @@ def generate_mock_gradcam(
             "stats": stats,
             "outputs": {
                 "mock_gradcam": str(cam_out),
-                "mock_overlay": str(overlay_out),
+                "mock_gradcam_rgb": str(heatmap_out),
+                "mock_overlay_rgb": str(overlay_out),
                 "ct_norm": str(ct_out),
             },
         }
@@ -231,10 +250,11 @@ def generate_mock_gradcam(
             json.dump(info, f, indent=2)
 
         run_summary["series"].append(info)
-        written.extend([cam_out, overlay_out, ct_out, info_out])
+        written.extend([cam_out, heatmap_out, overlay_out, ct_out, info_out])
 
         print(f"[{idx + 1}/{len(pairs)}] Wrote mock Grad-CAM for {image_path.name}")
         print(f"  - {cam_out}")
+        print(f"  - {heatmap_out}")
         print(f"  - {overlay_out}")
         print(f"  - {ct_out}")
         print(f"  - {info_out}")

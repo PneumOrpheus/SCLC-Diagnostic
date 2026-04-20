@@ -19,6 +19,7 @@ if str(PROJECT_ROOT) not in sys.path:
 	sys.path.insert(0, str(PROJECT_ROOT))
 
 from data.transforms import get_val_transforms_3d
+from grad_cam.colorize import colorize_heatmap, colorize_overlay, save_rgb_nifti
 from model_selection import get_sclc_model
 
 
@@ -221,19 +222,20 @@ def use_grad_cam(
 	cam_np = heatmap[0, 0].detach().cpu().numpy()
 	base_np = input_tensor[0, 0].detach().cpu().numpy()
 	base_np = _normalize_np_01(base_np)
-	overlay_np = np.clip((1.0 - alpha) * base_np + alpha * cam_np, 0.0, 1.0)
 
 	probs = torch.softmax(logits.detach(), dim=1)
 
 	stem = _strip_nii_suffix(image_path)
 	cam_out = out_dir / f"{stem}_gradcam_target{target_class}_pred{pred_class}.nii.gz"
-	overlay_out = out_dir / f"{stem}_gradcam_overlay_target{target_class}_pred{pred_class}.nii.gz"
+	heatmap_rgb_out = out_dir / f"{stem}_gradcam_rgb_target{target_class}_pred{pred_class}.nii.gz"
+	overlay_out = out_dir / f"{stem}_gradcam_overlay_rgb_target{target_class}_pred{pred_class}.nii.gz"
 	preproc_out = out_dir / f"{stem}_preprocessed_input.nii.gz"
 	info_out = out_dir / f"{stem}_gradcam_info.json"
 
 	_save_nifti(cam_np, str(cam_out))
-	_save_nifti(overlay_np, str(overlay_out))
 	_save_nifti(base_np, str(preproc_out))
+	save_rgb_nifti(colorize_heatmap(cam_np), heatmap_rgb_out)
+	save_rgb_nifti(colorize_overlay(base_np, cam_np, alpha=alpha), overlay_out)
 
 	class_probs = probs[0].detach().cpu().tolist()
 	info = {
@@ -250,7 +252,8 @@ def use_grad_cam(
 		"logits": logits[0].detach().cpu().tolist(),
 		"saved_files": {
 			"gradcam": str(cam_out),
-			"overlay": str(overlay_out),
+			"gradcam_rgb": str(heatmap_rgb_out),
+			"overlay_rgb": str(overlay_out),
 			"preprocessed_input": str(preproc_out),
 		},
 	}

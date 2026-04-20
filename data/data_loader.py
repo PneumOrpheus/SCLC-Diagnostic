@@ -11,7 +11,12 @@ from monai.transforms import Compose
 from tqdm import tqdm
 import torchvision
 
-from data.transforms import get_train_transforms_3d, get_val_transforms_3d
+from data.transforms import (
+    get_train_transforms_3d,
+    get_val_transforms_3d,
+    get_train_transforms_2p5d,
+    get_val_transforms_2p5d,
+)
 
 from sklearn.model_selection import train_test_split
 
@@ -408,6 +413,207 @@ def create_dataset(
                 json.dump(current_meta, f, indent=2)
 
             # Recreate dataset using only the valid subset
+            ds = PersistentDataset(data=valid_data, transform=transforms, cache_dir=current_cache_dir)
+
+        datasets.append(ds)
+
+    return datasets[0], datasets[1], datasets[2]
+
+
+def get_biglunge_2p5d_data_list(
+    data_path: str,
+    csv_path: str,
+    tumor_mask_suffix: str = "_label_tumor.nii.gz",
+    val_frac: float = 0.15,
+    test_frac: float = 0.15,
+    seed: int = 42,
+    testing: bool = False,
+    require_tumor_mask: bool = True,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """BigLunge data list for the 2.5D pipeline.
+
+    Each entry has ``image`` (CT), ``tumor_mask`` (segmentation used for
+    centering the crop), ``scan_label``, ``patient_id``. Patients lacking a
+    tumor mask are dropped when ``require_tumor_mask=True``.
+    """
+    if not os.path.isdir(data_path):
+        raise ValueError(f"Data path '{data_path}' does not exist.")
+    if not os.path.isfile(csv_path):
+        raise ValueError(f"CSV '{csv_path}' does not exist.")
+
+    patient_labels = load_patient_labels(csv_path)
+    data_root = Path(data_path)
+    patient_folders = sorted(
+        e.name for e in data_root.iterdir()
+        if e.is_dir() and e.name in patient_labels
+    )
+
+    # Keep only patients that actually have a tumor mask on disk.
+    usable_patients: List[str] = []
+    for pid in patient_folders:
+        mask_path = data_root / pid / f"{pid}{tumor_mask_suffix}"
+        if mask_path.exists() or not require_tumor_mask:
+            usable_patients.append(pid)
+    dropped = len(patient_folders) - len(usable_patients)
+    if dropped:
+        print(f"[2.5D] Dropped {dropped} patients without tumor mask '{tumor_mask_suffix}'.")
+    if not usable_patients:
+        raise ValueError(
+            f"No patients with tumor masks found under '{data_path}' "
+            f"(expected suffix '{tumor_mask_suffix}')."
+        )
+
+    patient_classes = [patient_labels[pid] for pid in usable_patients]
+
+    val_test_frac = val_frac + test_frac
+    if val_test_frac > 0:
+        train_ids, temp_ids, _, temp_cls = train_test_split(
+            usable_patients, patient_classes,
+            test_size=val_test_frac, random_state=seed, stratify=patient_classes,
+        )
+        if test_frac > 0 and val_frac > 0:
+            test_ratio = test_frac / val_test_frac
+            val_ids, test_ids, _, _ = train_test_split(
+                temp_ids, temp_cls,
+                test_size=test_ratio, random_state=seed, stratify=temp_cls,
+            )
+        elif test_frac > 0:
+            val_ids, test_ids = [], temp_ids
+        else:
+            val_ids, test_ids = temp_ids, []
+    else:
+        train_ids, val_ids, test_ids = usable_patients, [], []
+
+    split_patients = {"train": train_ids, "val": val_ids, "test": test_ids}
+    result: Dict[str, List[Dict[str, Any]]] = {}
+    for split, selected in split_patients.items():
+        print(f"[2.5D] Split '{split}': {len(selected)} patients.")
+        data_list: List[Dict[str, Any]] = []
+        for pid in selected:
+            patient_dir = data_root / pid
+            if not patient_dir.is_dir():
+                continue
+            label = patient_labels[pid]
+            mask_path = patient_dir / f"{pid}{tumor_mask_suffix}"
+            for nii in patient_dir.glob("*.nii*"):
+                if "_label_" in nii.name:
+                    continue
+                entry: Dict[str, Any] = {
+                    "image": str(nii),
+                    "scan_label": label,
+                    "patient_id": pid,
+                }
+                if mask_path.exists():
+                    entry["tumor_mask"] = str(mask_path)
+                elif require_tumor_mask:
+                    continue
+                data_list.append(entry)
+                if testing and len(data_list) >= 32:
+                    break
+            if testing and len(data_list) >= 32:
+                break
+
+        class_counts: Dict[int, int] = {}
+        for item in data_list:
+            class_counts[item["scan_label"]] = class_counts.get(item["scan_label"], 0) + 1
+        print(f"  {len(data_list)} images, class distribution: {class_counts}")
+        result[split] = data_list
+
+    return result
+
+
+def create_dataset_2p5d(
+    data_path: str,
+    csv_path: str,
+    img_size: int = 96,
+    num_slices: int = 5,
+    tumor_mask_suffix: str = "_label_tumor.nii.gz",
+    cache_dir: Optional[str] = None,
+    val_frac: float = 0.15,
+    test_frac: float = 0.15,
+    seed: int = 42,
+    testing: bool = False,
+    warm_cache: bool = False,
+    require_tumor_mask: bool = True,
+) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
+    """Create train/val/test PersistentDatasets for the 2.5D, tumor-cropped
+    pipeline. Each sample yields ``image`` of shape (num_slices, img_size,
+    img_size) suitable for a 2D CNN with num_slices input channels.
+
+    Only BigLunge is supported here — the DAPT dataset has no tumor masks.
+    """
+    all_splits = get_biglunge_2p5d_data_list(
+        data_path=data_path, csv_path=csv_path,
+        tumor_mask_suffix=tumor_mask_suffix,
+        val_frac=val_frac, test_frac=test_frac, seed=seed,
+        testing=testing, require_tumor_mask=require_tumor_mask,
+    )
+    cache_name = "monai_biglunge_2p5d"
+
+    datasets: List[PersistentDataset] = []
+    for split in ("train", "val", "test"):
+        data_list = all_splits[split]
+        if split == "train":
+            transforms = get_train_transforms_2p5d(img_size=img_size, num_slices=num_slices)
+        else:
+            transforms = get_val_transforms_2p5d(img_size=img_size, num_slices=num_slices)
+
+        if cache_dir is None:
+            test_suffix = "_testing" if testing else ""
+            current_cache_dir = os.path.join(
+                os.path.expanduser("~"), ".cache", cache_name,
+                f"img{img_size}_n{num_slices}{test_suffix}", split,
+            )
+        else:
+            current_cache_dir = os.path.join(cache_dir, split)
+        os.makedirs(current_cache_dir, exist_ok=True)
+        print(f"[2.5D] PersistentDataset cache_dir='{current_cache_dir}'")
+
+        import json
+        valid_data_file = os.path.join(current_cache_dir, "valid_data.json")
+        meta_file = os.path.join(current_cache_dir, "meta.json")
+        current_meta = {
+            "pipeline": "2p5d",
+            "data_list_len": len(data_list),
+            "testing": bool(testing),
+            "val_frac": float(val_frac), "test_frac": float(test_frac),
+            "seed": int(seed),
+            "img_size": int(img_size), "num_slices": int(num_slices),
+            "tumor_mask_suffix": tumor_mask_suffix,
+            "split": split,
+        }
+
+        cached_meta = None
+        if os.path.exists(meta_file):
+            try:
+                with open(meta_file, "r") as f:
+                    cached_meta = json.load(f)
+            except Exception:
+                cached_meta = None
+        cache_valid = (
+            os.path.exists(valid_data_file)
+            and not warm_cache
+            and cached_meta == current_meta
+        )
+
+        if cache_valid:
+            with open(valid_data_file, "r") as f:
+                valid_data = json.load(f)
+            ds = PersistentDataset(data=valid_data, transform=transforms, cache_dir=current_cache_dir)
+        else:
+            ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=current_cache_dir)
+            valid_data = []
+            for i in tqdm(range(len(ds)), desc=f"Validating & Caching [2.5D {split}]", unit="img"):
+                try:
+                    _ = ds[i]
+                    valid_data.append(data_list[i])
+                except Exception as e:
+                    print(f"Failed sample ({data_list[i].get('image', 'N/A')}): {e}")
+            print(f"[2.5D {split}] Kept {len(valid_data)}/{len(data_list)} valid samples.")
+            with open(valid_data_file, "w") as f:
+                json.dump(valid_data, f)
+            with open(meta_file, "w") as f:
+                json.dump(current_meta, f, indent=2)
             ds = PersistentDataset(data=valid_data, transform=transforms, cache_dir=current_cache_dir)
 
         datasets.append(ds)

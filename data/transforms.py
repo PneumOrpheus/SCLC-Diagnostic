@@ -213,6 +213,113 @@ class ExtractSubVolumed(MapTransform):
                 
         return d
 
+class CropAroundTumord(MapTransform):
+    """Crop a fixed-size 3D patch centered on the tumor mask centroid.
+
+    - ``keys``: image/mask keys to crop identically.
+    - ``source_key``: tumor segmentation key used to locate the centroid.
+      Must share voxel grid with the image (so Load/Orientation/Spacing first).
+    - ``patch_size``: (X, Y, Z) voxels at the current (post-Spacingd) resolution.
+
+    If the tumor mask is empty or missing, falls back to the volume center.
+    Out-of-bounds regions are zero-padded so the output shape is always exact.
+    """
+
+    def __init__(
+        self,
+        keys: KeysCollection,
+        source_key: str,
+        patch_size: tuple = (96, 96, 16),
+        allow_missing_keys: bool = False,
+    ) -> None:
+        super().__init__(keys, allow_missing_keys)
+        self.source_key = source_key
+        self.patch_size = tuple(int(p) for p in patch_size)
+
+    def _centroid(self, mask) -> Optional[tuple]:
+        if mask is None:
+            return None
+        if isinstance(mask, torch.Tensor):
+            nz = torch.nonzero(mask > 0.5, as_tuple=False)
+            if nz.numel() == 0:
+                return None
+            coords = nz[:, -3:].float().mean(dim=0)
+            return int(coords[0]), int(coords[1]), int(coords[2])
+        arr = np.asarray(mask)
+        idx = np.argwhere(arr > 0.5)
+        if idx.size == 0:
+            return None
+        c = idx[:, -3:].mean(axis=0)
+        return int(c[0]), int(c[1]), int(c[2])
+
+    def _crop(self, vol, center):
+        px, py, pz = self.patch_size
+        cx, cy, cz = center
+        X, Y, Z = vol.shape[-3:]
+        sx, sy, sz = cx - px // 2, cy - py // 2, cz - pz // 2
+        ex, ey, ez = sx + px, sy + py, sz + pz
+        pad = [max(0, -sx), max(0, ex - X),
+               max(0, -sy), max(0, ey - Y),
+               max(0, -sz), max(0, ez - Z)]
+        sx_c, sy_c, sz_c = max(0, sx), max(0, sy), max(0, sz)
+        ex_c, ey_c, ez_c = min(X, ex), min(Y, ey), min(Z, ez)
+        out = vol[..., sx_c:ex_c, sy_c:ey_c, sz_c:ez_c]
+        if any(p > 0 for p in pad):
+            if isinstance(out, torch.Tensor):
+                # F.pad last-dim-first: (z_l, z_r, y_l, y_r, x_l, x_r)
+                out = F.pad(out, (pad[4], pad[5], pad[2], pad[3], pad[0], pad[1]))
+            else:
+                out = np.pad(
+                    out,
+                    ((0, 0), (pad[0], pad[1]), (pad[2], pad[3]), (pad[4], pad[5])),
+                    mode="constant",
+                )
+        return out
+
+    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
+        d: Dict[Hashable, Any] = dict(data)
+        center = self._centroid(d.get(self.source_key))
+        if center is None:
+            # fallback: geometric center of the first keyed volume
+            ref = None
+            for k in self.key_iterator(d):
+                ref = d[k]
+                break
+            if ref is None:
+                return d
+            X, Y, Z = ref.shape[-3:]
+            center = (X // 2, Y // 2, Z // 2)
+
+        crop_keys = list(self.key_iterator(d))
+        if self.source_key in d and self.source_key not in crop_keys:
+            crop_keys.append(self.source_key)
+        for k in crop_keys:
+            d[k] = self._crop(d[k], center)
+        return d
+
+
+class AxialSlicesAsChannelsd(MapTransform):
+    """Convert a (C=1, X, Y, Z) volume to a (Z, X, Y) 2.5D tensor.
+
+    The depth axis becomes the channel axis so a standard 2D CNN can consume
+    it. Assumes a single-channel input volume (CT).
+    """
+
+    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
+        d: Dict[Hashable, Any] = dict(data)
+        for key in self.key_iterator(d):
+            vol = d[key]
+            if isinstance(vol, torch.Tensor):
+                if vol.ndim == 4:  # (C, X, Y, Z)
+                    vol = vol[0]
+                d[key] = vol.permute(2, 0, 1).contiguous()
+            else:
+                if vol.ndim == 4:
+                    vol = vol[0]
+                d[key] = np.ascontiguousarray(np.transpose(vol, (2, 0, 1)))
+        return d
+
+
 def _build_lung_crop_transforms(
     img_keys: list,
 ):
@@ -386,8 +493,84 @@ def get_val_transforms_3d(
         NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
 
         AddPlaceholderTargetsd(keys=["image"]),
-        
+
         # Add allow_missing_keys=True here!
         ToTensord(keys=["image", "mask"], allow_missing_keys=True),
     ]
     return Compose(transforms)
+
+
+def _build_25d_pipeline(
+    img_size: int,
+    num_slices: int,
+    train: bool,
+) -> list:
+    """Shared 2.5D pipeline: load CT + tumor mask, spacing, tumor-centered crop,
+    intensity scale, resize XY, stack axial slices as channels.
+    """
+    load_keys = ["image", "tumor_mask"]
+
+    # Over-sample Z by ~4x so the crop has slack for random Z-jitter during
+    # training; in 2.5D we hand num_slices axial slices to the classifier.
+    patch_z = num_slices
+
+    transforms: list = [
+        LoadNiftiWithRGBSupportd(keys=load_keys, allow_missing_keys=True),
+        EnsureChannelFirstd(keys=load_keys, channel_dim="no_channel", allow_missing_keys=True),
+        Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
+        Spacingd(
+            keys=load_keys,
+            pixdim=(1.0, 1.0, 2.0),
+            mode=["bilinear", "nearest"],
+            allow_missing_keys=True,
+        ),
+        # Patch size (XY) is larger than final img_size so we can resize down
+        # (cheap anti-alias) and optionally random-crop during training.
+        CropAroundTumord(
+            keys=["image"],
+            source_key="tumor_mask",
+            patch_size=(int(img_size * 1.25), int(img_size * 1.25), patch_z),
+            allow_missing_keys=True,
+        ),
+        ScaleIntensityRanged(keys=["image"], a_min=-1024, a_max=3071, b_min=0, b_max=1, clip=True),
+        Resized(
+            keys=["image"],
+            spatial_size=(img_size, img_size, num_slices),
+            mode=["trilinear"],
+        ),
+    ]
+
+    if train:
+        transforms += [
+            RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
+            RandFlipd(keys=["image"], prob=0.5, spatial_axis=1),
+            RandAffined(
+                keys=["image"],
+                prob=0.5,
+                rotate_range=(0.0, 0.0, 0.26),   # ~15 deg in-plane only
+                translate_range=(8, 8, 0),
+                scale_range=(0.1, 0.1, 0.0),
+                mode="bilinear",
+                padding_mode="zeros",
+            ),
+            RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
+            RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
+            RandGaussianNoised(keys=["image"], prob=0.3, mean=0.0, std=0.01),
+        ]
+
+    transforms += [
+        NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
+        DeleteItemsd(keys=["tumor_mask"]),
+        AxialSlicesAsChannelsd(keys=["image"]),
+        AddPlaceholderTargetsd(keys=["image"]),
+        ToTensord(keys=["image"]),
+    ]
+    return transforms
+
+
+def get_train_transforms_2p5d(img_size: int = 96, num_slices: int = 5) -> Compose:
+    return Compose(_build_25d_pipeline(img_size=img_size, num_slices=num_slices, train=True))
+
+
+def get_val_transforms_2p5d(img_size: int = 96, num_slices: int = 5) -> Compose:
+    return Compose(_build_25d_pipeline(img_size=img_size, num_slices=num_slices, train=False))
