@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from monai.networks.nets import SwinUNETR, resnet50, resnet18, ViT, DenseNet121
+from monai.networks.nets import SwinUNETR, resnet50, resnet18, ViT, DenseNet121, EfficientNetBN
 import os
 import sys
 
@@ -235,7 +235,114 @@ class DenseNetClassifier(nn.Module):
             return cls_logits
 
 
-def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in_channels: int = 1, depth_size: int = 128) -> nn.Module:
+# Pipeline selection by model-type suffix.
+#   _2d   -> single axial slice containing tumor, 2D CNN (in_channels=1)
+#   _2p5d -> N adjacent axial slices as channels, 2D CNN
+#   else  -> full 3D volume
+TWO_P_FIVE_D_MODEL_TYPES = ("efficientnet_b0_2p5d",)
+TWO_D_MODEL_TYPES = ("efficientnet_b0_2d",)
+
+
+def is_2p5d_model_type(model_type: str) -> bool:
+    return model_type.lower() in TWO_P_FIVE_D_MODEL_TYPES
+
+
+def is_2d_model_type(model_type: str) -> bool:
+    return model_type.lower() in TWO_D_MODEL_TYPES
+
+
+def get_pipeline(model_type: str) -> str:
+    if is_2d_model_type(model_type):
+        return "2d"
+    if is_2p5d_model_type(model_type):
+        return "2p5d"
+    return "3d"
+
+
+class EfficientNet2DClassifier(nn.Module):
+    """2D classifier: one axial slice -> EfficientNet-B0 (ImageNet-pretrained).
+
+    The slice is fed single-channel; MONAI re-initializes the stem conv for
+    ``in_channels != 3`` and keeps the rest pretrained. Pure 2D baseline for
+    comparison against 2.5D and 3D.
+    """
+
+    def __init__(self, num_classes: int = 3):
+        super().__init__()
+        self.efficientnet = EfficientNetBN(
+            "efficientnet-b0",
+            pretrained=True,
+            spatial_dims=2,
+            in_channels=1,
+            num_classes=num_classes,
+        )
+
+    def forward(self, x, return_segmentation=False):
+        # Expected (B, 1, H, W). Collapse an accidental trailing depth dim.
+        if x.ndim == 5 and x.shape[-1] == 1:
+            x = x.squeeze(-1)
+        cls_logits = self.efficientnet(x)
+        if return_segmentation:
+            seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+            return cls_logits, seg_logits
+        return cls_logits
+
+
+class EfficientNet2p5DClassifier(nn.Module):
+    """2.5D classifier: MONAI EfficientNet-B0 (2D, ImageNet-pretrained) with
+    ``num_slices`` axial slices fed in as input channels. The first conv is
+    re-initialized for ``in_channels != 3`` but the rest of the network keeps
+    its pretrained weights, which is the standard 2.5D transfer setup.
+    """
+
+    def __init__(self, num_slices: int = 5, num_classes: int = 3):
+        super().__init__()
+        self.num_slices = int(num_slices)
+        self.efficientnet = EfficientNetBN(
+            "efficientnet-b0",
+            pretrained=True,
+            spatial_dims=2,
+            in_channels=self.num_slices,
+            num_classes=num_classes,
+        )
+
+    def forward(self, x, return_segmentation=False):
+        # x is (B, num_slices, H, W). If 3D upstream code accidentally hands us
+        # (B, C, D, H, W) with C=1, collapse D into the channel axis.
+        if x.ndim == 5 and x.shape[1] == 1:
+            x = x.squeeze(1)
+        cls_logits = self.efficientnet(x)
+        if return_segmentation:
+            # Spatial dims of x are (H, W) in 2.5D; mirror the 3D API by
+            # returning a zero seg tensor so the shared training loop works.
+            seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+            return cls_logits, seg_logits
+        return cls_logits
+
+
+def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in_channels: int = 1, depth_size: int = 128, num_slices: int = 5) -> nn.Module:
+    if model_type.lower() == "efficientnet_b0_2d":
+        model = EfficientNet2DClassifier(num_classes=3)
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            print(f"[*] Loading 2D checkpoint from {checkpoint_path}")
+            state_dict = torch.load(checkpoint_path, map_location="cpu")
+            if isinstance(state_dict, dict) and "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
+            missing, unexpected = model.load_state_dict(state_dict, strict=False)
+            matched = len(state_dict) - len(unexpected)
+            print(f"[*] Matched {matched}/{len(state_dict)} keys.")
+        return model
+    if model_type.lower() == "efficientnet_b0_2p5d":
+        model = EfficientNet2p5DClassifier(num_slices=num_slices, num_classes=3)
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            print(f"[*] Loading 2.5D checkpoint from {checkpoint_path}")
+            state_dict = torch.load(checkpoint_path, map_location="cpu")
+            if isinstance(state_dict, dict) and "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
+            missing, unexpected = model.load_state_dict(state_dict, strict=False)
+            matched = len(state_dict) - len(unexpected)
+            print(f"[*] Matched {matched}/{len(state_dict)} keys.")
+        return model
     if model_type.lower() == "resnet50":
         model = ResNetClassifier(in_channels=in_channels, num_classes=3)
         if checkpoint_path and os.path.exists(checkpoint_path):

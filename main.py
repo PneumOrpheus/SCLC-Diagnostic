@@ -15,9 +15,11 @@ import time
 from datetime import datetime
 from collections import Counter, deque
 
-from model_selection import get_sclc_model
+from model_selection import get_sclc_model, get_pipeline
 from training.train import simple_collate_fn, train_epoch, validate_epoch
-from data.data_loader import create_dataset
+from training.train_2d import simple_collate_fn_2d, train_epoch_2d, validate_epoch_2d
+from data.data_loader import create_dataset, create_dataset_2p5d
+from data.dataset_2d import create_dataset_2d
 from logger import create_logger
 
 
@@ -39,8 +41,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description="SCLC Simplified 3D Classification Pipeline")
     
     # Mode selection
-    parser.add_argument("--model-type", type=str, default="swin_unetr", choices=["swin_unetr", "resnet50", "resnet18", "densenet121", "models_genesis"],
-                        help="Model architecture to use")
+    parser.add_argument("--model-type", type=str, default="swin_unetr",
+                        choices=["swin_unetr", "resnet50", "resnet18", "densenet121", "models_genesis",
+                                 "efficientnet_b0_2p5d", "efficientnet_b0_2d"],
+                        help="Model architecture to use. '_2d' uses the per-slice 2D pipeline; "
+                             "'_2p5d' uses the 2.5D tumor-cropped pipeline; others use the full 3D pipeline.")
     parser.add_argument("--mode", type=str, default="full", choices=["full", "dapt", "finetune", "inference"],
                         help="Pipeline mode")
     
@@ -73,7 +78,7 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--accumulation-steps", type=int, default=4, help="Gradient accumulation steps to increase effective batch size")
     parser.add_argument("--seg-loss-weight", type=float, default=0.1,
-                        help="Weight for auxiliary segmentation loss when --anno is enabled and masks exist.")
+                        help="Weight for the auxiliary segmentation loss (only active for SwinUNETR; ignored otherwise).")
     parser.add_argument("--weight-decay", type=float, default=1e-3) # Fine-tune weight decay
     parser.add_argument("--dapt-weight-decay", type=float, default=3e-3,
                         help="Weight decay for DAPT. Higher than fine-tune to combat scan-diversity overfitting. "
@@ -94,45 +99,84 @@ def parse_args():
     parser.add_argument("--testing", default=False, action="store_true", help="Run with a tiny subset for testing")
     parser.add_argument("--clear-cache", default=False, action="store_true",
                         help="Delete the MONAI PersistentDataset cache before building datasets")
-    parser.add_argument("--anno", default=True, action="store_true", help="Use annotations for multi-task segmentation learning")
-    parser.add_argument("--depth-size", type=int, default=28, help="Depth size for the 3D images")
+    parser.add_argument("--depth-size", type=int, default=128, help="Depth size for the 3D images (must be divisible by 32 for SwinUNETR)")
+
+    # 2.5D pipeline knobs
+    parser.add_argument("--num-slices", type=int, default=5,
+                        help="Number of axial slices stacked as channels for the 2.5D pipeline.")
+    parser.add_argument("--img-size-2p5d", type=int, default=96,
+                        help="In-plane size for the 2.5D tumor-centered crop.")
+    parser.add_argument("--tumor-mask-suffix", type=str, default="_label_tumor.nii.gz",
+                        help="Per-patient tumor mask suffix expected under the BigLunge patient folder.")
+
+    # 2D pipeline knobs
+    parser.add_argument("--img-size-2d", type=int, default=224,
+                        help="In-plane size for the 2D tumor-centered slice crop.")
+    parser.add_argument("--max-slices-per-volume", type=int, default=0,
+                        help="Cap tumor slices sampled per volume in the 2D pipeline (0 = no cap).")
 
     return parser.parse_args()
 
 
 def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64):
-    train_ds, val_ds, test_ds = create_dataset(
-        dataset_type=dataset_type,
-        data_path=data_path,
-        csv_path=csv_path,
-        img_size=224,
-        depth_size=depth_size,
-        convert_to_rgb=False,
-        use_multichannel_windowing=False,
-        num_workers=args.num_workers,
-        use_3d=True,
-        testing=args.testing,
-        warm_cache=False,
-    )
-    
+    pipeline = get_pipeline(args.model_type)
+    if pipeline == "2d":
+        max_slices = args.max_slices_per_volume if args.max_slices_per_volume and args.max_slices_per_volume > 0 else None
+        train_ds, val_ds, test_ds = create_dataset_2d(
+            data_path=data_path,
+            csv_path=csv_path,
+            dataset_type=dataset_type,
+            img_size=args.img_size_2d,
+            tumor_mask_suffix=args.tumor_mask_suffix,
+            max_slices_per_volume=max_slices,
+            testing=args.testing,
+        )
+        collate_fn = simple_collate_fn_2d
+    elif pipeline == "2p5d":
+        train_ds, val_ds, test_ds = create_dataset_2p5d(
+            data_path=data_path,
+            csv_path=csv_path,
+            dataset_type=dataset_type,
+            img_size=args.img_size_2p5d,
+            num_slices=args.num_slices,
+            tumor_mask_suffix=args.tumor_mask_suffix,
+            testing=args.testing,
+        )
+        collate_fn = simple_collate_fn
+    else:
+        train_ds, val_ds, test_ds = create_dataset(
+            dataset_type=dataset_type,
+            data_path=data_path,
+            csv_path=csv_path,
+            img_size=224,
+            depth_size=depth_size,
+            convert_to_rgb=False,
+            use_multichannel_windowing=False,
+            num_workers=args.num_workers,
+            use_3d=True,
+            testing=args.testing,
+            warm_cache=False,
+        )
+        collate_fn = simple_collate_fn
+
     if dataset_type == "lung_pet_ct_dx" and hasattr(train_ds, "data") and len(train_ds.data) > 0:
         print(f"Applying WeightedRandomSampler for highly imbalanced dataset: {dataset_type}")
         train_labels = [item["scan_label"] for item in train_ds.data]
         class_counts = Counter(train_labels)
         num_samples = len(train_labels)
-        
+
         # Invert class frequencies to create weights
         class_weights_dict = {cls: num_samples / count for cls, count in class_counts.items()}
         sample_weights = [class_weights_dict[label] for label in train_labels]
-        
+
         sampler = WeightedRandomSampler(weights=sample_weights, num_samples=num_samples, replacement=True)
         # Note: shuffle must be False when using a sampler
-        train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler, collate_fn=simple_collate_fn, num_workers=args.num_workers)
+        train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler, collate_fn=collate_fn, num_workers=args.num_workers)
     else:
-        train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, collate_fn=simple_collate_fn, num_workers=args.num_workers)
-        
-    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, collate_fn=simple_collate_fn, num_workers=args.num_workers)
-    test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, collate_fn=simple_collate_fn, num_workers=args.num_workers)
+        train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=args.num_workers)
+
+    val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn, num_workers=args.num_workers)
+    test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn, num_workers=args.num_workers)
 
     # Sanity: every class must be present in the training split.
     # This catches the "stale --testing cache froze training on 12 non-SCLC samples" bug loudly.
@@ -207,6 +251,8 @@ def run_training_phase(
     differential_lr: bool = False,
     backbone_lr_scale: float = 0.1,
     seg_loss_weight: float = 0.1,
+    train_fn=train_epoch,
+    validate_fn=validate_epoch,
 ):
     seg_loss_weight = max(0.0, float(seg_loss_weight))
 
@@ -309,19 +355,19 @@ def run_training_phase(
             logger.info(f"[{phase_name}] Epoch {epoch}/{epochs} | lr={current_lr:.2e}")
             print(f"\n--- {phase_name} Epoch {epoch}/{epochs} | lr={current_lr:.2e} ---")
         
-        train_loss, train_macro_f1 = train_epoch(
-            model=model, 
-            loader=train_loader, 
-            optimizer=optimizer, 
-            epoch=epoch, 
-            device=device, 
-            logger=logger, 
+        train_loss, train_macro_f1 = train_fn(
+            model=model,
+            loader=train_loader,
+            optimizer=optimizer,
+            epoch=epoch,
+            device=device,
+            logger=logger,
             scaler=scaler,
             use_segmentation=use_segmentation,
             accumulation_steps=accumulation_steps, # Pass down here
             seg_loss_weight=seg_loss_weight,
         )
-        val_metrics = validate_epoch(model, val_loader, device, logger)
+        val_metrics = validate_fn(model, val_loader, device, logger)
 
         for key in rolling_history:
             rolling_history[key].append(float(val_metrics[key]))
@@ -396,7 +442,11 @@ def main():
 
     if args.clear_cache:
         cache_root = os.path.join(os.path.expanduser("~"), ".cache")
-        for name in ("monai_lung_pet_ct_clean", "monai_biglunge"):
+        for name in (
+            "monai_lung_pet_ct_clean", "monai_biglunge",
+            "monai_lung_pet_ct_clean_2p5d", "monai_biglunge_2p5d",
+            "monai_lung_pet_ct_clean_2d", "monai_biglunge_2d",
+        ):
             path = os.path.join(cache_root, name)
             if os.path.isdir(path):
                 print(f"[--clear-cache] Removing {path}")
@@ -418,17 +468,26 @@ def main():
             "It is only used in modes 'finetune' and 'inference'."
         )
     
-    # Segmentation aux loss only flows gradient through SwinUNETR — the other
-    # wrappers return a zero-tensor seg head with no graph connection, so the
-    # --anno flag would silently do nothing. Warn loudly.
-    if args.anno and args.model_type != "swin_unetr":
-        logger.warning(
-            f"--anno is set but model_type={args.model_type} has no real segmentation "
-            f"decoder; mask supervision will have NO effect on training. Either switch "
-            f"to swin_unetr or drop --anno."
-        )
+    # Segmentation auxiliary loss is only meaningful for SwinUNETR (its decoder
+    # actually consumes the gradient); all other wrappers return a zero-tensor
+    # seg output. The 2.5D/2D EfficientNet paths have no seg output at all.
+    use_segmentation_loss = (args.model_type == "swin_unetr")
 
-    model = get_sclc_model(args.initial_checkpoint, model_type=args.model_type, in_channels=1, depth_size=args.depth_size).to(device)
+    # Pipeline dispatch: pick train/validate fns once for the whole run.
+    pipeline = get_pipeline(args.model_type)
+    if pipeline == "2d":
+        train_fn, validate_fn = train_epoch_2d, validate_epoch_2d
+    else:
+        train_fn, validate_fn = train_epoch, validate_epoch
+    logger.info(f"Pipeline: {pipeline} (model_type={args.model_type})")
+
+    model = get_sclc_model(
+        args.initial_checkpoint,
+        model_type=args.model_type,
+        in_channels=1,
+        depth_size=args.depth_size,
+        num_slices=args.num_slices,
+    ).to(device)
     num_params = sum(p.numel() for p in model.parameters())
     logger.info(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
     print(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
@@ -439,16 +498,17 @@ def main():
     if args.mode in ["full", "dapt"]:
         logger.info(f"Setting up DAPT Datasets from: {args.dapt_dataset}")
         train_loader, val_loader, test_loader = create_dataloaders(args, "lung_pet_ct_dx", args.dapt_dataset, depth_size=args.depth_size)
-        
+
         best_dapt_ckpt = run_training_phase(
-            model, train_loader, val_loader, device, 
+            model, train_loader, val_loader, device,
             args.dapt_epochs, args.dapt_lr, args.dapt_weight_decay, args.checkpoint_dir, logger,
             "dapt", scaler=scaler,
-            use_segmentation=args.anno, 
+            use_segmentation=use_segmentation_loss,
             accumulation_steps=args.accumulation_steps,
             model_type=args.model_type,
             monitor_window=args.monitor_rolling_window,
             seg_loss_weight=args.seg_loss_weight,
+            train_fn=train_fn, validate_fn=validate_fn,
         )
         current_checkpoint = best_dapt_ckpt
         
@@ -475,13 +535,14 @@ def main():
             model, train_loader, val_loader, device,
             args.finetune_epochs, args.finetune_lr, args.weight_decay, args.checkpoint_dir, logger,
             "finetune", scaler=scaler,
-            use_segmentation=args.anno,
+            use_segmentation=use_segmentation_loss,
             accumulation_steps=args.accumulation_steps,
             model_type=args.model_type,
             monitor_window=args.monitor_rolling_window,
             differential_lr=True,
             backbone_lr_scale=args.finetune_backbone_lr_scale,
             seg_loss_weight=args.seg_loss_weight,
+            train_fn=train_fn, validate_fn=validate_fn,
         )
         
     # --- PHASE 3: INFERENCE ---
@@ -509,7 +570,7 @@ def main():
                 
         if 'test_loader' in locals():
             logger.info("Running evaluation on the Test Set...")
-            test_metrics = validate_epoch(model, test_loader, device, logger, return_probabilities=True)
+            test_metrics = validate_fn(model, test_loader, device, logger, return_probabilities=True)
             logger.info(f"Final Test Set Accuracy: {test_metrics['accuracy']:.4f}")
 
             prob_payload = test_metrics.get("inference_probabilities")

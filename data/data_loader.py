@@ -522,9 +522,46 @@ def get_biglunge_2p5d_data_list(
     return result
 
 
+def get_lung_pet_ct_dx_2p5d_data_list(
+    data_path: str,
+    val_frac: float = 0.15,
+    test_frac: float = 0.15,
+    seed: int = 42,
+    testing: bool = False,
+    max_scans_per_patient: int = 2,
+    require_tumor_mask: bool = True,
+) -> Dict[str, List[Dict[str, Any]]]:
+    """Lung-PET-CT-Dx list for the 2.5D pipeline.
+
+    Reuses the 3D builder for split + class logic, then renames each entry's
+    ``mask`` key to ``tumor_mask`` so ``CropAroundTumord`` picks it up. Entries
+    without a mask are dropped when ``require_tumor_mask=True``.
+    """
+    base = get_lung_pet_ct_dx_data_list(
+        data_path=data_path, val_frac=val_frac, test_frac=test_frac,
+        seed=seed, testing=testing, max_scans_per_patient=max_scans_per_patient,
+    )
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for split, data_list in base.items():
+        kept: List[Dict[str, Any]] = []
+        for e in data_list:
+            if "mask" in e:
+                new_entry = {k: v for k, v in e.items() if k != "mask"}
+                new_entry["tumor_mask"] = e["mask"]
+                kept.append(new_entry)
+            elif not require_tumor_mask:
+                kept.append(dict(e))
+        dropped = len(data_list) - len(kept)
+        if dropped:
+            print(f"[2.5D lung_pet_ct_dx {split}] dropped {dropped} entries without a mask.")
+        out[split] = kept
+    return out
+
+
 def create_dataset_2p5d(
     data_path: str,
-    csv_path: str,
+    csv_path: str = "",
+    dataset_type: str = "big_lunge",
     img_size: int = 96,
     num_slices: int = 5,
     tumor_mask_suffix: str = "_label_tumor.nii.gz",
@@ -540,15 +577,29 @@ def create_dataset_2p5d(
     pipeline. Each sample yields ``image`` of shape (num_slices, img_size,
     img_size) suitable for a 2D CNN with num_slices input channels.
 
-    Only BigLunge is supported here — the DAPT dataset has no tumor masks.
+    Supported ``dataset_type``:
+      - ``"big_lunge"``: BigLunge patients with a per-patient ``{pid}{tumor_mask_suffix}``.
+      - ``"lung_pet_ct_dx"``: Lung-PET-CT-Dx with per-series ``{series}_mask.nii.gz``.
+        ``csv_path`` and ``tumor_mask_suffix`` are ignored in this mode.
     """
-    all_splits = get_biglunge_2p5d_data_list(
-        data_path=data_path, csv_path=csv_path,
-        tumor_mask_suffix=tumor_mask_suffix,
-        val_frac=val_frac, test_frac=test_frac, seed=seed,
-        testing=testing, require_tumor_mask=require_tumor_mask,
-    )
-    cache_name = "monai_biglunge_2p5d"
+    if dataset_type == "big_lunge":
+        if not csv_path:
+            raise ValueError("csv_path is required for dataset_type='big_lunge'.")
+        all_splits = get_biglunge_2p5d_data_list(
+            data_path=data_path, csv_path=csv_path,
+            tumor_mask_suffix=tumor_mask_suffix,
+            val_frac=val_frac, test_frac=test_frac, seed=seed,
+            testing=testing, require_tumor_mask=require_tumor_mask,
+        )
+        cache_name = "monai_biglunge_2p5d"
+    elif dataset_type == "lung_pet_ct_dx":
+        all_splits = get_lung_pet_ct_dx_2p5d_data_list(
+            data_path=data_path, val_frac=val_frac, test_frac=test_frac,
+            seed=seed, testing=testing, require_tumor_mask=require_tumor_mask,
+        )
+        cache_name = "monai_lung_pet_ct_clean_2p5d"
+    else:
+        raise ValueError(f"Unknown dataset_type for 2.5D: '{dataset_type}'.")
 
     datasets: List[PersistentDataset] = []
     for split in ("train", "val", "test"):

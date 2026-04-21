@@ -32,6 +32,7 @@ from monai.transforms import (
     Spacingd,
     CropForegroundd,
     DeleteItemsd,
+    SqueezeDimd,
 )
 from monai.data import MetaTensor
 
@@ -426,9 +427,6 @@ def get_train_transforms_3d(
         RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
         RandGaussianNoised(keys=["image"], prob=0.3, mean=0.0, std=0.01),
 
-        # Round 3 included RandCoarseDropoutd here. Removed in Round 4: on sparse
-        # tumors a 20x20x10 cutout can erase the lesion outright, which was the
-        # main suspect for why Round 3 under-fit (train F1 stuck at ~0.44).
 
         NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
 
@@ -574,3 +572,107 @@ def get_train_transforms_2p5d(img_size: int = 96, num_slices: int = 5) -> Compos
 
 def get_val_transforms_2p5d(img_size: int = 96, num_slices: int = 5) -> Compose:
     return Compose(_build_25d_pipeline(img_size=img_size, num_slices=num_slices, train=False))
+
+
+class SliceSelectd(MapTransform):
+    """Select a single axial slice (keeping a length-1 Z axis) from (C, X, Y, Z)
+    volumes. The slice index is read from ``slice_key`` on the sample dict.
+
+    Clamped to the volume's Z extent so entries built from a slightly different
+    orientation/spacing don't fail at runtime.
+    """
+
+    def __init__(
+        self,
+        keys: KeysCollection,
+        slice_key: str = "slice_idx",
+        allow_missing_keys: bool = False,
+    ) -> None:
+        super().__init__(keys, allow_missing_keys)
+        self.slice_key = slice_key
+
+    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
+        d: Dict[Hashable, Any] = dict(data)
+        if self.slice_key not in d:
+            raise KeyError(f"SliceSelectd: '{self.slice_key}' not found on sample.")
+        idx = int(d[self.slice_key])
+        for key in self.key_iterator(d):
+            vol = d[key]
+            Z = vol.shape[-1]
+            clamped = max(0, min(Z - 1, idx))
+            d[key] = vol[..., clamped:clamped + 1]
+        return d
+
+
+def _build_2d_pipeline(
+    img_size: int,
+    train: bool,
+) -> list:
+    """Shared 2D pipeline: load CT + tumor mask, spacing, pick the tumor slice
+    specified by ``slice_idx`` on the sample, crop in-plane around the 2D tumor
+    bbox in that slice, scale, resize, squeeze Z, augment, normalize.
+    """
+    load_keys = ["image", "tumor_mask"]
+    transforms: list = [
+        LoadNiftiWithRGBSupportd(keys=load_keys, allow_missing_keys=True),
+        EnsureChannelFirstd(keys=load_keys, channel_dim="no_channel", allow_missing_keys=True),
+        Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
+        Spacingd(
+            keys=load_keys,
+            pixdim=(1.0, 1.0, 2.0),
+            mode=["bilinear", "nearest"],
+            allow_missing_keys=True,
+        ),
+        # Pick the single axial slice of interest (volume stays 4D with Z=1 so
+        # the downstream 3D-style tumor crop can reuse CropAroundTumord).
+        SliceSelectd(keys=load_keys, slice_key="slice_idx", allow_missing_keys=True),
+        # In-plane crop around tumor bbox (Z=1 here — the crop is effectively 2D).
+        CropAroundTumord(
+            keys=["image"],
+            source_key="tumor_mask",
+            patch_size=(int(img_size * 1.25), int(img_size * 1.25), 1),
+            allow_missing_keys=True,
+        ),
+        ScaleIntensityRanged(keys=["image"], a_min=-1024, a_max=3071, b_min=0, b_max=1, clip=True),
+        Resized(
+            keys=["image"],
+            spatial_size=(img_size, img_size, 1),
+            mode=["trilinear"],
+        ),
+        # Drop the pseudo-Z axis and the mask. Downstream is (C=1, H, W).
+        SqueezeDimd(keys=["image"], dim=-1),
+        DeleteItemsd(keys=["tumor_mask"]),
+    ]
+
+    if train:
+        transforms += [
+            RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
+            RandFlipd(keys=["image"], prob=0.5, spatial_axis=1),
+            RandAffined(
+                keys=["image"],
+                prob=0.5,
+                rotate_range=(0.26,),          # ~15 deg in-plane
+                translate_range=(8, 8),
+                scale_range=(0.1, 0.1),
+                mode="bilinear",
+                padding_mode="zeros",
+            ),
+            RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
+            RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
+            RandGaussianNoised(keys=["image"], prob=0.3, mean=0.0, std=0.01),
+        ]
+
+    transforms += [
+        NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
+        AddPlaceholderTargetsd(keys=["image"]),
+        ToTensord(keys=["image"]),
+    ]
+    return transforms
+
+
+def get_train_transforms_2d(img_size: int = 224) -> Compose:
+    return Compose(_build_2d_pipeline(img_size=img_size, train=True))
+
+
+def get_val_transforms_2d(img_size: int = 224) -> Compose:
+    return Compose(_build_2d_pipeline(img_size=img_size, train=False))

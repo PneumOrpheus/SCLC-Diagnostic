@@ -1,0 +1,276 @@
+"""Training loop for the 2D per-slice pipeline.
+
+Key differences from the 3D/2.5D ``training/train.py`` loop:
+
+- No segmentation auxiliary loss (the 2D baseline is classification-only).
+- Each training sample is one axial slice; each volume contributes many slices.
+- Validation aggregates slice-level softmax probabilities per volume (mean),
+  then argmax, so the reported metrics are volume/patient-level — directly
+  comparable to the 3D and 2.5D pipelines.
+"""
+import time
+from typing import Any, Dict, List
+
+import numpy as np
+import torch
+import torch.nn as nn
+
+from training.train import (
+    AverageMeter,
+    CLASS_NAMES,
+    NUM_CLASSES,
+    _compute_classification_metrics,
+)
+
+
+def simple_collate_fn_2d(batch):
+    """Collate per-slice samples. Emits a 3-tuple so downstream code can tell
+    the 2D batches apart from the 2/3/4-tuple 3D/2.5D ones.
+
+    Returns
+    -------
+    images : (B, 1, H, W) float tensor
+    labels : (B,) long tensor
+    meta   : list[dict] with ``volume_id``, ``patient_id`` (if present) and
+             ``slice_idx`` for patient-level aggregation in validate.
+    """
+    images = torch.stack([item["image"] for item in batch], dim=0)
+    labels = torch.tensor([int(item["scan_label"]) for item in batch], dtype=torch.long)
+    meta: List[Dict[str, Any]] = []
+    for item in batch:
+        meta.append({
+            "volume_id": item.get("volume_id") or item.get("image"),
+            "patient_id": item.get("patient_id"),
+            "slice_idx": int(item.get("slice_idx", -1)),
+        })
+    return images, labels, meta
+
+
+def train_epoch_2d(
+    model,
+    loader,
+    optimizer,
+    epoch,
+    device,
+    logger,
+    scaler=None,
+    accumulation_steps: int = 1,
+    **_unused,  # keep a shared signature with train_epoch so run_training_phase can swap them
+):
+    model.train()
+    start_time = time.time()
+    run_loss = AverageMeter()
+    all_preds: List[int] = []
+    all_targets: List[int] = []
+
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    optimizer.zero_grad()
+
+    for idx, batch_data in enumerate(loader):
+        data, target, _ = batch_data
+        data, target = data.to(device), target.to(device)
+
+        with torch.amp.autocast(enabled=(scaler is not None), device_type="cuda"):
+            logits = model(data, return_segmentation=False)
+            loss = criterion(logits, target)
+
+            preds = torch.argmax(logits.detach(), dim=1)
+            all_preds.extend(preds.cpu().tolist())
+            all_targets.extend(target.detach().cpu().tolist())
+
+            unscaled_loss = loss.item()
+            loss = loss / accumulation_steps
+
+        if scaler is not None:
+            scaler.scale(loss).backward()
+        else:
+            loss.backward()
+
+        if (idx + 1) % accumulation_steps == 0 or (idx + 1) == len(loader):
+            if scaler is not None:
+                scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            if scaler is not None:
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                optimizer.step()
+            optimizer.zero_grad()
+
+        run_loss.update(unscaled_loss, n=data.size(0))
+
+        if (idx + 1) % 50 == 0 or (idx + 1) == len(loader):
+            msg = (
+                f"[2D] Epoch {epoch} [{idx + 1}/{len(loader)}] "
+                f"Loss: {run_loss.avg:.4f} Time: {time.time() - start_time:.2f}s"
+            )
+            print(msg)
+            logger.info(msg)
+            start_time = time.time()
+
+    metrics = _compute_classification_metrics(all_targets, all_preds)
+    summary = (
+        f"[2D] Train Epoch {epoch} (slice-level) => Loss: {run_loss.avg:.4f}, "
+        f"Acc: {metrics['accuracy']:.4f}, MacroF1: {metrics['macro_f1']:.4f}"
+    )
+    print(summary)
+    logger.info(summary)
+    return run_loss.avg, metrics["macro_f1"]
+
+
+@torch.no_grad()
+def validate_epoch_2d(model, loader, device, logger, return_probabilities: bool = False):
+    """Validate at volume level: mean softmax over a volume's slices, argmax.
+
+    Also reports slice-level metrics for sanity. The volume-level metrics are
+    the ones that matter — that's the comparable number vs. 3D/2.5D.
+    """
+    model.eval()
+    run_loss = AverageMeter()
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+
+    slice_preds: List[int] = []
+    slice_targets: List[int] = []
+
+    # per-volume accumulation
+    volume_prob_sum: Dict[str, np.ndarray] = {}
+    volume_slice_count: Dict[str, int] = {}
+    volume_label: Dict[str, int] = {}
+    volume_patient: Dict[str, Any] = {}
+
+    print("\n[2D] Starting validation...")
+    logger.info("[2D] Starting validation...")
+
+    for batch_data in loader:
+        data, target, meta = batch_data
+        data, target = data.to(device), target.to(device)
+        logits = model(data)
+        loss = criterion(logits, target)
+        run_loss.update(loss.item(), n=data.size(0))
+
+        probs = torch.softmax(logits, dim=1).cpu().numpy()
+        preds = probs.argmax(axis=1)
+        tgts = target.cpu().numpy()
+        slice_preds.extend(int(p) for p in preds)
+        slice_targets.extend(int(t) for t in tgts)
+
+        for i, m in enumerate(meta):
+            vid = m["volume_id"]
+            if vid not in volume_prob_sum:
+                volume_prob_sum[vid] = np.zeros(probs.shape[1], dtype=np.float64)
+                volume_slice_count[vid] = 0
+                volume_label[vid] = int(tgts[i])
+                volume_patient[vid] = m.get("patient_id")
+            volume_prob_sum[vid] += probs[i]
+            volume_slice_count[vid] += 1
+
+    volume_ids = list(volume_prob_sum.keys())
+    volume_preds: List[int] = []
+    volume_targets: List[int] = []
+    volume_probs: List[np.ndarray] = []
+    for vid in volume_ids:
+        mean_p = volume_prob_sum[vid] / max(1, volume_slice_count[vid])
+        volume_probs.append(mean_p)
+        volume_preds.append(int(mean_p.argmax()))
+        volume_targets.append(volume_label[vid])
+
+    slice_metrics = _compute_classification_metrics(slice_targets, slice_preds)
+    metrics = _compute_classification_metrics(volume_targets, volume_preds)
+    num_classes = metrics["num_classes"]
+
+    slice_msg = (
+        f"[2D] Val (slice-level, n={len(slice_targets)}) => "
+        f"Acc: {slice_metrics['accuracy']:.4f}, "
+        f"MacroF1: {slice_metrics['macro_f1']:.4f}"
+    )
+    val_msg = (
+        f"[2D] Val (volume-level, n={len(volume_targets)}) => Loss: {run_loss.avg:.4f}, "
+        f"Acc: {metrics['accuracy']:.4f}, BalancedAcc: {metrics['balanced_accuracy']:.4f}, "
+        f"MacroPrecision: {metrics['macro_precision']:.4f}, MacroRecall: {metrics['macro_recall']:.4f}, "
+        f"MacroF1: {metrics['macro_f1']:.4f}"
+    )
+    print(slice_msg); print(val_msg)
+    logger.info(slice_msg); logger.info(val_msg)
+
+    display_names = [
+        CLASS_NAMES[i] if i < len(CLASS_NAMES) else f"Class{i}"
+        for i in range(num_classes)
+    ]
+    for c in range(num_classes):
+        logger.info(
+            f"  [{display_names[c]:<16}] support={int(metrics['support'][c]):<4} "
+            f"precision={metrics['per_class_precision'][c]:.4f} "
+            f"recall={metrics['per_class_recall'][c]:.4f} "
+            f"f1={metrics['per_class_f1'][c]:.4f}"
+        )
+
+    # Confusion matrix (volume-level)
+    conf_matrix = metrics["conf_matrix"]
+    if len(volume_targets) > 0:
+        print("\n[2D] Volume-level Confusion Matrix:")
+        logger.info("\n[2D] Volume-level Confusion Matrix:")
+        header = f"{'True \\ Pred':<18}" + "".join([f"{display_names[j]:<16}" for j in range(num_classes)])
+        print(header); logger.info(header)
+        for i in range(num_classes):
+            row = f"Y:{display_names[i]:<16}" + "".join(f"{int(conf_matrix[i, j]):<16}" for j in range(num_classes))
+            print(row); logger.info(row)
+        print("")
+
+    result = {
+        "loss": run_loss.avg,
+        "accuracy": metrics["accuracy"],
+        "balanced_accuracy": metrics["balanced_accuracy"],
+        "macro_precision": metrics["macro_precision"],
+        "macro_recall": metrics["macro_recall"],
+        "macro_f1": metrics["macro_f1"],
+        "per_class_precision": metrics["per_class_precision"].tolist(),
+        "per_class_recall": metrics["per_class_recall"].tolist(),
+        "per_class_f1": metrics["per_class_f1"].tolist(),
+        "slice_level": {
+            "accuracy": slice_metrics["accuracy"],
+            "macro_f1": slice_metrics["macro_f1"],
+            "num_slices": len(slice_targets),
+        },
+    }
+
+    if return_probabilities:
+        samples = []
+        class_prob_sums = np.zeros(num_classes, dtype=np.float64)
+        pred_hist = np.zeros(num_classes, dtype=np.int64)
+        for i, vid in enumerate(volume_ids):
+            mean_p = volume_probs[i]
+            if mean_p.shape[0] != num_classes:
+                aligned = np.zeros(num_classes, dtype=np.float64)
+                n_copy = min(num_classes, mean_p.shape[0])
+                aligned[:n_copy] = mean_p[:n_copy]
+                mean_p = aligned
+            class_prob_sums += mean_p
+            pl = volume_preds[i]
+            if 0 <= pl < num_classes:
+                pred_hist[pl] += 1
+            samples.append({
+                "sample_index": i,
+                "volume_id": vid,
+                "patient_id": volume_patient.get(vid),
+                "num_slices": int(volume_slice_count[vid]),
+                "true_label": int(volume_targets[i]),
+                "true_name": display_names[int(volume_targets[i])] if 0 <= int(volume_targets[i]) < num_classes else f"Class{int(volume_targets[i])}",
+                "pred_label": int(volume_preds[i]),
+                "pred_name": display_names[int(volume_preds[i])] if 0 <= int(volume_preds[i]) < num_classes else f"Class{int(volume_preds[i])}",
+                "confidence": float(np.max(mean_p)) if mean_p.size > 0 else 0.0,
+                "probabilities": {display_names[c]: float(mean_p[c]) for c in range(num_classes)},
+            })
+        n = max(1, len(samples))
+        mean_probs_dict = {display_names[c]: float(class_prob_sums[c] / n) for c in range(num_classes)}
+        pred_counts_dict = {display_names[c]: int(pred_hist[c]) for c in range(num_classes)}
+        pred_fracs_dict = {display_names[c]: float(pred_hist[c] / n) for c in range(num_classes)}
+        result["inference_probabilities"] = {
+            "num_samples": len(samples),
+            "class_names": display_names,
+            "mean_probability_per_class": mean_probs_dict,
+            "predicted_class_counts": pred_counts_dict,
+            "predicted_class_fractions": pred_fracs_dict,
+            "samples": samples,
+        }
+
+    return result
