@@ -155,9 +155,9 @@ def get_lung_pet_ct_dx_data_list(
                     entry["mask"] = str(mask_path)
                         
                 data_list.append(entry)
-                if testing and len(data_list) >= 12:
+                if testing and len(data_list) >= 16:
                     break
-            if testing and len(data_list) >= 12:
+            if testing and len(data_list) >= 16:
                 break
                 
         class_counts: Dict[int, int] = {}

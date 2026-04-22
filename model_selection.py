@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from monai.networks.nets import SwinUNETR, resnet50, resnet18, ViT, DenseNet121, EfficientNetBN
+from monai.networks.nets import SwinUNETR, resnet50, resnet18, ViT, DenseNet121, EfficientNetBN, TorchVisionFCModel
 import os
 import sys
 
@@ -239,8 +239,18 @@ class DenseNetClassifier(nn.Module):
 #   _2d   -> single axial slice containing tumor, 2D CNN (in_channels=1)
 #   _2p5d -> N adjacent axial slices as channels, 2D CNN
 #   else  -> full 3D volume
-TWO_P_FIVE_D_MODEL_TYPES = ("efficientnet_b0_2p5d",)
-TWO_D_MODEL_TYPES = ("efficientnet_b0_2d",)
+TWO_P_FIVE_D_MODEL_TYPES = (
+    "efficientnet_b0_2p5d",
+    "densenet121_2p5d",
+)
+TWO_D_MODEL_TYPES = (
+    "efficientnet_b0_2d",
+    "densenet121_2d",
+    "resnet50_2d",
+)
+MIL_MODEL_TYPES = (
+    "mil_resnet50_2p5d",
+)
 
 
 def is_2p5d_model_type(model_type: str) -> bool:
@@ -251,7 +261,13 @@ def is_2d_model_type(model_type: str) -> bool:
     return model_type.lower() in TWO_D_MODEL_TYPES
 
 
+def is_mil_model_type(model_type: str) -> bool:
+    return model_type.lower() in MIL_MODEL_TYPES
+
+
 def get_pipeline(model_type: str) -> str:
+    if is_mil_model_type(model_type):
+        return "mil"
     if is_2d_model_type(model_type):
         return "2d"
     if is_2p5d_model_type(model_type):
@@ -278,10 +294,134 @@ class EfficientNet2DClassifier(nn.Module):
         )
 
     def forward(self, x, return_segmentation=False):
-        # Expected (B, 1, H, W). Collapse an accidental trailing depth dim.
-        if x.ndim == 5 and x.shape[-1] == 1:
-            x = x.squeeze(-1)
+        # The 2D pipeline outputs (B, 1, H, W).
+        # Fallback to catch accidental depth dimensions:
+        if x.ndim == 5:
+            # e.g., (B, 1, H, W, 1) -> (B, 1, H, W)
+            if x.shape[-1] == 1:
+                x = x.squeeze(-1)
+            # e.g., (B, 1, 1, H, W) -> (B, 1, H, W)
+            elif x.shape[2] == 1:
+                x = x.squeeze(2)
+        
         cls_logits = self.efficientnet(x)
+        if return_segmentation:
+            seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+            return cls_logits, seg_logits
+        return cls_logits
+
+
+class DenseNet2DClassifier(nn.Module):
+    """2D DenseNet121 (ImageNet-pretrained) for single-slice classification.
+    MONAI's DenseNet121 builds the classification head when ``out_channels``
+    equals the number of classes.
+    """
+
+    def __init__(self, num_classes: int = 3):
+        super().__init__()
+        self.densenet = DenseNet121(
+            spatial_dims=2,
+            in_channels=1,
+            out_channels=num_classes,
+            pretrained=True,
+        )
+
+    def forward(self, x, return_segmentation=False):
+        if x.ndim == 5:
+            if x.shape[-1] == 1:
+                x = x.squeeze(-1)
+            elif x.shape[2] == 1:
+                x = x.squeeze(2)
+        cls_logits = self.densenet(x)
+        if return_segmentation:
+            seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+            return cls_logits, seg_logits
+        return cls_logits
+
+
+class TorchVisionResNet2DClassifier(nn.Module):
+    """2D ResNet-50 wired via MONAI's TorchVisionFCModel with torchvision
+    ImageNet weights. MONAI's ``in_channels`` kwarg doesn't actually swap the
+    stem for torchvision backbones in this version, so we replace ``conv1``
+    ourselves and average the RGB pretrained weights across the 3 channel dim
+    (standard grayscale-transfer trick). FC head is replaced for ``num_classes``.
+    """
+
+    def __init__(self, num_classes: int = 3, model_name: str = "resnet50", in_channels: int = 1):
+        super().__init__()
+        self.backbone = TorchVisionFCModel(
+            model_name=model_name,
+            num_classes=num_classes,
+            dim=2,
+            pretrained=True,
+            pool=None,
+            use_conv=False,
+        )
+        if in_channels != 3:
+            self._adapt_stem(in_channels)
+
+    def _adapt_stem(self, in_channels: int) -> None:
+        # torchvision ResNet stores the stem as ``.features.0`` after
+        # MONAI's NetAdapter strips the FC head. Fall back to a recursive
+        # search so we also handle ResNet18/34 and similar if swapped in.
+        stem = None
+        stem_parent = None
+        stem_attr = None
+        for parent_name, parent in self.backbone.named_modules():
+            for attr, mod in parent.named_children():
+                if isinstance(mod, nn.Conv2d) and mod.in_channels == 3 and mod.kernel_size == (7, 7):
+                    stem = mod
+                    stem_parent = parent
+                    stem_attr = attr
+                    break
+            if stem is not None:
+                break
+        if stem is None:
+            raise RuntimeError("Could not locate 3-channel 7x7 stem conv to adapt.")
+        new_conv = nn.Conv2d(
+            in_channels, stem.out_channels,
+            kernel_size=stem.kernel_size, stride=stem.stride,
+            padding=stem.padding, bias=stem.bias is not None,
+        )
+        with torch.no_grad():
+            avg = stem.weight.mean(dim=1, keepdim=True)  # (out, 1, 7, 7)
+            new_conv.weight.copy_(avg.repeat(1, in_channels, 1, 1))
+            if stem.bias is not None:
+                new_conv.bias.copy_(stem.bias)
+        setattr(stem_parent, stem_attr, new_conv)
+
+    def forward(self, x, return_segmentation=False):
+        if x.ndim == 5:
+            if x.shape[-1] == 1:
+                x = x.squeeze(-1)
+            elif x.shape[2] == 1:
+                x = x.squeeze(2)
+        cls_logits = self.backbone(x)
+        if return_segmentation:
+            seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+            return cls_logits, seg_logits
+        return cls_logits
+
+
+class DenseNet2p5DClassifier(nn.Module):
+    """2.5D DenseNet121: ``num_slices`` axial slices stacked as input channels.
+    ImageNet-pretrained; stem conv is re-initialized for the new channel count.
+    """
+
+    def __init__(self, num_slices: int = 5, num_classes: int = 3):
+        super().__init__()
+        self.num_slices = int(num_slices)
+        self.densenet = DenseNet121(
+            spatial_dims=2,
+            in_channels=self.num_slices,
+            out_channels=num_classes,
+            pretrained=True,
+        )
+
+    def forward(self, x, return_segmentation=False):
+        if x.ndim == 5 and x.shape[1] == 1:
+            x = x.squeeze(1)
+        cls_logits = self.densenet(x)
         if return_segmentation:
             seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
             return cls_logits, seg_logits
@@ -325,6 +465,39 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
         model = EfficientNet2DClassifier(num_classes=3)
         if checkpoint_path and os.path.exists(checkpoint_path):
             print(f"[*] Loading 2D checkpoint from {checkpoint_path}")
+            state_dict = torch.load(checkpoint_path, map_location="cpu")
+            if isinstance(state_dict, dict) and "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
+            missing, unexpected = model.load_state_dict(state_dict, strict=False)
+            matched = len(state_dict) - len(unexpected)
+            print(f"[*] Matched {matched}/{len(state_dict)} keys.")
+        return model
+    if model_type.lower() == "densenet121_2d":
+        model = DenseNet2DClassifier(num_classes=3)
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            print(f"[*] Loading 2D checkpoint from {checkpoint_path}")
+            state_dict = torch.load(checkpoint_path, map_location="cpu")
+            if isinstance(state_dict, dict) and "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
+            missing, unexpected = model.load_state_dict(state_dict, strict=False)
+            matched = len(state_dict) - len(unexpected)
+            print(f"[*] Matched {matched}/{len(state_dict)} keys.")
+        return model
+    if model_type.lower() == "resnet50_2d":
+        model = TorchVisionResNet2DClassifier(num_classes=3, model_name="resnet50")
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            print(f"[*] Loading 2D checkpoint from {checkpoint_path}")
+            state_dict = torch.load(checkpoint_path, map_location="cpu")
+            if isinstance(state_dict, dict) and "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
+            missing, unexpected = model.load_state_dict(state_dict, strict=False)
+            matched = len(state_dict) - len(unexpected)
+            print(f"[*] Matched {matched}/{len(state_dict)} keys.")
+        return model
+    if model_type.lower() == "densenet121_2p5d":
+        model = DenseNet2p5DClassifier(num_slices=num_slices, num_classes=3)
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            print(f"[*] Loading 2.5D checkpoint from {checkpoint_path}")
             state_dict = torch.load(checkpoint_path, map_location="cpu")
             if isinstance(state_dict, dict) and "state_dict" in state_dict:
                 state_dict = state_dict["state_dict"]

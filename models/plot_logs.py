@@ -8,8 +8,15 @@ import matplotlib.pyplot as plt
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_ROOT = PROJECT_ROOT / "output"
-DEFAULT_LOG = "swin_unetr_2026-04-16_10_logs.txt"
+DEFAULT_ROOT = PROJECT_ROOT / "output/2d/"
+TXT_FILE = "resnet50_2d_2026-04-21_19_logs.txt"
+LOG_FOLDERS = ["densenet121_2d","resnet50_2d","efficientnet_b0_2d"]
+DEFAULT_LOG = None
+for folder in LOG_FOLDERS:
+    candidate = DEFAULT_ROOT / folder / TXT_FILE
+    if candidate.is_file():
+        DEFAULT_LOG = candidate
+        break
 
 FLOAT_RE = r"[-+]?\d*\.?\d+(?:[eE][-+]?\d+)?"
 
@@ -18,8 +25,24 @@ TRAIN_STEP_RE = re.compile(rf"\bEpoch\s+(\d+)\s+\[(\d+)/(\d+)\]\s+Loss:\s+({FLOA
 TRAIN_SUMMARY_RE = re.compile(
     rf"Train Epoch\s+(\d+)\s+Summary\s+=>\s+Loss:\s*({FLOAT_RE}),\s*Accuracy:\s*({FLOAT_RE})(?:,\s*MacroF1:\s*({FLOAT_RE}))?"
 )
+TRAIN_SUMMARY_2D_RE = re.compile(
+    rf"\[2D\]\s+Train Epoch\s+(\d+)\s+\(slice-level\)\s+=>\s+Loss:\s*({FLOAT_RE}),\s*Acc:\s*({FLOAT_RE}),\s*MacroF1:\s*({FLOAT_RE})",
+    re.IGNORECASE,
+)
 PHASE_SUMMARY_RE = re.compile(
-    rf"\[(dapt|finetune)\]\s+Epoch\s+(\d+)\s+Summary\s+=>\s+TrainLoss:\s*({FLOAT_RE})(?:,\s*TrainMacroF1:\s*({FLOAT_RE}),\s*ValMacroF1:\s*({FLOAT_RE})/({FLOAT_RE})\s*\(cur/roll\d+\))?",
+    rf"\[(dapt|finetune)\]\s+Epoch\s+(\d+)\s+Summary\s+=>\s+TrainLoss:\s*({FLOAT_RE})(?:,\s*TrainMacroF1:\s*({FLOAT_RE}),\s*ValMacroF1(?:\([^)]*\))?:\s*({FLOAT_RE})/({FLOAT_RE})\s*\(cur/roll\d+\))?",
+    re.IGNORECASE,
+)
+VAL_SLICE_RE = re.compile(
+    rf"\[2D\]\s+Val\s+\(slice-level,\s*n=\d+\)\s+=>\s+Acc:\s*({FLOAT_RE}),\s*MacroF1:\s*({FLOAT_RE})",
+    re.IGNORECASE,
+)
+VAL_VOLUME_RE = re.compile(
+    rf"\[2D\]\s+Val\s+\(volume-level,\s*n=\d+\)\s+=>\s+Loss:\s*({FLOAT_RE}),\s*Acc:\s*({FLOAT_RE}),\s*BalancedAcc:\s*({FLOAT_RE}),\s*MacroPrecision:\s*({FLOAT_RE}),\s*MacroRecall:\s*({FLOAT_RE}),\s*MacroF1:\s*({FLOAT_RE})",
+    re.IGNORECASE,
+)
+VAL_PATIENT_RE = re.compile(
+    rf"\[2D\]\s+Val\s+\(patient-level,\s*n=\d+\)\s+=>\s+Acc:\s*({FLOAT_RE}),\s*BalancedAcc:\s*({FLOAT_RE}),\s*MacroPrecision:\s*({FLOAT_RE}),\s*MacroRecall:\s*({FLOAT_RE}),\s*MacroF1:\s*({FLOAT_RE})",
     re.IGNORECASE,
 )
 VALID_RE = re.compile(
@@ -66,6 +89,8 @@ def parse_log(log_path: Path):
                 continue
 
             m_train_summary = TRAIN_SUMMARY_RE.search(line)
+            if m_train_summary is None:
+                m_train_summary = TRAIN_SUMMARY_2D_RE.search(line)
             if m_train_summary:
                 epoch = int(m_train_summary.group(1))
                 train_loss = float(m_train_summary.group(2))
@@ -90,6 +115,34 @@ def parse_log(log_path: Path):
                     rec["train_f1"] = float(m_phase_summary.group(4))
                 if m_phase_summary.group(5) is not None:
                     rec["val_f1"] = float(m_phase_summary.group(5))
+                continue
+
+            m_val_slice = VAL_SLICE_RE.search(line)
+            if m_val_slice and current_phase is not None and current_epoch is not None:
+                rec = ensure_record(current_phase, current_epoch)
+                rec["val_slice_acc"] = float(m_val_slice.group(1))
+                rec["val_slice_f1"] = float(m_val_slice.group(2))
+                continue
+
+            m_val_volume = VAL_VOLUME_RE.search(line)
+            if m_val_volume and current_phase is not None and current_epoch is not None:
+                rec = ensure_record(current_phase, current_epoch)
+                rec["val_loss"] = float(m_val_volume.group(1))
+                rec["val_acc"] = float(m_val_volume.group(2))
+                rec["val_balanced_acc"] = float(m_val_volume.group(3))
+                rec["val_precision"] = float(m_val_volume.group(4))
+                rec["val_recall"] = float(m_val_volume.group(5))
+                rec["val_f1"] = float(m_val_volume.group(6))
+                continue
+
+            m_val_patient = VAL_PATIENT_RE.search(line)
+            if m_val_patient and current_phase is not None and current_epoch is not None:
+                rec = ensure_record(current_phase, current_epoch)
+                rec["val_patient_acc"] = float(m_val_patient.group(1))
+                rec["val_patient_balanced_acc"] = float(m_val_patient.group(2))
+                rec["val_patient_precision"] = float(m_val_patient.group(3))
+                rec["val_patient_recall"] = float(m_val_patient.group(4))
+                rec["val_patient_f1"] = float(m_val_patient.group(5))
                 continue
 
             m_val = VALID_RE.search(line)
@@ -240,6 +293,8 @@ def main():
         raise RuntimeError("No plottable records found in log.")
 
     val_count = sum(1 for r in records if "val_acc" in r)
+    val_slice_count = sum(1 for r in records if "val_slice_acc" in r)
+    val_patient_count = sum(1 for r in records if "val_patient_acc" in r)
     train_loss_count = sum(1 for r in records if "train_loss" in r)
     train_acc_count = sum(1 for r in records if "train_acc" in r)
     train_f1_count = sum(1 for r in records if "train_f1" in r)
@@ -250,7 +305,9 @@ def main():
     print(f"Epoch records: {len(records)}")
     print(f"Train loss points: {train_loss_count}")
     print(f"Train accuracy points: {train_acc_count}")
+    print(f"Val slice accuracy points: {val_slice_count}")
     print(f"Val accuracy points: {val_count}")
+    print(f"Val patient accuracy points: {val_patient_count}")
     print(f"Train macro-F1 points: {train_f1_count}")
     print(f"Val macro-F1 points: {val_f1_count}")
     print(f"Val macro-recall points: {val_recall_count}")

@@ -15,12 +15,58 @@ import time
 from datetime import datetime
 from collections import Counter, deque
 
+try:
+    import yaml
+except ImportError:  # PyYAML is only needed when --config is used
+    yaml = None
+
 from model_selection import get_sclc_model, get_pipeline
 from training.train import simple_collate_fn, train_epoch, validate_epoch
 from training.train_2d import simple_collate_fn_2d, train_epoch_2d, validate_epoch_2d
 from data.data_loader import create_dataset, create_dataset_2p5d
 from data.dataset_2d import create_dataset_2d
 from logger import create_logger
+
+
+def _dump_effective_config(output_dir: str, args: argparse.Namespace, logger) -> str:
+    """Persist the fully-resolved argparse namespace (config + CLI merged) to
+    ``output_dir/effective_config.yaml``. Written at startup so even a crashed
+    run leaves behind a reproducible record of what it was about to do.
+    """
+    cfg = {k: v for k, v in vars(args).items() if not k.startswith("_")}
+    cfg["_meta"] = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "config_file": getattr(args, "config", "") or None,
+        "cwd": os.getcwd(),
+    }
+    out_path = os.path.join(output_dir, "effective_config.yaml")
+    try:
+        if yaml is not None:
+            with open(out_path, "w") as f:
+                yaml.safe_dump(cfg, f, sort_keys=True, default_flow_style=False)
+        else:
+            out_path = os.path.splitext(out_path)[0] + ".json"
+            with open(out_path, "w") as f:
+                json.dump(cfg, f, indent=2, default=str)
+    except Exception as e:
+        logger.warning(f"Failed to write effective config: {e}")
+        return ""
+    logger.info(f"Effective config written to: {out_path}")
+    return out_path
+
+
+def _append_metrics_row(metrics_path: str, row: Dict[str, Any]) -> None:
+    """Append one JSON object per line to ``metrics_path``. Flushing is
+    best-effort — a mid-run crash still leaves completed epochs on disk.
+    """
+    if not metrics_path:
+        return
+    try:
+        with open(metrics_path, "a") as f:
+            f.write(json.dumps(row, default=str) + "\n")
+    except Exception:
+        # Metrics logging must never take down training.
+        pass
 
 
 def _save_inference_probabilities(output_dir: str, model_type: str, payload: Dict[str, Any], logger) -> str:
@@ -37,13 +83,61 @@ def _save_inference_probabilities(output_dir: str, model_type: str, payload: Dic
     logger.info(f"Saved inference probabilities to: {out_path}")
     return out_path
 
+def _flatten_config(cfg: Any, out: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Flatten a nested YAML config into {dest_name: value}.
+
+    Nested sections are walked for their leaves; section names themselves are
+    discarded (grouping is cosmetic). Hyphenated keys are converted to
+    underscores so they match argparse ``dest`` names.
+    """
+    if out is None:
+        out = {}
+    if not isinstance(cfg, dict):
+        return out
+    for k, v in cfg.items():
+        if isinstance(v, dict):
+            _flatten_config(v, out)
+        else:
+            out[str(k).replace("-", "_")] = v
+    return out
+
+
+def _apply_config_to_parser(parser: argparse.ArgumentParser, config_path: str) -> Dict[str, Any]:
+    """Load YAML at ``config_path`` and push its leaves as argparse defaults.
+
+    Returns the flat dict that was applied so main() can log what came from
+    the config file. Keys that don't match any argparse dest are logged as a
+    warning (typos surface loud instead of silently doing nothing).
+    """
+    if yaml is None:
+        raise RuntimeError("PyYAML is required to use --config. Install with: pip install pyyaml")
+    if not os.path.isfile(config_path):
+        raise FileNotFoundError(f"--config path does not exist: {config_path}")
+    with open(config_path, "r") as f:
+        raw = yaml.safe_load(f) or {}
+    flat = _flatten_config(raw)
+    known_dests = {a.dest for a in parser._actions}
+    unknown = sorted(k for k in flat if k not in known_dests and k != "name" and k != "notes")
+    if unknown:
+        print(f"[config] WARNING: ignoring unknown keys in {config_path}: {unknown}", file=sys.stderr)
+    applied = {k: v for k, v in flat.items() if k in known_dests}
+    parser.set_defaults(**applied)
+    return applied
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="SCLC Simplified 3D Classification Pipeline")
-    
+
+    # Config file. Loaded before the main parse so CLI flags still override.
+    parser.add_argument("--config", type=str, default="",
+                        help="Path to a YAML experiment config. Values are applied as argparse defaults; "
+                             "any CLI flag given on the command line overrides the config.")
+
     # Mode selection
     parser.add_argument("--model-type", type=str, default="swin_unetr",
                         choices=["swin_unetr", "resnet50", "resnet18", "densenet121", "models_genesis",
-                                 "efficientnet_b0_2p5d", "efficientnet_b0_2d"],
+                                 "efficientnet_b0_2p5d", "densenet121_2p5d",
+                                 "efficientnet_b0_2d", "densenet121_2d", "resnet50_2d"],
                         help="Model architecture to use. '_2d' uses the per-slice 2D pipeline; "
                              "'_2p5d' uses the 2.5D tumor-cropped pipeline; others use the full 3D pipeline.")
     parser.add_argument("--mode", type=str, default="full", choices=["full", "dapt", "finetune", "inference"],
@@ -71,8 +165,14 @@ def parse_args():
     # Hyperparameters
     parser.add_argument("--dapt-epochs", type=int, default=30)
     parser.add_argument("--dapt-lr", type=float, default=1e-4)
+    parser.add_argument("--dapt-warmup-epochs", type=int, default=3,
+                        help="Linear warmup length for the DAPT phase. 0 disables.")
     parser.add_argument("--finetune-epochs", type=int, default=40)
     parser.add_argument("--finetune-lr", type=float, default=3e-5)
+    parser.add_argument("--finetune-warmup-epochs", type=int, default=2,
+                        help="Linear warmup length for the fine-tune phase. 0 disables.")
+    parser.add_argument("--warmup-start-lr", type=float, default=1e-6,
+                        help="Starting LR for linear warmup (ramps to the phase LR).")
     parser.add_argument("--finetune-backbone-lr-scale", type=float, default=0.1,
                         help="Backbone LR multiplier for fine-tune differential LR (backbone_lr = finetune_lr * scale).")
     parser.add_argument("--batch-size", type=int, default=2)
@@ -112,10 +212,26 @@ def parse_args():
     # 2D pipeline knobs
     parser.add_argument("--img-size-2d", type=int, default=224,
                         help="In-plane size for the 2D tumor-centered slice crop.")
-    parser.add_argument("--max-slices-per-volume", type=int, default=0,
-                        help="Cap tumor slices sampled per volume in the 2D pipeline (0 = no cap).")
+    parser.add_argument("--max-slices-per-volume", type=int, default=8,
+                        help="Cap tumor slices sampled per volume in the 2D pipeline (0 = no cap). "
+                             "Each uncapped slice triggers a full volume reload during cache build, so keep this small.")
+    parser.add_argument("--cache-workers", type=int, default=4,
+                        help="Parallel workers used when building the 2D/2.5D/3D PersistentDataset cache for the first time.")
 
-    return parser.parse_args()
+    # Two-pass parse: peek at --config first, apply it as defaults, then the
+    # real parse lets CLI flags override config values. This keeps a single
+    # source of truth for argument definitions (here), and makes YAML a thin
+    # "set a bunch of defaults" layer.
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument("--config", type=str, default="")
+    pre_args, _ = pre_parser.parse_known_args()
+    applied: Dict[str, Any] = {}
+    if pre_args.config:
+        applied = _apply_config_to_parser(parser, pre_args.config)
+
+    args = parser.parse_args()
+    args._config_applied = applied  # stashed so main() can log what came from the file
+    return args
 
 
 def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64):
@@ -130,6 +246,7 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
             tumor_mask_suffix=args.tumor_mask_suffix,
             max_slices_per_volume=max_slices,
             testing=args.testing,
+            cache_workers=args.cache_workers,
         )
         collate_fn = simple_collate_fn_2d
     elif pipeline == "2p5d":
@@ -159,8 +276,8 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
         )
         collate_fn = simple_collate_fn
 
-    if dataset_type == "lung_pet_ct_dx" and hasattr(train_ds, "data") and len(train_ds.data) > 0:
-        print(f"Applying WeightedRandomSampler for highly imbalanced dataset: {dataset_type}")
+    if hasattr(train_ds, "data") and len(train_ds.data) > 0:
+        print(f"Applying WeightedRandomSampler for {dataset_type}")
         train_labels = [item["scan_label"] for item in train_ds.data]
         class_counts = Counter(train_labels)
         num_samples = len(train_labels)
@@ -184,11 +301,16 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
         train_counts = Counter(int(item["scan_label"]) for item in train_ds.data)
         missing = [c for c in range(3) if train_counts.get(c, 0) == 0]
         if missing:
-            raise RuntimeError(
+            msg = (
                 f"[{dataset_type}] Training split is missing classes {missing}. "
-                f"Counts: {dict(train_counts)}. "
-                f"Refusing to train — clear the cache (--clear-cache) and check the data directory."
+                f"Counts: {dict(train_counts)}."
             )
+            if args.testing:
+                print(f"WARNING: {msg} Proceeding because --testing is enabled.")
+            else:
+                raise RuntimeError(
+                    msg + " Refusing to train — clear the cache (--clear-cache) and check the data directory."
+                )
         print(f"[{dataset_type}] Train class distribution: {dict(train_counts)}")
 
     return train_loader, val_loader, test_loader
@@ -253,6 +375,7 @@ def run_training_phase(
     seg_loss_weight: float = 0.1,
     train_fn=train_epoch,
     validate_fn=validate_epoch,
+    metrics_path: str = "",
 ):
     seg_loss_weight = max(0.0, float(seg_loss_weight))
 
@@ -369,40 +492,81 @@ def run_training_phase(
         )
         val_metrics = validate_fn(model, val_loader, device, logger)
 
+        patient_metrics = val_metrics.get("patient_level")
+        has_patient_metrics = isinstance(patient_metrics, dict)
+        monitor_source = patient_metrics if has_patient_metrics else val_metrics
+        monitor_level = "patient" if has_patient_metrics else "volume"
+
         for key in rolling_history:
-            rolling_history[key].append(float(val_metrics[key]))
+            if key == "loss":
+                rolling_history[key].append(float(val_metrics[key]))
+            else:
+                rolling_history[key].append(float(monitor_source.get(key, val_metrics[key])))
         rolling_metrics = {k: float(np.mean(v)) for k, v in rolling_history.items()}
 
-        raw_macro_f1 = float(val_metrics["macro_f1"])
+        raw_accuracy = float(monitor_source.get("accuracy", val_metrics["accuracy"]))
+        raw_balanced_accuracy = float(monitor_source.get("balanced_accuracy", val_metrics["balanced_accuracy"]))
+        raw_macro_precision = float(monitor_source.get("macro_precision", val_metrics["macro_precision"]))
+        raw_macro_recall = float(monitor_source.get("macro_recall", val_metrics["macro_recall"]))
+        raw_macro_f1 = float(monitor_source.get("macro_f1", val_metrics["macro_f1"]))
         rolling_macro_f1 = float(rolling_metrics["macro_f1"])
 
         train_val_msg = (
             f"[{phase_name}] Epoch {epoch} Summary => "
             f"TrainLoss: {train_loss:.4f}, TrainMacroF1: {train_macro_f1:.4f}, "
-            f"ValMacroF1: {raw_macro_f1:.4f}/{rolling_macro_f1:.4f} (cur/roll{monitor_window})"
+            f"ValMacroF1({monitor_level}): {raw_macro_f1:.4f}/{rolling_macro_f1:.4f} (cur/roll{monitor_window})"
         )
         print(train_val_msg)
         logger.info(train_val_msg)
 
         rolling_msg = (
-            f"[{phase_name}] Val current vs rolling-{monitor_window}: "
-            f"accuracy {val_metrics['accuracy']:.4f}/{rolling_metrics['accuracy']:.4f}, "
-            f"balanced_accuracy {val_metrics['balanced_accuracy']:.4f}/{rolling_metrics['balanced_accuracy']:.4f}, "
-            f"macro_precision {val_metrics['macro_precision']:.4f}/{rolling_metrics['macro_precision']:.4f}, "
-            f"macro_recall {val_metrics['macro_recall']:.4f}/{rolling_metrics['macro_recall']:.4f}, "
+            f"[{phase_name}] {monitor_level.capitalize()} current vs rolling-{monitor_window}: "
+            f"accuracy {raw_accuracy:.4f}/{rolling_metrics['accuracy']:.4f}, "
+            f"balanced_accuracy {raw_balanced_accuracy:.4f}/{rolling_metrics['balanced_accuracy']:.4f}, "
+            f"macro_precision {raw_macro_precision:.4f}/{rolling_metrics['macro_precision']:.4f}, "
+            f"macro_recall {raw_macro_recall:.4f}/{rolling_metrics['macro_recall']:.4f}, "
             f"macro_f1 {raw_macro_f1:.4f}/{rolling_macro_f1:.4f}"
         )
         print(rolling_msg)
         logger.info(rolling_msg)
-        
+
+        # Per-epoch metrics row for post-hoc plotting. Schema stays stable:
+        # one object per epoch, new pipelines append their extras inside
+        # val_patient / val_slice sub-objects rather than polluting the root.
+        row: Dict[str, Any] = {
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "phase": phase_name,
+            "epoch": epoch,
+            "model_type": model_type,
+            "lr_backbone": float(optimizer.param_groups[0]["lr"]),
+            "lr_head": float(optimizer.param_groups[1]["lr"]) if len(optimizer.param_groups) > 1 else None,
+            "train_loss": float(train_loss),
+            "train_macro_f1": float(train_macro_f1),
+            "val_loss": float(val_metrics["loss"]),
+            "val_accuracy": float(val_metrics["accuracy"]),
+            "val_balanced_accuracy": float(val_metrics["balanced_accuracy"]),
+            "val_macro_precision": float(val_metrics["macro_precision"]),
+            "val_macro_recall": float(val_metrics["macro_recall"]),
+            "val_macro_f1": raw_macro_f1,
+            "val_macro_f1_rolling": rolling_macro_f1,
+            "monitor_level": monitor_level,
+            "monitor_window": int(monitor_window),
+            "epochs_no_improve": int(epochs_no_improve),
+        }
+        if "slice_level" in val_metrics:
+            row["val_slice"] = val_metrics["slice_level"]
+        if "patient_level" in val_metrics:
+            row["val_patient"] = val_metrics["patient_level"]
+        _append_metrics_row(metrics_path, row)
+
         scheduler.step()
 
         if rolling_macro_f1 > best_monitor_macro_f1:
             best_monitor_macro_f1 = rolling_macro_f1
-            best_ckpt = os.path.join(checkpoint_dir, f"{stamp_day_month}_{model_tag}_best.pth")
+            best_ckpt = os.path.join(checkpoint_dir, f"{stamp_day_month}_{model_tag}_pbest.pth")
             torch.save(model.state_dict(), best_ckpt)
             logger.info(
-                f"[*] New best model saved! RollingMacroF1({monitor_window}): {best_monitor_macro_f1:.4f} "
+                f"[*] New best model saved! Rolling{monitor_level.capitalize()}MacroF1({monitor_window}): {best_monitor_macro_f1:.4f} "
                 f"| CurrentMacroF1: {raw_macro_f1:.4f}"
             )
             epochs_no_improve = 0  # reset counter
@@ -437,6 +601,9 @@ def main():
     if not args.initial_checkpoint and args.model_type == "swin_unetr":
         args.initial_checkpoint = "/home/data/pre_trained_models/model_swin_unetr_btcv_segmentation_v1.pt"
         
+    # Organize outputs as: {output_dir}/{pipeline}/{model_type}/
+    pipeline_dir = get_pipeline(args.model_type)
+    args.output_dir = os.path.join(args.output_dir, pipeline_dir, args.model_type)
     os.makedirs(args.output_dir, exist_ok=True)
     os.makedirs(args.checkpoint_dir, exist_ok=True)
 
@@ -462,6 +629,12 @@ def main():
     logger = create_logger(output_dir=args.output_dir, dist_rank=-1, name=f"{args.model_type}")
     logger.info(f"Running {args.model_type} 3D Classification Pipeline")
     logger.info(f"Mode: {args.mode} | Testing: {args.testing} | Device: {device} | AMP: {not args.disable_amp}")
+    if getattr(args, "config", ""):
+        applied = getattr(args, "_config_applied", {})
+        logger.info(f"Loaded config: {args.config} ({len(applied)} values applied as defaults)")
+
+    _dump_effective_config(args.output_dir, args, logger)
+    metrics_path = os.path.join(args.output_dir, "metrics.jsonl")
     if args.model_checkpoint and args.mode in ["full", "dapt"]:
         logger.warning(
             "--model-checkpoint is ignored in modes 'full' and 'dapt'. "
@@ -508,7 +681,10 @@ def main():
             model_type=args.model_type,
             monitor_window=args.monitor_rolling_window,
             seg_loss_weight=args.seg_loss_weight,
+            warmup_epochs=args.dapt_warmup_epochs,
+            warmup_start_lr=args.warmup_start_lr,
             train_fn=train_fn, validate_fn=validate_fn,
+            metrics_path=metrics_path,
         )
         current_checkpoint = best_dapt_ckpt
         
@@ -542,7 +718,10 @@ def main():
             differential_lr=True,
             backbone_lr_scale=args.finetune_backbone_lr_scale,
             seg_loss_weight=args.seg_loss_weight,
+            warmup_epochs=args.finetune_warmup_epochs,
+            warmup_start_lr=args.warmup_start_lr,
             train_fn=train_fn, validate_fn=validate_fn,
+            metrics_path=metrics_path,
         )
         
     # --- PHASE 3: INFERENCE ---
@@ -572,6 +751,24 @@ def main():
             logger.info("Running evaluation on the Test Set...")
             test_metrics = validate_fn(model, test_loader, device, logger, return_probabilities=True)
             logger.info(f"Final Test Set Accuracy: {test_metrics['accuracy']:.4f}")
+
+            test_row: Dict[str, Any] = {
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+                "phase": "test",
+                "epoch": None,
+                "model_type": args.model_type,
+                "test_loss": float(test_metrics["loss"]),
+                "test_accuracy": float(test_metrics["accuracy"]),
+                "test_balanced_accuracy": float(test_metrics["balanced_accuracy"]),
+                "test_macro_precision": float(test_metrics["macro_precision"]),
+                "test_macro_recall": float(test_metrics["macro_recall"]),
+                "test_macro_f1": float(test_metrics["macro_f1"]),
+            }
+            if "slice_level" in test_metrics:
+                test_row["test_slice"] = test_metrics["slice_level"]
+            if "patient_level" in test_metrics:
+                test_row["test_patient"] = test_metrics["patient_level"]
+            _append_metrics_row(metrics_path, test_row)
 
             prob_payload = test_metrics.get("inference_probabilities")
             if prob_payload is not None:

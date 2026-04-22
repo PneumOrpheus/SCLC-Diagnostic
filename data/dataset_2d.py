@@ -15,6 +15,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import numpy as np
 from monai.data import PersistentDataset
 from tqdm import tqdm
@@ -138,6 +140,62 @@ def _expand_volume_entries_to_slices(
     return out
 
 
+def _testing_subset_balanced(
+    entries: List[Dict[str, Any]],
+    max_items: int = 64,
+    num_classes: int = 3,
+    label_key: str = "scan_label",
+) -> List[Dict[str, Any]]:
+    """Deterministically cap a testing split while preserving class coverage.
+
+    Strategy:
+    1) Round-robin pick across class buckets in original order.
+    2) If fewer than ``max_items`` are selected, fill from the remaining
+       entries in original order.
+    """
+    if max_items <= 0 or len(entries) <= max_items:
+        return entries
+
+    buckets: Dict[int, List[Dict[str, Any]]] = {c: [] for c in range(num_classes)}
+    for e in entries:
+        y = e.get(label_key)
+        try:
+            yi = int(y)
+        except (TypeError, ValueError):
+            continue
+        if 0 <= yi < num_classes:
+            buckets[yi].append(e)
+
+    selected: List[Dict[str, Any]] = []
+    cursors: Dict[int, int] = {c: 0 for c in range(num_classes)}
+    active = [c for c in range(num_classes) if buckets[c]]
+
+    while len(selected) < max_items and active:
+        next_active: List[int] = []
+        for c in active:
+            i = cursors[c]
+            if i < len(buckets[c]):
+                selected.append(buckets[c][i])
+                cursors[c] = i + 1
+                if cursors[c] < len(buckets[c]) and len(selected) < max_items:
+                    next_active.append(c)
+            if len(selected) >= max_items:
+                break
+        active = next_active
+
+    if len(selected) < max_items:
+        selected_ids = {id(x) for x in selected}
+        for e in entries:
+            if id(e) in selected_ids:
+                continue
+            selected.append(e)
+            selected_ids.add(id(e))
+            if len(selected) >= max_items:
+                break
+
+    return selected
+
+
 def get_biglunge_2d_data_list(
     data_path: str,
     csv_path: str,
@@ -184,7 +242,7 @@ def get_biglunge_2d_data_list(
             max_slices_per_volume=max_slices_per_volume,
         )
         if testing:
-            expanded = expanded[:64]
+            expanded = _testing_subset_balanced(expanded, max_items=64, num_classes=3)
         cls_counts: Dict[int, int] = {}
         for e in expanded:
             cls_counts[e["scan_label"]] = cls_counts.get(e["scan_label"], 0) + 1
@@ -213,9 +271,15 @@ def get_lung_pet_ct_dx_2d_data_list(
         testing=testing, max_scans_per_patient=max_scans_per_patient,
     )
 
+    # Attach patient_id (derived from the Lung-PET-CT-Dx folder name) so the
+    # 2D validator can aggregate slice-level probabilities per patient rather
+    # than per scan. The 3D builder omits this field; adding it here keeps the
+    # existing 3D PersistentDataset cache hash unchanged.
     mask_paths: List[str] = []
     for split_entries in volumes.values():
         for v in split_entries:
+            img_path = v.get("image", "")
+            v["patient_id"] = Path(img_path).parent.name if img_path else None
             if "mask" in v:
                 v["tumor_mask"] = v.pop("mask")
                 mask_paths.append(v["tumor_mask"])
@@ -233,7 +297,7 @@ def get_lung_pet_ct_dx_2d_data_list(
             max_slices_per_volume=max_slices_per_volume,
         )
         if testing:
-            expanded = expanded[:64]
+            expanded = _testing_subset_balanced(expanded, max_items=64, num_classes=3)
         cls_counts: Dict[int, int] = {}
         for e in expanded:
             cls_counts[e["scan_label"]] = cls_counts.get(e["scan_label"], 0) + 1
@@ -256,6 +320,7 @@ def create_dataset_2d(
     seed: int = 42,
     testing: bool = False,
     warm_cache: bool = False,
+    cache_workers: int = 8,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
     """Create train/val/test ``PersistentDataset``s of 2D tumor slices.
     Samples are (C=1, img_size, img_size). Supported ``dataset_type``:
@@ -344,13 +409,36 @@ def create_dataset_2d(
             ds = PersistentDataset(data=valid_data, transform=transforms, cache_dir=current_cache_dir)
         else:
             ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=current_cache_dir)
-            valid_data: List[Dict[str, Any]] = []
-            for i in tqdm(range(len(ds)), desc=f"Validating & Caching [2D {split}]", unit="slice"):
+            valid_flags = [False] * len(data_list)
+            n_workers = max(1, int(cache_workers))
+
+            def _try_one(i: int):
                 try:
                     _ = ds[i]
-                    valid_data.append(data_list[i])
-                except Exception as e:
-                    print(f"Failed sample ({data_list[i].get('image', 'N/A')} @ z={data_list[i].get('slice_idx')}): {e}")
+                    return i, None
+                except Exception as e:  # noqa: BLE001 — we want every failure logged, not the first one to abort
+                    return i, e
+
+            desc = f"Validating & Caching [2D {split}] (threads={n_workers})"
+            if n_workers == 1:
+                for i in tqdm(range(len(ds)), desc=desc, unit="slice"):
+                    _, err = _try_one(i)
+                    if err is None:
+                        valid_flags[i] = True
+                    else:
+                        print(f"Failed sample ({data_list[i].get('image', 'N/A')} @ z={data_list[i].get('slice_idx')}): {err}")
+            else:
+                # MONAI LoadImage + numpy release the GIL during I/O, so threads
+                # parallelize the disk-bound first-pass cache build well.
+                with ThreadPoolExecutor(max_workers=n_workers) as ex:
+                    futures = [ex.submit(_try_one, i) for i in range(len(ds))]
+                    for fut in tqdm(as_completed(futures), total=len(futures), desc=desc, unit="slice"):
+                        i, err = fut.result()
+                        if err is None:
+                            valid_flags[i] = True
+                        else:
+                            print(f"Failed sample ({data_list[i].get('image', 'N/A')} @ z={data_list[i].get('slice_idx')}): {err}")
+            valid_data: List[Dict[str, Any]] = [data_list[i] for i, ok in enumerate(valid_flags) if ok]
             print(f"[2D {split}] Kept {len(valid_data)}/{len(data_list)} valid slices.")
             with open(valid_data_file, "w") as f:
                 json.dump(valid_data, f)

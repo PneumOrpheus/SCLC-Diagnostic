@@ -626,11 +626,11 @@ def _build_2d_pipeline(
         # Pick the single axial slice of interest (volume stays 4D with Z=1 so
         # the downstream 3D-style tumor crop can reuse CropAroundTumord).
         SliceSelectd(keys=load_keys, slice_key="slice_idx", allow_missing_keys=True),
-        # In-plane crop around tumor bbox (Z=1 here — the crop is effectively 2D).
+        # In-plane fixed-size crop centered on the tumor
         CropAroundTumord(
             keys=["image"],
             source_key="tumor_mask",
-            patch_size=(int(img_size * 1.25), int(img_size * 1.25), 1),
+            patch_size=(96, 96, 1),
             allow_missing_keys=True,
         ),
         ScaleIntensityRanged(keys=["image"], a_min=-1024, a_max=3071, b_min=0, b_max=1, clip=True),

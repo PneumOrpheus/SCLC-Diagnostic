@@ -9,7 +9,7 @@ Key differences from the 3D/2.5D ``training/train.py`` loop:
   comparable to the 3D and 2.5D pipelines.
 """
 import time
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
@@ -21,6 +21,53 @@ from training.train import (
     NUM_CLASSES,
     _compute_classification_metrics,
 )
+
+
+def _get_class_weight_tensor(loader, device, logger=None) -> Optional[torch.Tensor]:
+    """Build inverse-frequency class weights from loader.dataset.data.
+
+    We normalize weights to mean=1 and clip the extremes so weighting stays
+    stable even on small classes.
+    """
+    cached = getattr(loader, "_class_weight_tensor", None)
+    if cached is not None:
+        return cached.to(device)
+
+    labels: List[int] = []
+    dataset = getattr(loader, "dataset", None)
+    entries = getattr(dataset, "data", None)
+    if isinstance(entries, list):
+        for item in entries:
+            if not isinstance(item, dict):
+                continue
+            y = item.get("scan_label")
+            if y is None:
+                continue
+            yi = int(y)
+            if 0 <= yi < NUM_CLASSES:
+                labels.append(yi)
+
+    if not labels:
+        if logger is not None:
+            logger.warning("[2D] Class-weighted loss disabled: could not infer labels from loader.dataset.data.")
+        return None
+
+    counts = np.bincount(np.asarray(labels, dtype=np.int64), minlength=NUM_CLASSES).astype(np.float32)
+    inv_freq = counts.sum() / np.clip(counts, 1.0, None)
+    weights = inv_freq / max(float(inv_freq.mean()), 1e-8)
+    weights = np.clip(weights, 0.25, 4.0).astype(np.float32)
+
+    weight_tensor = torch.tensor(weights, dtype=torch.float32)
+    loader._class_weight_tensor = weight_tensor
+
+    if logger is not None:
+        cls_msg = []
+        for i in range(NUM_CLASSES):
+            name = CLASS_NAMES[i] if i < len(CLASS_NAMES) else f"Class{i}"
+            cls_msg.append(f"{name}: n={int(counts[i])}, w={weights[i]:.3f}")
+        logger.info("[2D] Class-weighted CE active -> " + " | ".join(cls_msg))
+
+    return weight_tensor.to(device)
 
 
 def simple_collate_fn_2d(batch):
@@ -174,8 +221,45 @@ def validate_epoch_2d(model, loader, device, logger, return_probabilities: bool 
         volume_preds.append(int(mean_p.argmax()))
         volume_targets.append(volume_label[vid])
 
+    # Patient-level aggregation: equal weight per volume (mean of each volume's
+    # mean-softmax), then argmax. For datasets where one patient == one volume
+    # (e.g. BigLunge) this reduces to the volume-level numbers. For Lung-PET-CT-Dx
+    # (multi-scan patients) it's the one clinically meaningful number.
+    # Volumes with an unknown patient_id get their own bucket keyed on volume_id
+    # so they contribute independently rather than collapsing into one fake
+    # "None" patient.
+    patient_prob_sum: Dict[Any, np.ndarray] = {}
+    patient_volume_count: Dict[Any, int] = {}
+    patient_slice_count: Dict[Any, int] = {}
+    patient_label: Dict[Any, int] = {}
+    patient_volume_ids: Dict[Any, List[str]] = {}
+    for i, vid in enumerate(volume_ids):
+        pid = volume_patient.get(vid)
+        key = pid if pid is not None else f"__vol__:{vid}"
+        if key not in patient_prob_sum:
+            patient_prob_sum[key] = np.zeros(volume_probs[i].shape[0], dtype=np.float64)
+            patient_volume_count[key] = 0
+            patient_slice_count[key] = 0
+            patient_label[key] = volume_label[vid]
+            patient_volume_ids[key] = []
+        patient_prob_sum[key] += volume_probs[i]
+        patient_volume_count[key] += 1
+        patient_slice_count[key] += volume_slice_count[vid]
+        patient_volume_ids[key].append(vid)
+
+    patient_keys = list(patient_prob_sum.keys())
+    patient_preds: List[int] = []
+    patient_targets: List[int] = []
+    patient_probs: List[np.ndarray] = []
+    for key in patient_keys:
+        mean_p = patient_prob_sum[key] / max(1, patient_volume_count[key])
+        patient_probs.append(mean_p)
+        patient_preds.append(int(mean_p.argmax()))
+        patient_targets.append(patient_label[key])
+
     slice_metrics = _compute_classification_metrics(slice_targets, slice_preds)
     metrics = _compute_classification_metrics(volume_targets, volume_preds)
+    patient_metrics = _compute_classification_metrics(patient_targets, patient_preds)
     num_classes = metrics["num_classes"]
 
     slice_msg = (
@@ -189,8 +273,14 @@ def validate_epoch_2d(model, loader, device, logger, return_probabilities: bool 
         f"MacroPrecision: {metrics['macro_precision']:.4f}, MacroRecall: {metrics['macro_recall']:.4f}, "
         f"MacroF1: {metrics['macro_f1']:.4f}"
     )
-    print(slice_msg); print(val_msg)
-    logger.info(slice_msg); logger.info(val_msg)
+    patient_msg = (
+        f"[2D] Val (patient-level, n={len(patient_targets)}) => "
+        f"Acc: {patient_metrics['accuracy']:.4f}, BalancedAcc: {patient_metrics['balanced_accuracy']:.4f}, "
+        f"MacroPrecision: {patient_metrics['macro_precision']:.4f}, MacroRecall: {patient_metrics['macro_recall']:.4f}, "
+        f"MacroF1: {patient_metrics['macro_f1']:.4f}"
+    )
+    print(slice_msg); print(val_msg); print(patient_msg)
+    logger.info(slice_msg); logger.info(val_msg); logger.info(patient_msg)
 
     display_names = [
         CLASS_NAMES[i] if i < len(CLASS_NAMES) else f"Class{i}"
@@ -204,17 +294,21 @@ def validate_epoch_2d(model, loader, device, logger, return_probabilities: bool 
             f"f1={metrics['per_class_f1'][c]:.4f}"
         )
 
-    # Confusion matrix (volume-level)
-    conf_matrix = metrics["conf_matrix"]
-    if len(volume_targets) > 0:
-        print("\n[2D] Volume-level Confusion Matrix:")
-        logger.info("\n[2D] Volume-level Confusion Matrix:")
+    # Confusion matrices (volume-level and patient-level)
+    def _log_conf_matrix(title: str, matrix) -> None:
+        print(f"\n[2D] {title}:")
+        logger.info(f"\n[2D] {title}:")
         header = f"{'True \\ Pred':<18}" + "".join([f"{display_names[j]:<16}" for j in range(num_classes)])
         print(header); logger.info(header)
         for i in range(num_classes):
-            row = f"Y:{display_names[i]:<16}" + "".join(f"{int(conf_matrix[i, j]):<16}" for j in range(num_classes))
+            row = f"Y:{display_names[i]:<16}" + "".join(f"{int(matrix[i, j]):<16}" for j in range(num_classes))
             print(row); logger.info(row)
         print("")
+
+    if len(volume_targets) > 0:
+        _log_conf_matrix("Volume-level Confusion Matrix", metrics["conf_matrix"])
+    if len(patient_targets) > 0:
+        _log_conf_matrix("Patient-level Confusion Matrix", patient_metrics["conf_matrix"])
 
     result = {
         "loss": run_loss.avg,
@@ -230,6 +324,17 @@ def validate_epoch_2d(model, loader, device, logger, return_probabilities: bool 
             "accuracy": slice_metrics["accuracy"],
             "macro_f1": slice_metrics["macro_f1"],
             "num_slices": len(slice_targets),
+        },
+        "patient_level": {
+            "accuracy": patient_metrics["accuracy"],
+            "balanced_accuracy": patient_metrics["balanced_accuracy"],
+            "macro_precision": patient_metrics["macro_precision"],
+            "macro_recall": patient_metrics["macro_recall"],
+            "macro_f1": patient_metrics["macro_f1"],
+            "per_class_precision": patient_metrics["per_class_precision"].tolist(),
+            "per_class_recall": patient_metrics["per_class_recall"].tolist(),
+            "per_class_f1": patient_metrics["per_class_f1"].tolist(),
+            "num_patients": len(patient_targets),
         },
     }
 
@@ -264,6 +369,45 @@ def validate_epoch_2d(model, loader, device, logger, return_probabilities: bool 
         mean_probs_dict = {display_names[c]: float(class_prob_sums[c] / n) for c in range(num_classes)}
         pred_counts_dict = {display_names[c]: int(pred_hist[c]) for c in range(num_classes)}
         pred_fracs_dict = {display_names[c]: float(pred_hist[c] / n) for c in range(num_classes)}
+        # Patient-level rollup for the inference JSON. Keys beginning with
+        # "__vol__:" are synthetic fallbacks for volumes whose patient_id was
+        # missing — we surface them as patient_id=None in the payload so
+        # downstream analysis can tell them apart from real patient groupings.
+        patient_samples = []
+        pat_class_prob_sums = np.zeros(num_classes, dtype=np.float64)
+        pat_pred_hist = np.zeros(num_classes, dtype=np.int64)
+        for i, key in enumerate(patient_keys):
+            mean_p = patient_probs[i]
+            if mean_p.shape[0] != num_classes:
+                aligned = np.zeros(num_classes, dtype=np.float64)
+                n_copy = min(num_classes, mean_p.shape[0])
+                aligned[:n_copy] = mean_p[:n_copy]
+                mean_p = aligned
+            pat_class_prob_sums += mean_p
+            pl = patient_preds[i]
+            if 0 <= pl < num_classes:
+                pat_pred_hist[pl] += 1
+            is_fallback = isinstance(key, str) and key.startswith("__vol__:")
+            true_lbl = int(patient_targets[i])
+            pred_lbl = int(patient_preds[i])
+            patient_samples.append({
+                "sample_index": i,
+                "patient_id": None if is_fallback else key,
+                "volume_ids": list(patient_volume_ids[key]),
+                "num_volumes": int(patient_volume_count[key]),
+                "num_slices": int(patient_slice_count[key]),
+                "true_label": true_lbl,
+                "true_name": display_names[true_lbl] if 0 <= true_lbl < num_classes else f"Class{true_lbl}",
+                "pred_label": pred_lbl,
+                "pred_name": display_names[pred_lbl] if 0 <= pred_lbl < num_classes else f"Class{pred_lbl}",
+                "confidence": float(np.max(mean_p)) if mean_p.size > 0 else 0.0,
+                "probabilities": {display_names[c]: float(mean_p[c]) for c in range(num_classes)},
+            })
+        n_p = max(1, len(patient_samples))
+        pat_mean_probs_dict = {display_names[c]: float(pat_class_prob_sums[c] / n_p) for c in range(num_classes)}
+        pat_pred_counts_dict = {display_names[c]: int(pat_pred_hist[c]) for c in range(num_classes)}
+        pat_pred_fracs_dict = {display_names[c]: float(pat_pred_hist[c] / n_p) for c in range(num_classes)}
+
         result["inference_probabilities"] = {
             "num_samples": len(samples),
             "class_names": display_names,
@@ -271,6 +415,13 @@ def validate_epoch_2d(model, loader, device, logger, return_probabilities: bool 
             "predicted_class_counts": pred_counts_dict,
             "predicted_class_fractions": pred_fracs_dict,
             "samples": samples,
+            "patient_level": {
+                "num_patients": len(patient_samples),
+                "mean_probability_per_class": pat_mean_probs_dict,
+                "predicted_class_counts": pat_pred_counts_dict,
+                "predicted_class_fractions": pat_pred_fracs_dict,
+                "samples": patient_samples,
+            },
         }
 
     return result
