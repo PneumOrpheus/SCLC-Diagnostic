@@ -1,0 +1,21 @@
+=== 2D inference at Wed Apr 29 06:04:34 UTC 2026 ===
+[06:04:34] === START: efficientnet_b0_2d ===
+[06:04:34]   ckpt: /home/data/trained_models/2d/efficientnet_b0_2d/Apr_28_04_finetune_pbest_raw.pth
+[06:55:42] === DONE:  efficientnet_b0_2d ===
+[06:55:42] === START: resnet50_2d ===
+[06:55:42]   ckpt: /home/data/trained_models/2d/resnet50_2d/Apr_28_04_finetune_pbest_raw.pth
+[06:57:40] === DONE:  resnet50_2d ===
+[06:57:40] === START: densenet121_2d ===
+[06:57:40]   ckpt: /home/data/trained_models/2d/densenet121_2d/Apr_28_04_finetune_pbest_raw.pth
+[06:57:58] === DONE:  densenet121_2d ===
+[06:57:58] === START: swin_tiny_2d ===
+[06:57:58]   ckpt: /home/data/trained_models/2d/swin_tiny_2d/Apr_28_04_finetune_pbest_raw.pth
+[06:58:28] === DONE:  swin_tiny_2d ===
+=== ALL DONE at Wed Apr 29 06:58:28 UTC 2026 ===
+=== Rebuilding thesis_results/ ===
+[ok]  2d/efficientnet_b0_2d: DAPT 20 ep, FT 27 ep, DAPT-test=y, BL-test=y
+[ok]  2d/resnet50_2d: DAPT 20 ep, FT 17 ep, DAPT-test=y, BL-test=y
+[ok]  2d/densenet121_2d: DAPT 20 ep, FT 11 ep, DAPT-test=y, BL-test=y
+[ok]  2d/swin_tiny_2d: DAPT 20 ep, FT 18 ep, DAPT-test=y, BL-test=y
+
+thesis_results/ rebuilt — see /home/hansstem/SCLC-Classification/thesis_results/README.md

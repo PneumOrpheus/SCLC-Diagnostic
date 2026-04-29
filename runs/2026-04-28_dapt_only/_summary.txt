@@ -1,0 +1,9 @@
+=== DAPT-only retrain starting at Tue Apr 28 08:47:05 UTC 2026 ===
+Logs: runs/2026-04-28_dapt_only
+[08:47:05] === START: densenet121_2d (mode dapt) ===
+[08:47:05]   cmd: python main.py --mode dapt --config configs/experiments/2d_densenet121.yaml 
+[08:54:01] === DONE:  densenet121_2d ===
+[08:54:01] === START: swin_tiny_2d (mode dapt) ===
+[08:54:01]   cmd: python main.py --mode dapt --config configs/experiments/2d_swin_tiny.yaml 
+[09:00:26] === DONE:  swin_tiny_2d ===
+=== ALL DONE at Tue Apr 28 09:00:26 UTC 2026 ===

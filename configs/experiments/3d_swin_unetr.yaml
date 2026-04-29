@@ -19,7 +19,10 @@ checkpoints:
   output_dir: output
 
 training:
-  dapt_epochs: 30
+  # Match the 2D recipe (was 30 — flaws.md 3.5: DAPT memorizes past ep 8-10
+  # on the historical no-augs schedule). 20 leaves cosine-decay headroom past
+  # the expected peak.
+  dapt_epochs: 20
   dapt_lr: 1.0e-4
   dapt_warmup_epochs: 3
   dapt_weight_decay: 3.0e-3
@@ -28,11 +31,22 @@ training:
   finetune_warmup_epochs: 2
   warmup_start_lr: 1.0e-6
   finetune_backbone_lr_scale: 0.1
+  # Native LP-FT (matches 2D/MIL): freeze SwinUNETR encoder for 5 epochs so
+  # the fresh classifier head learns first, then unfreeze with diff-LR.
+  finetune_freeze_backbone_epochs: 5
   weight_decay: 1.0e-3
   batch_size: 2
   accumulation_steps: 4
   monitor_rolling_window: 3
   seg_loss_weight: 0.1
+  # Symmetry with the 2D / MIL pipelines: stronger augs + bag-level mixup
+  # to counter overfitting on the ~26 SCLC train patients. Mixup is
+  # auto-suppressed when seg-aux loss is active (DAPT) so image/mask
+  # desync doesn't corrupt the decoder gradient — see _mixup_3d in
+  # training/train.py. So in practice mixup applies during BigLunge
+  # fine-tune (no seg loss there after the gating fix).
+  strong_augs: true
+  mixup_alpha: 0.2
 
 system:
   num_workers: 4

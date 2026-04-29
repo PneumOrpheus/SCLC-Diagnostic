@@ -15,12 +15,23 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+from sklearn.metrics import balanced_accuracy_score, f1_score
+
+from training.bootstrap import bootstrap_ci, per_class_f1_ci
 from training.train import (
     AverageMeter,
     CLASS_NAMES,
     NUM_CLASSES,
     _compute_classification_metrics,
 )
+
+
+def _macro_f1(yt, yp):
+    return float(f1_score(yt, yp, average="macro", zero_division=0))
+
+
+def _bacc(yt, yp):
+    return float(balanced_accuracy_score(yt, yp))
 
 
 def _get_class_weight_tensor(loader, device, logger=None) -> Optional[torch.Tensor]:
@@ -93,6 +104,32 @@ def simple_collate_fn_2d(batch):
     return images, labels, meta
 
 
+def _mixup_batch(x: torch.Tensor, y: torch.Tensor, alpha: float):
+    """Sample lam ~ Beta(alpha, alpha), mix x, return (x_mix, y_a, y_b, lam).
+
+    We flip ``lam = max(lam, 1-lam)`` so the primary target y_a is always the
+    larger-weighted sample — keeps on-the-fly train-metric tracking against
+    y_a interpretable as "how well we predict the dominant label of the mix".
+    alpha<=0 returns the identity (no mixing) so the training loop can stay
+    uniform whether MixUp is on or off. For tiny batches resample the
+    permutation until it has no fixed points; see flaws.md 1.4.
+    """
+    if alpha <= 0.0 or x.size(0) < 2:
+        return x, y, y, 1.0
+    lam = float(np.random.beta(alpha, alpha))
+    lam = max(lam, 1.0 - lam)
+    B = x.size(0)
+    idx = torch.randperm(B, device=x.device)
+    for _ in range(8):
+        if not torch.any(idx == torch.arange(B, device=x.device)):
+            break
+        idx = torch.randperm(B, device=x.device)
+    else:
+        return x, y, y, 1.0
+    x_mix = lam * x + (1.0 - lam) * x[idx]
+    return x_mix, y, y[idx], lam
+
+
 def train_epoch_2d(
     model,
     loader,
@@ -102,6 +139,7 @@ def train_epoch_2d(
     logger,
     scaler=None,
     accumulation_steps: int = 1,
+    mixup_alpha: float = 0.0,
     **_unused,  # keep a shared signature with train_epoch so run_training_phase can swap them
 ):
     model.train()
@@ -112,18 +150,25 @@ def train_epoch_2d(
 
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
     optimizer.zero_grad()
+    mixup_active = float(mixup_alpha) > 0.0
+    if mixup_active and epoch == 1:
+        logger.info(f"[2D] MixUp active with alpha={mixup_alpha:.3f} (Beta({mixup_alpha},{mixup_alpha}))")
 
     for idx, batch_data in enumerate(loader):
         data, target, _ = batch_data
         data, target = data.to(device), target.to(device)
+        data_mix, y_a, y_b, lam = _mixup_batch(data, target, alpha=float(mixup_alpha))
 
         with torch.amp.autocast(enabled=(scaler is not None), device_type="cuda"):
-            logits = model(data, return_segmentation=False)
-            loss = criterion(logits, target)
+            logits = model(data_mix, return_segmentation=False)
+            if mixup_active:
+                loss = lam * criterion(logits, y_a) + (1.0 - lam) * criterion(logits, y_b)
+            else:
+                loss = criterion(logits, y_a)
 
             preds = torch.argmax(logits.detach(), dim=1)
             all_preds.extend(preds.cpu().tolist())
-            all_targets.extend(target.detach().cpu().tolist())
+            all_targets.extend(y_a.detach().cpu().tolist())
 
             unscaled_loss = loss.item()
             loss = loss / accumulation_steps
@@ -166,7 +211,12 @@ def train_epoch_2d(
 
 
 @torch.no_grad()
-def validate_epoch_2d(model, loader, device, logger, return_probabilities: bool = False):
+def validate_epoch_2d(
+    model, loader, device, logger,
+    return_probabilities: bool = False,
+    compute_ci: bool = True,
+    n_boot: int = 1000,
+):
     """Validate at volume level: mean softmax over a volume's slices, argmax.
 
     Also reports slice-level metrics for sanity. The volume-level metrics are
@@ -337,6 +387,30 @@ def validate_epoch_2d(model, loader, device, logger, return_probabilities: bool 
             "num_patients": len(patient_targets),
         },
     }
+
+    # Stratified bootstrap CIs on patient-level metrics. n_patients=52 on
+    # Lung-PET-CT-Dx DAPT val → per-class F1 swings ~0.1 per single-patient
+    # flip, so the CI is the only honest thing to report.
+    if compute_ci and len(patient_targets) > 0:
+        _, mf1_lo, mf1_hi = bootstrap_ci(
+            patient_targets, patient_preds, _macro_f1, n_boot=n_boot, rng_seed=0
+        )
+        _, bacc_lo, bacc_hi = bootstrap_ci(
+            patient_targets, patient_preds, _bacc, n_boot=n_boot, rng_seed=0
+        )
+        pc_f1_ci = per_class_f1_ci(
+            patient_targets, patient_preds, num_classes=num_classes,
+            n_boot=n_boot, rng_seed=0,
+        )
+        result["patient_level"]["macro_f1_ci95"] = [mf1_lo, mf1_hi]
+        result["patient_level"]["balanced_accuracy_ci95"] = [bacc_lo, bacc_hi]
+        result["patient_level"]["per_class_f1_ci95"] = [list(pair) for pair in pc_f1_ci]
+        result["patient_level"]["ci_n_boot"] = int(n_boot)
+        logger.info(
+            f"[2D] Bootstrap CI (n_boot={n_boot}): "
+            f"patient MacroF1={patient_metrics['macro_f1']:.4f} [{mf1_lo:.4f}, {mf1_hi:.4f}], "
+            f"BalAcc={patient_metrics['balanced_accuracy']:.4f} [{bacc_lo:.4f}, {bacc_hi:.4f}]"
+        )
 
     if return_probabilities:
         samples = []

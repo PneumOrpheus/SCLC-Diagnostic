@@ -1,0 +1,948 @@
+<frozen importlib._bootstrap_external>:1301: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+/home/hansstem/anaconda3/envs/sclc/lib/python3.12/site-packages/monai/utils/deprecate_utils.py:321: FutureWarning: monai.transforms.spatial.dictionary Orientationd.__init__:labels: Current default value of argument `labels=(('L', 'R'), ('P', 'A'), ('I', 'S'))` was changed in version None from `labels=(('L', 'R'), ('P', 'A'), ('I', 'S'))` to `labels=None`. Default value changed to None meaning that the transform now uses the 'space' of a meta-tensor, if applicable, to determine appropriate axis labels.
+  warn_deprecated(argname, msg, warning_category)
+[*] RadImageNetResNet502DClassifier: loading weights from /home/data/RadImageNet/ResNet50/ResNet50.pt
+[*] RadImageNet ResNet50: matched 318/318 backbone keys (source contributed 318, missing=0, unexpected=0)
+Initialized resnet50_2d_rin Classifier. Total Params: 23,507,907
+Split 'train': 242 patients.
+  482 images (482 w/ masks), class distribution: {0: 341, 1: 56, 2: 85}
+Split 'val': 52 patients.
+  102 images (102 w/ masks), class distribution: {0: 73, 2: 17, 1: 12}
+Split 'test': 53 patients.
+  106 images (106 w/ masks), class distribution: {2: 18, 0: 76, 1: 12}
+[2D lung_pet_ct_dx train] 3730 slices from 482 volumes / 242 patients (dropped: no_mask=0, no_tumor_slices=0), classes={0: 2608, 1: 442, 2: 680}
+[2D lung_pet_ct_dx val] 786 slices from 101 volumes / 52 patients (dropped: no_mask=0, no_tumor_slices=1), classes={0: 554, 2: 136, 1: 96}
+[2D lung_pet_ct_dx test] 834 slices from 106 volumes / 53 patients (dropped: no_mask=0, no_tumor_slices=0), classes={2: 144, 0: 594, 1: 96}
+[2D lung_pet_ct_dx] dropped-patient inventory -> /home/hansstem/.cache/monai_lung_pet_ct_clean_2d/img224_crop96_mp1/dropped_patients.json
+[2D] PersistentDataset cache_dir='/home/hansstem/.cache/monai_lung_pet_ct_clean_2d/img224_crop96_mp1/train'
+Validating & Caching [2D train] (threads=4):   0%|          | 0/3730 [00:00<?, ?slice/s]Validating & Caching [2D train] (threads=4):   0%|          | 1/3730 [00:00<07:00,  8.87slice/s]Validating & Caching [2D train] (threads=4):   0%|          | 2/3730 [00:00<07:20,  8.47slice/s]Validating & Caching [2D train] (threads=4):   0%|          | 7/3730 [00:00<02:31, 24.51slice/s]Validating & Caching [2D train] (threads=4):   0%|          | 13/3730 [00:00<01:52, 33.10slice/s]Validating & Caching [2D train] (threads=4):   0%|          | 17/3730 [00:00<03:37, 17.06slice/s]Validating & Caching [2D train] (threads=4):   1%|          | 22/3730 [00:01<02:50, 21.79slice/s]Validating & Caching [2D train] (threads=4):   1%|          | 27/3730 [00:01<02:24, 25.69slice/s]Validating & Caching [2D train] (threads=4):   1%|          | 31/3730 [00:01<02:23, 25.73slice/s]Validating & Caching [2D train] (threads=4):   1%|          | 35/3730 [00:01<02:09, 28.51slice/s]Validating & Caching [2D train] (threads=4):   1%|          | 40/3730 [00:01<01:50, 33.40slice/s]Validating & Caching [2D train] (threads=4):   1%|          | 44/3730 [00:02<03:23, 18.15slice/s]Validating & Caching [2D train] (threads=4):   1%|▏         | 47/3730 [00:02<03:54, 15.73slice/s]Validating & Caching [2D train] (threads=4):   1%|▏         | 50/3730 [00:02<03:30, 17.45slice/s]Validating & Caching [2D train] (threads=4):   1%|▏         | 53/3730 [00:02<04:39, 13.15slice/s]Validating & Caching [2D train] (threads=4):   2%|▏         | 56/3730 [00:02<04:22, 14.00slice/s]Validating & Caching [2D train] (threads=4):   2%|▏         | 63/3730 [00:03<02:49, 21.61slice/s]Validating & Caching [2D train] (threads=4):   2%|▏         | 68/3730 [00:03<02:19, 26.28slice/s]Validating & Caching [2D train] (threads=4):   2%|▏         | 73/3730 [00:03<02:10, 27.94slice/s]Validating & Caching [2D train] (threads=4):   2%|▏         | 79/3730 [00:03<01:58, 30.87slice/s]Validating & Caching [2D train] (threads=4):   2%|▏         | 83/3730 [00:03<01:56, 31.32slice/s]Validating & Caching [2D train] (threads=4):   2%|▏         | 87/3730 [00:04<03:33, 17.06slice/s]Validating & Caching [2D train] (threads=4):   2%|▏         | 90/3730 [00:04<03:33, 17.06slice/s]Validating & Caching [2D train] (threads=4):   3%|▎         | 98/3730 [00:04<02:20, 25.77slice/s]Validating & Caching [2D train] (threads=4):   3%|▎         | 102/3730 [00:04<02:13, 27.14slice/s]Validating & Caching [2D train] (threads=4):   3%|▎         | 106/3730 [00:04<02:35, 23.33slice/s]Validating & Caching [2D train] (threads=4):   3%|▎         | 113/3730 [00:04<02:01, 29.88slice/s]Validating & Caching [2D train] (threads=4):   3%|▎         | 118/3730 [00:05<02:05, 28.79slice/s]Validating & Caching [2D train] (threads=4):   3%|▎         | 122/3730 [00:05<01:58, 30.56slice/s]Validating & Caching [2D train] (threads=4):   3%|▎         | 126/3730 [00:05<02:00, 29.95slice/s]Validating & Caching [2D train] (threads=4):   4%|▎         | 132/3730 [00:05<02:03, 29.03slice/s]Validating & Caching [2D train] (threads=4):   4%|▎         | 137/3730 [00:05<01:54, 31.43slice/s]Validating & Caching [2D train] (threads=4):   4%|▍         | 141/3730 [00:05<02:00, 29.84slice/s]Validating & Caching [2D train] (threads=4):   4%|▍         | 145/3730 [00:06<01:52, 31.80slice/s]Validating & Caching [2D train] (threads=4):   4%|▍         | 150/3730 [00:06<01:49, 32.62slice/s]Validating & Caching [2D train] (threads=4):   4%|▍         | 154/3730 [00:06<01:51, 32.17slice/s]Validating & Caching [2D train] (threads=4):   4%|▍         | 158/3730 [00:06<02:06, 28.35slice/s]Validating & Caching [2D train] (threads=4):   4%|▍         | 161/3730 [00:06<02:06, 28.22slice/s]Validating & Caching [2D train] (threads=4):   4%|▍         | 166/3730 [00:06<02:03, 28.79slice/s]Validating & Caching [2D train] (threads=4):   5%|▍         | 171/3730 [00:06<02:09, 27.57slice/s]Validating & Caching [2D train] (threads=4):   5%|▍         | 175/3730 [00:07<01:59, 29.83slice/s]Validating & Caching [2D train] (threads=4):   5%|▍         | 182/3730 [00:07<01:41, 34.85slice/s]Validating & Caching [2D train] (threads=4):   5%|▍         | 186/3730 [00:07<01:51, 31.73slice/s]Validating & Caching [2D train] (threads=4):   5%|▌         | 190/3730 [00:07<01:52, 31.51slice/s]Validating & Caching [2D train] (threads=4):   5%|▌         | 194/3730 [00:07<01:47, 32.82slice/s]Validating & Caching [2D train] (threads=4):   5%|▌         | 198/3730 [00:07<01:48, 32.66slice/s]Validating & Caching [2D train] (threads=4):   5%|▌         | 203/3730 [00:07<01:39, 35.37slice/s]Validating & Caching [2D train] (threads=4):   6%|▌         | 208/3730 [00:07<01:43, 34.10slice/s]Validating & Caching [2D train] (threads=4):   6%|▌         | 212/3730 [00:08<01:54, 30.80slice/s]Validating & Caching [2D train] (threads=4):   6%|▌         | 217/3730 [00:08<01:50, 31.80slice/s]Validating & Caching [2D train] (threads=4):   6%|▌         | 221/3730 [00:08<02:12, 26.41slice/s]Validating & Caching [2D train] (threads=4):   6%|▌         | 224/3730 [00:08<02:17, 25.50slice/s]Validating & Caching [2D train] (threads=4):   6%|▌         | 227/3730 [00:08<02:12, 26.38slice/s]Validating & Caching [2D train] (threads=4):   6%|▌         | 232/3730 [00:08<02:21, 24.76slice/s]Validating & Caching [2D train] (threads=4):   6%|▋         | 236/3730 [00:09<02:17, 25.46slice/s]Validating & Caching [2D train] (threads=4):   6%|▋         | 239/3730 [00:09<02:20, 24.91slice/s]Validating & Caching [2D train] (threads=4):   7%|▋         | 244/3730 [00:09<02:08, 27.20slice/s]Validating & Caching [2D train] (threads=4):   7%|▋         | 249/3730 [00:09<01:54, 30.36slice/s]Validating & Caching [2D train] (threads=4):   7%|▋         | 254/3730 [00:09<01:40, 34.49slice/s]Validating & Caching [2D train] (threads=4):   7%|▋         | 258/3730 [00:09<01:38, 35.27slice/s]Validating & Caching [2D train] (threads=4):   7%|▋         | 268/3730 [00:09<01:08, 50.67slice/s]Validating & Caching [2D train] (threads=4):   7%|▋         | 275/3730 [00:09<01:06, 51.59slice/s]Validating & Caching [2D train] (threads=4):   8%|▊         | 281/3730 [00:10<01:34, 36.61slice/s]Validating & Caching [2D train] (threads=4):   8%|▊         | 288/3730 [00:10<01:31, 37.54slice/s]Validating & Caching [2D train] (threads=4):   8%|▊         | 293/3730 [00:10<02:17, 25.00slice/s]Validating & Caching [2D train] (threads=4):   8%|▊         | 297/3730 [00:10<02:06, 27.05slice/s]Validating & Caching [2D train] (threads=4):   8%|▊         | 301/3730 [00:11<02:06, 27.14slice/s]Validating & Caching [2D train] (threads=4):   8%|▊         | 308/3730 [00:11<01:44, 32.79slice/s]Validating & Caching [2D train] (threads=4):   8%|▊         | 313/3730 [00:11<01:50, 30.83slice/s]Validating & Caching [2D train] (threads=4):   8%|▊         | 317/3730 [00:11<01:51, 30.52slice/s]Validating & Caching [2D train] (threads=4):   9%|▊         | 321/3730 [00:11<01:50, 30.79slice/s]Validating & Caching [2D train] (threads=4):   9%|▊         | 326/3730 [00:11<01:37, 34.76slice/s]Validating & Caching [2D train] (threads=4):   9%|▉         | 332/3730 [00:11<01:28, 38.34slice/s]Validating & Caching [2D train] (threads=4):   9%|▉         | 337/3730 [00:12<01:29, 37.75slice/s]Validating & Caching [2D train] (threads=4):   9%|▉         | 341/3730 [00:12<01:49, 30.91slice/s]Validating & Caching [2D train] (threads=4):   9%|▉         | 345/3730 [00:12<02:02, 27.59slice/s]Validating & Caching [2D train] (threads=4):   9%|▉         | 348/3730 [00:12<02:04, 27.20slice/s]Validating & Caching [2D train] (threads=4):   9%|▉         | 351/3730 [00:12<02:15, 24.89slice/s]Validating & Caching [2D train] (threads=4):   9%|▉         | 354/3730 [00:12<02:13, 25.36slice/s]Validating & Caching [2D train] (threads=4):  10%|▉         | 360/3730 [00:12<01:43, 32.51slice/s]Validating & Caching [2D train] (threads=4):  10%|▉         | 366/3730 [00:13<01:28, 38.06slice/s]Validating & Caching [2D train] (threads=4):  10%|▉         | 370/3730 [00:13<01:33, 35.90slice/s]Validating & Caching [2D train] (threads=4):  10%|█         | 374/3730 [00:13<01:48, 30.87slice/s]Validating & Caching [2D train] (threads=4):  10%|█         | 378/3730 [00:13<02:08, 26.04slice/s]Validating & Caching [2D train] (threads=4):  10%|█         | 383/3730 [00:13<01:50, 30.31slice/s]Validating & Caching [2D train] (threads=4):  10%|█         | 389/3730 [00:13<01:32, 36.09slice/s]Validating & Caching [2D train] (threads=4):  11%|█         | 393/3730 [00:13<01:48, 30.74slice/s]Validating & Caching [2D train] (threads=4):  11%|█         | 397/3730 [00:14<01:50, 30.21slice/s]Validating & Caching [2D train] (threads=4):  11%|█         | 401/3730 [00:14<01:44, 31.83slice/s]Validating & Caching [2D train] (threads=4):  11%|█         | 405/3730 [00:14<02:04, 26.73slice/s]Validating & Caching [2D train] (threads=4):  11%|█         | 409/3730 [00:14<01:57, 28.19slice/s]Validating & Caching [2D train] (threads=4):  11%|█         | 413/3730 [00:14<02:05, 26.43slice/s]Validating & Caching [2D train] (threads=4):  11%|█         | 416/3730 [00:14<02:04, 26.52slice/s]Validating & Caching [2D train] (threads=4):  11%|█▏        | 421/3730 [00:14<01:56, 28.46slice/s]Validating & Caching [2D train] (threads=4):  11%|█▏        | 424/3730 [00:15<02:06, 26.17slice/s]Validating & Caching [2D train] (threads=4):  11%|█▏        | 427/3730 [00:15<02:03, 26.68slice/s]Validating & Caching [2D train] (threads=4):  12%|█▏        | 432/3730 [00:15<01:56, 28.19slice/s]Validating & Caching [2D train] (threads=4):  12%|█▏        | 436/3730 [00:15<01:54, 28.80slice/s]Validating & Caching [2D train] (threads=4):  12%|█▏        | 440/3730 [00:15<01:54, 28.68slice/s]Validating & Caching [2D train] (threads=4):  12%|█▏        | 443/3730 [00:15<02:01, 27.04slice/s]Validating & Caching [2D train] (threads=4):  12%|█▏        | 446/3730 [00:15<02:01, 27.09slice/s]Validating & Caching [2D train] (threads=4):  12%|█▏        | 449/3730 [00:16<02:01, 26.97slice/s]Validating & Caching [2D train] (threads=4):  12%|█▏        | 452/3730 [00:16<02:00, 27.27slice/s]Validating & Caching [2D train] (threads=4):  12%|█▏        | 456/3730 [00:16<01:56, 28.18slice/s]Validating & Caching [2D train] (threads=4):  12%|█▏        | 460/3730 [00:16<01:46, 30.72slice/s]Validating & Caching [2D train] (threads=4):  12%|█▏        | 464/3730 [00:16<01:57, 27.80slice/s]Validating & Caching [2D train] (threads=4):  13%|█▎        | 467/3730 [00:16<01:55, 28.27slice/s]Validating & Caching [2D train] (threads=4):  13%|█▎        | 470/3730 [00:16<02:28, 21.98slice/s]Validating & Caching [2D train] (threads=4):  13%|█▎        | 475/3730 [00:17<02:22, 22.81slice/s]Validating & Caching [2D train] (threads=4):  13%|█▎        | 485/3730 [00:17<01:30, 35.87slice/s]Validating & Caching [2D train] (threads=4):  13%|█▎        | 489/3730 [00:17<01:31, 35.43slice/s]Validating & Caching [2D train] (threads=4):  13%|█▎        | 493/3730 [00:17<01:40, 32.23slice/s]Validating & Caching [2D train] (threads=4):  13%|█▎        | 497/3730 [00:17<01:55, 28.03slice/s]Validating & Caching [2D train] (threads=4):  13%|█▎        | 500/3730 [00:17<02:02, 26.38slice/s]Validating & Caching [2D train] (threads=4):  14%|█▎        | 504/3730 [00:17<02:03, 26.14slice/s]Validating & Caching [2D train] (threads=4):  14%|█▎        | 508/3730 [00:18<02:17, 23.49slice/s]Validating & Caching [2D train] (threads=4):  14%|█▎        | 511/3730 [00:18<02:18, 23.20slice/s]Validating & Caching [2D train] (threads=4):  14%|█▍        | 514/3730 [00:18<02:19, 23.05slice/s]Validating & Caching [2D train] (threads=4):  14%|█▍        | 519/3730 [00:18<01:55, 27.83slice/s]Validating & Caching [2D train] (threads=4):  14%|█▍        | 523/3730 [00:18<02:05, 25.65slice/s]Validating & Caching [2D train] (threads=4):  14%|█▍        | 526/3730 [00:18<02:03, 26.00slice/s]Validating & Caching [2D train] (threads=4):  14%|█▍        | 531/3730 [00:19<01:47, 29.71slice/s]Validating & Caching [2D train] (threads=4):  14%|█▍        | 535/3730 [00:19<01:52, 28.39slice/s]Validating & Caching [2D train] (threads=4):  14%|█▍        | 540/3730 [00:19<01:40, 31.78slice/s]Validating & Caching [2D train] (threads=4):  15%|█▍        | 546/3730 [00:19<01:22, 38.46slice/s]Validating & Caching [2D train] (threads=4):  15%|█▍        | 555/3730 [00:19<01:07, 47.13slice/s]Validating & Caching [2D train] (threads=4):  15%|█▌        | 560/3730 [00:19<01:27, 36.12slice/s]Validating & Caching [2D train] (threads=4):  15%|█▌        | 565/3730 [00:19<01:37, 32.34slice/s]Validating & Caching [2D train] (threads=4):  15%|█▌        | 569/3730 [00:20<01:37, 32.54slice/s]Validating & Caching [2D train] (threads=4):  15%|█▌        | 573/3730 [00:20<02:18, 22.81slice/s]Validating & Caching [2D train] (threads=4):  15%|█▌        | 576/3730 [00:20<02:15, 23.33slice/s]Validating & Caching [2D train] (threads=4):  16%|█▌        | 585/3730 [00:20<01:27, 36.00slice/s]Validating & Caching [2D train] (threads=4):  16%|█▌        | 590/3730 [00:20<01:24, 37.29slice/s]Validating & Caching [2D train] (threads=4):  16%|█▌        | 597/3730 [00:20<01:15, 41.74slice/s]Validating & Caching [2D train] (threads=4):  16%|█▌        | 602/3730 [00:21<01:57, 26.54slice/s]Validating & Caching [2D train] (threads=4):  16%|█▌        | 606/3730 [00:21<02:57, 17.56slice/s]Validating & Caching [2D train] (threads=4):  16%|█▋        | 614/3730 [00:21<02:03, 25.21slice/s]Validating & Caching [2D train] (threads=4):  17%|█▋        | 619/3730 [00:21<01:49, 28.29slice/s]Validating & Caching [2D train] (threads=4):  17%|█▋        | 628/3730 [00:22<01:19, 38.99slice/s]Validating & Caching [2D train] (threads=4):  17%|█▋        | 634/3730 [00:22<01:27, 35.50slice/s]Validating & Caching [2D train] (threads=4):  17%|█▋        | 639/3730 [00:22<01:33, 33.22slice/s]Validating & Caching [2D train] (threads=4):  17%|█▋        | 644/3730 [00:22<01:26, 35.74slice/s]Validating & Caching [2D train] (threads=4):  17%|█▋        | 651/3730 [00:22<01:12, 42.59slice/s]Validating & Caching [2D train] (threads=4):  18%|█▊        | 657/3730 [00:22<01:08, 44.88slice/s]Validating & Caching [2D train] (threads=4):  18%|█▊        | 663/3730 [00:22<01:14, 41.35slice/s]Validating & Caching [2D train] (threads=4):  18%|█▊        | 668/3730 [00:23<01:24, 36.13slice/s]Validating & Caching [2D train] (threads=4):  18%|█▊        | 673/3730 [00:23<01:22, 37.16slice/s]Validating & Caching [2D train] (threads=4):  18%|█▊        | 678/3730 [00:23<01:21, 37.23slice/s]Validating & Caching [2D train] (threads=4):  18%|█▊        | 686/3730 [00:23<01:05, 46.49slice/s]Validating & Caching [2D train] (threads=4):  19%|█▊        | 692/3730 [00:23<01:18, 38.74slice/s]Validating & Caching [2D train] (threads=4):  19%|█▊        | 697/3730 [00:23<01:21, 37.08slice/s]Validating & Caching [2D train] (threads=4):  19%|█▉        | 703/3730 [00:23<01:13, 41.31slice/s]Validating & Caching [2D train] (threads=4):  19%|█▉        | 708/3730 [00:24<01:10, 42.68slice/s]Validating & Caching [2D train] (threads=4):  19%|█▉        | 713/3730 [00:24<01:18, 38.31slice/s]Validating & Caching [2D train] (threads=4):  19%|█▉        | 718/3730 [00:24<01:17, 38.94slice/s]Validating & Caching [2D train] (threads=4):  19%|█▉        | 724/3730 [00:24<01:09, 43.47slice/s]Validating & Caching [2D train] (threads=4):  20%|█▉        | 729/3730 [00:24<01:13, 40.86slice/s]Validating & Caching [2D train] (threads=4):  20%|█▉        | 734/3730 [00:24<01:11, 41.66slice/s]Validating & Caching [2D train] (threads=4):  20%|█▉        | 739/3730 [00:24<01:12, 41.20slice/s]Validating & Caching [2D train] (threads=4):  20%|█▉        | 744/3730 [00:25<02:02, 24.36slice/s]Validating & Caching [2D train] (threads=4):  20%|██        | 748/3730 [00:25<02:57, 16.80slice/s]Validating & Caching [2D train] (threads=4):  20%|██        | 751/3730 [00:25<02:50, 17.49slice/s]Validating & Caching [2D train] (threads=4):  20%|██        | 757/3730 [00:25<02:06, 23.42slice/s]Validating & Caching [2D train] (threads=4):  20%|██        | 761/3730 [00:26<01:53, 26.22slice/s]Validating & Caching [2D train] (threads=4):  21%|██        | 768/3730 [00:26<01:27, 33.78slice/s]Validating & Caching [2D train] (threads=4):  21%|██        | 775/3730 [00:26<01:12, 40.99slice/s]Validating & Caching [2D train] (threads=4):  21%|██        | 780/3730 [00:26<01:13, 40.05slice/s]Validating & Caching [2D train] (threads=4):  21%|██        | 785/3730 [00:26<01:14, 39.45slice/s]Validating & Caching [2D train] (threads=4):  21%|██        | 790/3730 [00:26<01:21, 36.07slice/s]Validating & Caching [2D train] (threads=4):  21%|██▏       | 795/3730 [00:26<01:15, 38.78slice/s]Validating & Caching [2D train] (threads=4):  21%|██▏       | 800/3730 [00:27<01:35, 30.79slice/s]Validating & Caching [2D train] (threads=4):  22%|██▏       | 804/3730 [00:27<01:45, 27.76slice/s]Validating & Caching [2D train] (threads=4):  22%|██▏       | 808/3730 [00:27<01:46, 27.56slice/s]Validating & Caching [2D train] (threads=4):  22%|██▏       | 812/3730 [00:27<01:38, 29.70slice/s]Validating & Caching [2D train] (threads=4):  22%|██▏       | 816/3730 [00:27<01:40, 28.91slice/s]Validating & Caching [2D train] (threads=4):  22%|██▏       | 821/3730 [00:27<01:36, 30.15slice/s]Validating & Caching [2D train] (threads=4):  22%|██▏       | 826/3730 [00:27<01:26, 33.48slice/s]Validating & Caching [2D train] (threads=4):  22%|██▏       | 830/3730 [00:28<01:42, 28.24slice/s]Validating & Caching [2D train] (threads=4):  22%|██▏       | 834/3730 [00:28<01:40, 28.78slice/s]Validating & Caching [2D train] (threads=4):  22%|██▏       | 838/3730 [00:28<01:56, 24.77slice/s]Validating & Caching [2D train] (threads=4):  23%|██▎       | 842/3730 [00:28<01:53, 25.54slice/s]Validating & Caching [2D train] (threads=4):  23%|██▎       | 845/3730 [00:28<01:52, 25.55slice/s]Validating & Caching [2D train] (threads=4):  23%|██▎       | 851/3730 [00:28<01:30, 31.94slice/s]Validating & Caching [2D train] (threads=4):  23%|██▎       | 856/3730 [00:28<01:22, 34.74slice/s]Validating & Caching [2D train] (threads=4):  23%|██▎       | 861/3730 [00:29<01:17, 37.16slice/s]Validating & Caching [2D train] (threads=4):  23%|██▎       | 865/3730 [00:29<01:16, 37.42slice/s]Validating & Caching [2D train] (threads=4):  23%|██▎       | 870/3730 [00:29<01:10, 40.44slice/s]Validating & Caching [2D train] (threads=4):  23%|██▎       | 875/3730 [00:29<01:22, 34.79slice/s]Validating & Caching [2D train] (threads=4):  24%|██▎       | 879/3730 [00:29<01:27, 32.46slice/s]Validating & Caching [2D train] (threads=4):  24%|██▎       | 885/3730 [00:29<01:13, 38.63slice/s]Validating & Caching [2D train] (threads=4):  24%|██▍       | 892/3730 [00:29<01:02, 45.45slice/s]Validating & Caching [2D train] (threads=4):  24%|██▍       | 897/3730 [00:29<01:04, 43.79slice/s]Validating & Caching [2D train] (threads=4):  24%|██▍       | 902/3730 [00:30<01:05, 43.09slice/s]Validating & Caching [2D train] (threads=4):  24%|██▍       | 907/3730 [00:30<01:30, 31.21slice/s]Validating & Caching [2D train] (threads=4):  24%|██▍       | 912/3730 [00:30<01:24, 33.36slice/s]Validating & Caching [2D train] (threads=4):  25%|██▍       | 918/3730 [00:30<01:13, 38.11slice/s]Validating & Caching [2D train] (threads=4):  25%|██▍       | 926/3730 [00:30<01:08, 41.13slice/s]Validating & Caching [2D train] (threads=4):  25%|██▌       | 933/3730 [00:30<01:02, 44.77slice/s]Validating & Caching [2D train] (threads=4):  25%|██▌       | 938/3730 [00:31<01:09, 40.16slice/s]Validating & Caching [2D train] (threads=4):  25%|██▌       | 943/3730 [00:31<01:11, 39.06slice/s]Validating & Caching [2D train] (threads=4):  25%|██▌       | 951/3730 [00:31<00:58, 47.31slice/s]Validating & Caching [2D train] (threads=4):  26%|██▌       | 957/3730 [00:31<00:58, 47.62slice/s]Validating & Caching [2D train] (threads=4):  26%|██▌       | 962/3730 [00:31<01:01, 44.82slice/s]Validating & Caching [2D train] (threads=4):  26%|██▌       | 969/3730 [00:31<00:55, 50.11slice/s]Validating & Caching [2D train] (threads=4):  26%|██▌       | 975/3730 [00:31<00:58, 47.06slice/s]Validating & Caching [2D train] (threads=4):  26%|██▋       | 980/3730 [00:31<01:02, 43.88slice/s]Validating & Caching [2D train] (threads=4):  26%|██▋       | 985/3730 [00:32<01:10, 39.03slice/s]Validating & Caching [2D train] (threads=4):  27%|██▋       | 994/3730 [00:32<00:54, 50.62slice/s]Validating & Caching [2D train] (threads=4):  27%|██▋       | 1001/3730 [00:32<00:51, 53.25slice/s]Validating & Caching [2D train] (threads=4):  27%|██▋       | 1007/3730 [00:32<00:56, 48.06slice/s]Validating & Caching [2D train] (threads=4):  27%|██▋       | 1013/3730 [00:32<01:02, 43.35slice/s]Validating & Caching [2D train] (threads=4):  27%|██▋       | 1018/3730 [00:32<01:13, 36.75slice/s]Validating & Caching [2D train] (threads=4):  28%|██▊       | 1026/3730 [00:32<00:59, 45.80slice/s]Validating & Caching [2D train] (threads=4):  28%|██▊       | 1032/3730 [00:33<00:55, 48.48slice/s]Validating & Caching [2D train] (threads=4):  28%|██▊       | 1038/3730 [00:33<01:24, 32.05slice/s]Validating & Caching [2D train] (threads=4):  28%|██▊       | 1049/3730 [00:33<00:58, 45.60slice/s]Validating & Caching [2D train] (threads=4):  28%|██▊       | 1056/3730 [00:33<01:01, 43.50slice/s]Validating & Caching [2D train] (threads=4):  28%|██▊       | 1063/3730 [00:33<00:59, 44.93slice/s]Validating & Caching [2D train] (threads=4):  29%|██▊       | 1070/3730 [00:33<00:56, 46.67slice/s]Validating & Caching [2D train] (threads=4):  29%|██▉       | 1076/3730 [00:34<01:06, 40.09slice/s]Validating & Caching [2D train] (threads=4):  29%|██▉       | 1081/3730 [00:34<01:27, 30.26slice/s]Validating & Caching [2D train] (threads=4):  29%|██▉       | 1085/3730 [00:35<02:39, 16.53slice/s]Validating & Caching [2D train] (threads=4):  29%|██▉       | 1089/3730 [00:35<03:38, 12.07slice/s]Validating & Caching [2D train] (threads=4):  29%|██▉       | 1093/3730 [00:36<03:31, 12.49slice/s]Validating & Caching [2D train] (threads=4):  29%|██▉       | 1098/3730 [00:36<02:42, 16.19slice/s]Validating & Caching [2D train] (threads=4):  30%|██▉       | 1107/3730 [00:36<01:43, 25.22slice/s]Validating & Caching [2D train] (threads=4):  30%|██▉       | 1112/3730 [00:36<01:33, 27.96slice/s]Validating & Caching [2D train] (threads=4):  30%|██▉       | 1117/3730 [00:36<01:31, 28.66slice/s]Validating & Caching [2D train] (threads=4):  30%|███       | 1121/3730 [00:36<01:31, 28.59slice/s]Validating & Caching [2D train] (threads=4):  30%|███       | 1128/3730 [00:36<01:21, 32.07slice/s]Validating & Caching [2D train] (threads=4):  30%|███       | 1132/3730 [00:37<02:19, 18.66slice/s]Validating & Caching [2D train] (threads=4):  30%|███       | 1135/3730 [00:37<02:31, 17.12slice/s]Validating & Caching [2D train] (threads=4):  31%|███       | 1140/3730 [00:37<02:01, 21.31slice/s]Validating & Caching [2D train] (threads=4):  31%|███       | 1144/3730 [00:37<01:46, 24.37slice/s]Validating & Caching [2D train] (threads=4):  31%|███       | 1149/3730 [00:37<01:35, 27.01slice/s]Validating & Caching [2D train] (threads=4):  31%|███       | 1154/3730 [00:38<01:25, 29.99slice/s]Validating & Caching [2D train] (threads=4):  31%|███       | 1161/3730 [00:38<01:12, 35.20slice/s]Validating & Caching [2D train] (threads=4):  31%|███       | 1165/3730 [00:38<01:11, 35.66slice/s]Validating & Caching [2D train] (threads=4):  31%|███▏      | 1169/3730 [00:38<01:10, 36.17slice/s]Validating & Caching [2D train] (threads=4):  31%|███▏      | 1174/3730 [00:38<01:21, 31.36slice/s]Validating & Caching [2D train] (threads=4):  32%|███▏      | 1178/3730 [00:38<01:21, 31.48slice/s]Validating & Caching [2D train] (threads=4):  32%|███▏      | 1183/3730 [00:38<01:15, 33.62slice/s]Validating & Caching [2D train] (threads=4):  32%|███▏      | 1187/3730 [00:39<01:15, 33.89slice/s]Validating & Caching [2D train] (threads=4):  32%|███▏      | 1191/3730 [00:39<01:42, 24.86slice/s]Validating & Caching [2D train] (threads=4):  32%|███▏      | 1194/3730 [00:39<02:19, 18.17slice/s]Validating & Caching [2D train] (threads=4):  32%|███▏      | 1197/3730 [00:39<03:04, 13.74slice/s]Validating & Caching [2D train] (threads=4):  32%|███▏      | 1200/3730 [00:40<03:41, 11.43slice/s]Validating & Caching [2D train] (threads=4):  32%|███▏      | 1206/3730 [00:40<02:35, 16.23slice/s]Validating & Caching [2D train] (threads=4):  32%|███▏      | 1211/3730 [00:40<02:02, 20.52slice/s]Validating & Caching [2D train] (threads=4):  33%|███▎      | 1214/3730 [00:40<01:56, 21.57slice/s]Validating & Caching [2D train] (threads=4):  33%|███▎      | 1218/3730 [00:40<01:41, 24.83slice/s]Validating & Caching [2D train] (threads=4):  33%|███▎      | 1224/3730 [00:41<01:36, 25.90slice/s]Validating & Caching [2D train] (threads=4):  33%|███▎      | 1231/3730 [00:41<01:14, 33.32slice/s]Validating & Caching [2D train] (threads=4):  33%|███▎      | 1235/3730 [00:41<01:13, 33.99slice/s]Validating & Caching [2D train] (threads=4):  33%|███▎      | 1239/3730 [00:41<01:16, 32.56slice/s]Validating & Caching [2D train] (threads=4):  33%|███▎      | 1243/3730 [00:41<01:15, 33.04slice/s]Validating & Caching [2D train] (threads=4):  33%|███▎      | 1247/3730 [00:41<01:12, 34.41slice/s]Validating & Caching [2D train] (threads=4):  34%|███▎      | 1251/3730 [00:41<01:29, 27.55slice/s]Validating & Caching [2D train] (threads=4):  34%|███▎      | 1255/3730 [00:42<01:35, 25.98slice/s]Validating & Caching [2D train] (threads=4):  34%|███▍      | 1259/3730 [00:42<01:39, 24.78slice/s]Validating & Caching [2D train] (threads=4):  34%|███▍      | 1262/3730 [00:42<01:48, 22.73slice/s]Validating & Caching [2D train] (threads=4):  34%|███▍      | 1265/3730 [00:42<02:08, 19.21slice/s]Validating & Caching [2D train] (threads=4):  34%|███▍      | 1268/3730 [00:44<08:00,  5.13slice/s]Validating & Caching [2D train] (threads=4):  34%|███▍      | 1270/3730 [00:44<08:20,  4.92slice/s]Validating & Caching [2D train] (threads=4):  34%|███▍      | 1276/3730 [00:45<04:50,  8.44slice/s]Validating & Caching [2D train] (threads=4):  34%|███▍      | 1279/3730 [00:45<04:04, 10.03slice/s]Validating & Caching [2D train] (threads=4):  34%|███▍      | 1282/3730 [00:45<03:35, 11.35slice/s]Validating & Caching [2D train] (threads=4):  35%|███▍      | 1289/3730 [00:45<02:13, 18.31slice/s]Validating & Caching [2D train] (threads=4):  35%|███▍      | 1294/3730 [00:45<01:48, 22.49slice/s]Validating & Caching [2D train] (threads=4):  35%|███▍      | 1298/3730 [00:45<01:48, 22.35slice/s]Validating & Caching [2D train] (threads=4):  35%|███▍      | 1302/3730 [00:45<01:54, 21.15slice/s]Validating & Caching [2D train] (threads=4):  35%|███▌      | 1306/3730 [00:46<01:41, 23.81slice/s]Validating & Caching [2D train] (threads=4):  35%|███▌      | 1310/3730 [00:46<01:34, 25.65slice/s]Validating & Caching [2D train] (threads=4):  35%|███▌      | 1314/3730 [00:46<01:37, 24.68slice/s]Validating & Caching [2D train] (threads=4):  35%|███▌      | 1317/3730 [00:46<01:57, 20.50slice/s]Validating & Caching [2D train] (threads=4):  35%|███▌      | 1324/3730 [00:46<01:21, 29.54slice/s]Validating & Caching [2D train] (threads=4):  36%|███▌      | 1328/3730 [00:46<01:27, 27.58slice/s]Validating & Caching [2D train] (threads=4):  36%|███▌      | 1334/3730 [00:46<01:14, 32.35slice/s]Validating & Caching [2D train] (threads=4):  36%|███▌      | 1341/3730 [00:47<00:59, 39.85slice/s]Validating & Caching [2D train] (threads=4):  36%|███▌      | 1346/3730 [00:47<00:57, 41.32slice/s]Validating & Caching [2D train] (threads=4):  36%|███▌      | 1351/3730 [00:47<00:54, 43.37slice/s]Validating & Caching [2D train] (threads=4):  36%|███▋      | 1357/3730 [00:47<00:53, 44.66slice/s]Validating & Caching [2D train] (threads=4):  37%|███▋      | 1362/3730 [00:47<01:54, 20.71slice/s]Validating & Caching [2D train] (threads=4):  37%|███▋      | 1366/3730 [00:48<02:37, 15.00slice/s]Validating & Caching [2D train] (threads=4):  37%|███▋      | 1369/3730 [00:48<02:52, 13.65slice/s]Validating & Caching [2D train] (threads=4):  37%|███▋      | 1372/3730 [00:48<02:37, 14.97slice/s]Validating & Caching [2D train] (threads=4):  37%|███▋      | 1375/3730 [00:49<03:10, 12.33slice/s]Validating & Caching [2D train] (threads=4):  37%|███▋      | 1379/3730 [00:49<02:28, 15.81slice/s]Validating & Caching [2D train] (threads=4):  37%|███▋      | 1384/3730 [00:49<01:53, 20.58slice/s]Validating & Caching [2D train] (threads=4):  37%|███▋      | 1388/3730 [00:49<01:46, 21.99slice/s]Validating & Caching [2D train] (threads=4):  37%|███▋      | 1393/3730 [00:49<01:29, 26.18slice/s]Validating & Caching [2D train] (threads=4):  37%|███▋      | 1397/3730 [00:49<01:25, 27.38slice/s]Validating & Caching [2D train] (threads=4):  38%|███▊      | 1401/3730 [00:50<01:31, 25.55slice/s]Validating & Caching [2D train] (threads=4):  38%|███▊      | 1404/3730 [00:50<01:46, 21.84slice/s]Validating & Caching [2D train] (threads=4):  38%|███▊      | 1407/3730 [00:50<01:57, 19.85slice/s]Validating & Caching [2D train] (threads=4):  38%|███▊      | 1411/3730 [00:50<01:44, 22.22slice/s]Validating & Caching [2D train] (threads=4):  38%|███▊      | 1414/3730 [00:50<01:44, 22.11slice/s]Validating & Caching [2D train] (threads=4):  38%|███▊      | 1419/3730 [00:50<01:28, 26.15slice/s]Validating & Caching [2D train] (threads=4):  38%|███▊      | 1424/3730 [00:51<01:14, 31.01slice/s]Validating & Caching [2D train] (threads=4):  38%|███▊      | 1429/3730 [00:51<01:08, 33.38slice/s]Validating & Caching [2D train] (threads=4):  38%|███▊      | 1433/3730 [00:51<01:16, 30.07slice/s]Validating & Caching [2D train] (threads=4):  39%|███▊      | 1437/3730 [00:51<01:18, 29.31slice/s]Validating & Caching [2D train] (threads=4):  39%|███▊      | 1441/3730 [00:51<01:34, 24.12slice/s]Validating & Caching [2D train] (threads=4):  39%|███▊      | 1445/3730 [00:51<01:28, 25.68slice/s]Validating & Caching [2D train] (threads=4):  39%|███▉      | 1448/3730 [00:51<01:27, 26.19slice/s]Validating & Caching [2D train] (threads=4):  39%|███▉      | 1452/3730 [00:52<01:23, 27.30slice/s]Validating & Caching [2D train] (threads=4):  39%|███▉      | 1455/3730 [00:52<01:28, 25.63slice/s]Validating & Caching [2D train] (threads=4):  39%|███▉      | 1461/3730 [00:52<01:08, 32.92slice/s]Validating & Caching [2D train] (threads=4):  39%|███▉      | 1467/3730 [00:52<01:02, 36.40slice/s]Validating & Caching [2D train] (threads=4):  39%|███▉      | 1473/3730 [00:52<00:56, 40.05slice/s]Validating & Caching [2D train] (threads=4):  40%|███▉      | 1478/3730 [00:52<00:56, 39.69slice/s]Validating & Caching [2D train] (threads=4):  40%|███▉      | 1483/3730 [00:52<01:00, 37.08slice/s]Validating & Caching [2D train] (threads=4):  40%|███▉      | 1487/3730 [00:52<01:03, 35.06slice/s]Validating & Caching [2D train] (threads=4):  40%|████      | 1495/3730 [00:53<00:48, 45.67slice/s]Validating & Caching [2D train] (threads=4):  40%|████      | 1500/3730 [00:53<01:03, 35.06slice/s]Validating & Caching [2D train] (threads=4):  40%|████      | 1505/3730 [00:53<01:02, 35.81slice/s]Validating & Caching [2D train] (threads=4):  41%|████      | 1512/3730 [00:53<00:55, 39.64slice/s]Validating & Caching [2D train] (threads=4):  41%|████      | 1517/3730 [00:53<01:06, 33.40slice/s]Validating & Caching [2D train] (threads=4):  41%|████      | 1521/3730 [00:54<01:17, 28.46slice/s]Validating & Caching [2D train] (threads=4):  41%|████      | 1527/3730 [00:54<01:07, 32.69slice/s]Validating & Caching [2D train] (threads=4):  41%|████      | 1533/3730 [00:54<01:01, 35.93slice/s]Validating & Caching [2D train] (threads=4):  41%|████      | 1537/3730 [00:54<01:14, 29.51slice/s]Validating & Caching [2D train] (threads=4):  41%|████▏     | 1543/3730 [00:54<01:04, 33.76slice/s]Validating & Caching [2D train] (threads=4):  42%|████▏     | 1551/3730 [00:54<00:50, 43.56slice/s]Validating & Caching [2D train] (threads=4):  42%|████▏     | 1558/3730 [00:54<00:47, 45.55slice/s]Validating & Caching [2D train] (threads=4):  42%|████▏     | 1564/3730 [00:54<00:45, 47.50slice/s]Validating & Caching [2D train] (threads=4):  42%|████▏     | 1570/3730 [00:55<00:47, 45.14slice/s]Validating & Caching [2D train] (threads=4):  42%|████▏     | 1578/3730 [00:55<00:42, 50.74slice/s]Validating & Caching [2D train] (threads=4):  42%|████▏     | 1584/3730 [00:55<00:46, 46.37slice/s]Validating & Caching [2D train] (threads=4):  43%|████▎     | 1589/3730 [00:55<00:49, 43.31slice/s]Validating & Caching [2D train] (threads=4):  43%|████▎     | 1596/3730 [00:55<00:48, 43.70slice/s]Validating & Caching [2D train] (threads=4):  43%|████▎     | 1601/3730 [00:55<00:47, 44.46slice/s]Validating & Caching [2D train] (threads=4):  43%|████▎     | 1606/3730 [00:55<00:47, 45.19slice/s]Validating & Caching [2D train] (threads=4):  43%|████▎     | 1612/3730 [00:56<00:43, 48.14slice/s]Validating & Caching [2D train] (threads=4):  43%|████▎     | 1618/3730 [00:56<00:41, 51.05slice/s]Validating & Caching [2D train] (threads=4):  44%|████▎     | 1624/3730 [00:56<00:45, 45.86slice/s]Validating & Caching [2D train] (threads=4):  44%|████▎     | 1629/3730 [00:56<01:03, 33.31slice/s]Validating & Caching [2D train] (threads=4):  44%|████▍     | 1633/3730 [00:56<01:02, 33.66slice/s]Validating & Caching [2D train] (threads=4):  44%|████▍     | 1640/3730 [00:56<00:51, 40.89slice/s]Validating & Caching [2D train] (threads=4):  44%|████▍     | 1645/3730 [00:56<00:52, 39.70slice/s]Validating & Caching [2D train] (threads=4):  44%|████▍     | 1651/3730 [00:57<00:48, 43.11slice/s]Validating & Caching [2D train] (threads=4):  44%|████▍     | 1656/3730 [00:57<00:47, 43.32slice/s]Validating & Caching [2D train] (threads=4):  45%|████▍     | 1661/3730 [00:57<00:49, 41.41slice/s]Validating & Caching [2D train] (threads=4):  45%|████▍     | 1666/3730 [00:57<00:53, 38.33slice/s]Validating & Caching [2D train] (threads=4):  45%|████▍     | 1670/3730 [00:57<00:58, 35.45slice/s]Validating & Caching [2D train] (threads=4):  45%|████▍     | 1674/3730 [00:57<00:57, 35.50slice/s]Validating & Caching [2D train] (threads=4):  45%|████▍     | 1678/3730 [00:57<00:59, 34.33slice/s]Validating & Caching [2D train] (threads=4):  45%|████▌     | 1682/3730 [00:57<01:09, 29.38slice/s]Validating & Caching [2D train] (threads=4):  45%|████▌     | 1686/3730 [00:58<01:10, 28.91slice/s]Validating & Caching [2D train] (threads=4):  45%|████▌     | 1690/3730 [00:58<01:05, 31.31slice/s]Validating & Caching [2D train] (threads=4):  45%|████▌     | 1694/3730 [00:58<01:06, 30.64slice/s]Validating & Caching [2D train] (threads=4):  46%|████▌     | 1699/3730 [00:58<00:59, 33.87slice/s]Validating & Caching [2D train] (threads=4):  46%|████▌     | 1703/3730 [00:58<01:07, 30.24slice/s]Validating & Caching [2D train] (threads=4):  46%|████▌     | 1707/3730 [00:58<01:03, 31.98slice/s]Validating & Caching [2D train] (threads=4):  46%|████▌     | 1711/3730 [00:58<01:06, 30.20slice/s]Validating & Caching [2D train] (threads=4):  46%|████▌     | 1715/3730 [00:59<01:12, 27.92slice/s]Validating & Caching [2D train] (threads=4):  46%|████▌     | 1721/3730 [00:59<01:04, 31.19slice/s]Validating & Caching [2D train] (threads=4):  46%|████▋     | 1727/3730 [00:59<00:59, 33.69slice/s]Validating & Caching [2D train] (threads=4):  46%|████▋     | 1732/3730 [00:59<01:01, 32.32slice/s]Validating & Caching [2D train] (threads=4):  47%|████▋     | 1736/3730 [00:59<01:01, 32.34slice/s]Validating & Caching [2D train] (threads=4):  47%|████▋     | 1740/3730 [00:59<01:15, 26.52slice/s]Validating & Caching [2D train] (threads=4):  47%|████▋     | 1743/3730 [01:00<01:24, 23.41slice/s]Validating & Caching [2D train] (threads=4):  47%|████▋     | 1747/3730 [01:00<01:16, 25.86slice/s]Validating & Caching [2D train] (threads=4):  47%|████▋     | 1750/3730 [01:00<01:36, 20.43slice/s]Validating & Caching [2D train] (threads=4):  47%|████▋     | 1753/3730 [01:00<01:32, 21.37slice/s]Validating & Caching [2D train] (threads=4):  47%|████▋     | 1757/3730 [01:00<01:18, 25.10slice/s]Validating & Caching [2D train] (threads=4):  47%|████▋     | 1762/3730 [01:00<01:08, 28.88slice/s]Validating & Caching [2D train] (threads=4):  47%|████▋     | 1766/3730 [01:00<01:07, 29.18slice/s]Validating & Caching [2D train] (threads=4):  47%|████▋     | 1770/3730 [01:01<01:02, 31.46slice/s]Validating & Caching [2D train] (threads=4):  48%|████▊     | 1774/3730 [01:01<01:04, 30.18slice/s]Validating & Caching [2D train] (threads=4):  48%|████▊     | 1778/3730 [01:01<01:03, 30.76slice/s]Validating & Caching [2D train] (threads=4):  48%|████▊     | 1782/3730 [01:01<01:00, 31.97slice/s]Validating & Caching [2D train] (threads=4):  48%|████▊     | 1786/3730 [01:01<00:57, 33.95slice/s]Validating & Caching [2D train] (threads=4):  48%|████▊     | 1790/3730 [01:01<01:00, 32.00slice/s]Validating & Caching [2D train] (threads=4):  48%|████▊     | 1794/3730 [01:01<01:19, 24.20slice/s]Validating & Caching [2D train] (threads=4):  48%|████▊     | 1797/3730 [01:02<01:38, 19.67slice/s]Validating & Caching [2D train] (threads=4):  48%|████▊     | 1800/3730 [01:02<01:47, 17.95slice/s]Validating & Caching [2D train] (threads=4):  48%|████▊     | 1804/3730 [01:02<01:29, 21.53slice/s]Validating & Caching [2D train] (threads=4):  49%|████▊     | 1811/3730 [01:02<01:08, 27.83slice/s]Validating & Caching [2D train] (threads=4):  49%|████▊     | 1816/3730 [01:02<01:12, 26.26slice/s]Validating & Caching [2D train] (threads=4):  49%|████▉     | 1820/3730 [01:02<01:08, 27.97slice/s]Validating & Caching [2D train] (threads=4):  49%|████▉     | 1824/3730 [01:03<01:15, 25.25slice/s]Validating & Caching [2D train] (threads=4):  49%|████▉     | 1830/3730 [01:03<01:00, 31.62slice/s]Validating & Caching [2D train] (threads=4):  49%|████▉     | 1834/3730 [01:03<00:58, 32.46slice/s]Validating & Caching [2D train] (threads=4):  49%|████▉     | 1839/3730 [01:03<00:54, 34.95slice/s]Validating & Caching [2D train] (threads=4):  49%|████▉     | 1843/3730 [01:03<01:14, 25.42slice/s]Validating & Caching [2D train] (threads=4):  50%|████▉     | 1847/3730 [01:04<01:22, 22.84slice/s]Validating & Caching [2D train] (threads=4):  50%|████▉     | 1851/3730 [01:04<01:17, 24.17slice/s]Validating & Caching [2D train] (threads=4):  50%|████▉     | 1857/3730 [01:04<01:00, 30.92slice/s]Validating & Caching [2D train] (threads=4):  50%|████▉     | 1861/3730 [01:04<00:57, 32.24slice/s]Validating & Caching [2D train] (threads=4):  50%|█████     | 1865/3730 [01:04<00:55, 33.89slice/s]Validating & Caching [2D train] (threads=4):  50%|█████     | 1871/3730 [01:04<00:46, 39.85slice/s]Validating & Caching [2D train] (threads=4):  50%|█████     | 1877/3730 [01:04<00:43, 42.23slice/s]Validating & Caching [2D train] (threads=4):  51%|█████     | 1884/3730 [01:04<00:38, 47.79slice/s]Validating & Caching [2D train] (threads=4):  51%|█████     | 1889/3730 [01:04<00:39, 47.01slice/s]Validating & Caching [2D train] (threads=4):  51%|█████     | 1894/3730 [01:05<00:41, 44.08slice/s]Validating & Caching [2D train] (threads=4):  51%|█████     | 1899/3730 [01:05<00:55, 32.86slice/s]Validating & Caching [2D train] (threads=4):  51%|█████     | 1904/3730 [01:05<00:53, 34.27slice/s]Validating & Caching [2D train] (threads=4):  51%|█████     | 1909/3730 [01:05<00:57, 31.92slice/s]Validating & Caching [2D train] (threads=4):  51%|█████▏    | 1914/3730 [01:05<00:53, 34.02slice/s]Validating & Caching [2D train] (threads=4):  51%|█████▏    | 1918/3730 [01:05<00:55, 32.93slice/s]Validating & Caching [2D train] (threads=4):  52%|█████▏    | 1925/3730 [01:05<00:46, 38.59slice/s]Validating & Caching [2D train] (threads=4):  52%|█████▏    | 1933/3730 [01:06<00:37, 47.46slice/s]Validating & Caching [2D train] (threads=4):  52%|█████▏    | 1939/3730 [01:07<02:47, 10.66slice/s]Validating & Caching [2D train] (threads=4):  52%|█████▏    | 1943/3730 [01:08<02:43, 10.90slice/s]Validating & Caching [2D train] (threads=4):  52%|█████▏    | 1946/3730 [01:08<02:29, 11.97slice/s]Validating & Caching [2D train] (threads=4):  52%|█████▏    | 1950/3730 [01:08<02:01, 14.67slice/s]Validating & Caching [2D train] (threads=4):  52%|█████▏    | 1954/3730 [01:08<01:58, 14.96slice/s]Validating & Caching [2D train] (threads=4):  52%|█████▏    | 1957/3730 [01:08<01:54, 15.55slice/s]Validating & Caching [2D train] (threads=4):  53%|█████▎    | 1960/3730 [01:09<02:51, 10.35slice/s]Validating & Caching [2D train] (threads=4):  53%|█████▎    | 1964/3730 [01:09<02:12, 13.36slice/s]Validating & Caching [2D train] (threads=4):  53%|█████▎    | 1968/3730 [01:09<01:49, 16.06slice/s]Validating & Caching [2D train] (threads=4):  53%|█████▎    | 1971/3730 [01:09<01:49, 16.12slice/s]Validating & Caching [2D train] (threads=4):  53%|█████▎    | 1975/3730 [01:09<01:33, 18.81slice/s]Validating & Caching [2D train] (threads=4):  53%|█████▎    | 1978/3730 [01:10<01:27, 20.06slice/s]Validating & Caching [2D train] (threads=4):  53%|█████▎    | 1981/3730 [01:10<01:23, 20.95slice/s]Validating & Caching [2D train] (threads=4):  53%|█████▎    | 1986/3730 [01:10<01:08, 25.45slice/s]Validating & Caching [2D train] (threads=4):  53%|█████▎    | 1990/3730 [01:10<01:04, 27.05slice/s]Validating & Caching [2D train] (threads=4):  53%|█████▎    | 1995/3730 [01:10<00:53, 32.24slice/s]Validating & Caching [2D train] (threads=4):  54%|█████▎    | 1999/3730 [01:10<00:57, 30.29slice/s]Validating & Caching [2D train] (threads=4):  54%|█████▎    | 2004/3730 [01:10<00:50, 34.31slice/s]Validating & Caching [2D train] (threads=4):  54%|█████▍    | 2009/3730 [01:11<01:03, 26.94slice/s]Validating & Caching [2D train] (threads=4):  54%|█████▍    | 2013/3730 [01:11<01:24, 20.36slice/s]Validating & Caching [2D train] (threads=4):  54%|█████▍    | 2016/3730 [01:11<01:38, 17.35slice/s]Validating & Caching [2D train] (threads=4):  54%|█████▍    | 2019/3730 [01:11<01:53, 15.07slice/s]Validating & Caching [2D train] (threads=4):  54%|█████▍    | 2021/3730 [01:12<01:56, 14.71slice/s]Validating & Caching [2D train] (threads=4):  54%|█████▍    | 2027/3730 [01:12<01:17, 21.86slice/s]Validating & Caching [2D train] (threads=4):  54%|█████▍    | 2031/3730 [01:12<01:10, 24.03slice/s]Validating & Caching [2D train] (threads=4):  55%|█████▍    | 2034/3730 [01:12<01:11, 23.65slice/s]Validating & Caching [2D train] (threads=4):  55%|█████▍    | 2038/3730 [01:12<01:04, 26.44slice/s]Validating & Caching [2D train] (threads=4):  55%|█████▍    | 2043/3730 [01:12<00:58, 28.74slice/s]Validating & Caching [2D train] (threads=4):  55%|█████▍    | 2050/3730 [01:12<00:44, 37.81slice/s]Validating & Caching [2D train] (threads=4):  55%|█████▌    | 2055/3730 [01:12<00:44, 37.24slice/s]Validating & Caching [2D train] (threads=4):  55%|█████▌    | 2060/3730 [01:13<00:46, 35.71slice/s]Validating & Caching [2D train] (threads=4):  55%|█████▌    | 2064/3730 [01:13<01:01, 27.22slice/s]Validating & Caching [2D train] (threads=4):  55%|█████▌    | 2068/3730 [01:13<00:57, 28.71slice/s]Validating & Caching [2D train] (threads=4):  56%|█████▌    | 2072/3730 [01:13<01:05, 25.38slice/s]Validating & Caching [2D train] (threads=4):  56%|█████▌    | 2076/3730 [01:13<00:58, 28.29slice/s]Validating & Caching [2D train] (threads=4):  56%|█████▌    | 2080/3730 [01:14<01:23, 19.80slice/s]Validating & Caching [2D train] (threads=4):  56%|█████▌    | 2083/3730 [01:14<01:29, 18.38slice/s]Validating & Caching [2D train] (threads=4):  56%|█████▌    | 2086/3730 [01:14<01:25, 19.26slice/s]Validating & Caching [2D train] (threads=4):  56%|█████▌    | 2089/3730 [01:14<01:33, 17.52slice/s]Validating & Caching [2D train] (threads=4):  56%|█████▌    | 2094/3730 [01:14<01:12, 22.47slice/s]Validating & Caching [2D train] (threads=4):  56%|█████▋    | 2101/3730 [01:15<01:41, 16.12slice/s]Validating & Caching [2D train] (threads=4):  56%|█████▋    | 2105/3730 [01:15<01:26, 18.85slice/s]Validating & Caching [2D train] (threads=4):  57%|█████▋    | 2111/3730 [01:15<01:29, 18.00slice/s]Validating & Caching [2D train] (threads=4):  57%|█████▋    | 2114/3730 [01:15<01:28, 18.23slice/s]Validating & Caching [2D train] (threads=4):  57%|█████▋    | 2117/3730 [01:16<01:26, 18.72slice/s]Validating & Caching [2D train] (threads=4):  57%|█████▋    | 2120/3730 [01:16<01:18, 20.48slice/s]Validating & Caching [2D train] (threads=4):  57%|█████▋    | 2124/3730 [01:16<01:15, 21.38slice/s]Validating & Caching [2D train] (threads=4):  57%|█████▋    | 2127/3730 [01:16<01:16, 21.01slice/s]Validating & Caching [2D train] (threads=4):  57%|█████▋    | 2131/3730 [01:16<01:05, 24.46slice/s]Validating & Caching [2D train] (threads=4):  57%|█████▋    | 2135/3730 [01:16<01:01, 25.94slice/s]Validating & Caching [2D train] (threads=4):  57%|█████▋    | 2141/3730 [01:16<00:50, 31.72slice/s]Validating & Caching [2D train] (threads=4):  58%|█████▊    | 2147/3730 [01:17<00:41, 38.33slice/s]Validating & Caching [2D train] (threads=4):  58%|█████▊    | 2153/3730 [01:17<00:36, 43.33slice/s]Validating & Caching [2D train] (threads=4):  58%|█████▊    | 2158/3730 [01:17<00:41, 38.03slice/s]Validating & Caching [2D train] (threads=4):  58%|█████▊    | 2163/3730 [01:17<00:39, 40.11slice/s]Validating & Caching [2D train] (threads=4):  58%|█████▊    | 2168/3730 [01:17<00:46, 33.42slice/s]Validating & Caching [2D train] (threads=4):  58%|█████▊    | 2172/3730 [01:17<00:48, 31.95slice/s]Validating & Caching [2D train] (threads=4):  58%|█████▊    | 2177/3730 [01:17<00:44, 34.87slice/s]Validating & Caching [2D train] (threads=4):  58%|█████▊    | 2181/3730 [01:17<00:43, 35.95slice/s]Validating & Caching [2D train] (threads=4):  59%|█████▊    | 2187/3730 [01:18<00:43, 35.61slice/s]Validating & Caching [2D train] (threads=4):  59%|█████▊    | 2191/3730 [01:18<00:43, 35.16slice/s]Validating & Caching [2D train] (threads=4):  59%|█████▉    | 2197/3730 [01:18<00:37, 41.13slice/s]Validating & Caching [2D train] (threads=4):  59%|█████▉    | 2202/3730 [01:18<00:37, 40.35slice/s]Validating & Caching [2D train] (threads=4):  59%|█████▉    | 2207/3730 [01:18<00:39, 38.58slice/s]Validating & Caching [2D train] (threads=4):  59%|█████▉    | 2212/3730 [01:18<00:42, 36.08slice/s]Validating & Caching [2D train] (threads=4):  59%|█████▉    | 2216/3730 [01:18<00:44, 33.79slice/s]Validating & Caching [2D train] (threads=4):  60%|█████▉    | 2220/3730 [01:19<00:47, 31.87slice/s]Validating & Caching [2D train] (threads=4):  60%|█████▉    | 2225/3730 [01:19<00:47, 31.76slice/s]Validating & Caching [2D train] (threads=4):  60%|█████▉    | 2231/3730 [01:19<00:41, 35.95slice/s]Validating & Caching [2D train] (threads=4):  60%|█████▉    | 2235/3730 [01:19<00:56, 26.27slice/s]Validating & Caching [2D train] (threads=4):  60%|██████    | 2240/3730 [01:19<00:56, 26.16slice/s]Validating & Caching [2D train] (threads=4):  60%|██████    | 2244/3730 [01:19<00:52, 28.06slice/s]Validating & Caching [2D train] (threads=4):  60%|██████    | 2248/3730 [01:20<01:00, 24.68slice/s]Validating & Caching [2D train] (threads=4):  60%|██████    | 2251/3730 [01:20<01:17, 19.16slice/s]Validating & Caching [2D train] (threads=4):  61%|██████    | 2257/3730 [01:20<00:56, 26.04slice/s]Validating & Caching [2D train] (threads=4):  61%|██████    | 2261/3730 [01:20<01:13, 20.01slice/s]Validating & Caching [2D train] (threads=4):  61%|██████    | 2264/3730 [01:21<01:22, 17.88slice/s]Validating & Caching [2D train] (threads=4):  61%|██████    | 2267/3730 [01:21<01:16, 19.09slice/s]Validating & Caching [2D train] (threads=4):  61%|██████    | 2270/3730 [01:21<01:39, 14.65slice/s]Validating & Caching [2D train] (threads=4):  61%|██████    | 2272/3730 [01:21<01:35, 15.32slice/s]Validating & Caching [2D train] (threads=4):  61%|██████    | 2274/3730 [01:21<01:37, 14.93slice/s]Validating & Caching [2D train] (threads=4):  61%|██████    | 2277/3730 [01:21<01:24, 17.29slice/s]Validating & Caching [2D train] (threads=4):  61%|██████    | 2284/3730 [01:22<00:52, 27.72slice/s]Validating & Caching [2D train] (threads=4):  61%|██████▏   | 2292/3730 [01:22<00:37, 38.29slice/s]Validating & Caching [2D train] (threads=4):  62%|██████▏   | 2299/3730 [01:22<00:33, 42.89slice/s]Validating & Caching [2D train] (threads=4):  62%|██████▏   | 2304/3730 [01:22<00:32, 44.50slice/s]Validating & Caching [2D train] (threads=4):  62%|██████▏   | 2309/3730 [01:22<00:39, 35.63slice/s]Validating & Caching [2D train] (threads=4):  62%|██████▏   | 2314/3730 [01:22<00:42, 33.48slice/s]Validating & Caching [2D train] (threads=4):  62%|██████▏   | 2319/3730 [01:22<00:41, 34.17slice/s]Validating & Caching [2D train] (threads=4):  62%|██████▏   | 2326/3730 [01:23<00:35, 39.97slice/s]Validating & Caching [2D train] (threads=4):  62%|██████▏   | 2331/3730 [01:23<00:34, 40.15slice/s]Validating & Caching [2D train] (threads=4):  63%|██████▎   | 2336/3730 [01:23<00:32, 42.31slice/s]Validating & Caching [2D train] (threads=4):  63%|██████▎   | 2341/3730 [01:23<00:33, 40.88slice/s]Validating & Caching [2D train] (threads=4):  63%|██████▎   | 2346/3730 [01:23<00:36, 38.21slice/s]Validating & Caching [2D train] (threads=4):  63%|██████▎   | 2350/3730 [01:23<00:45, 30.34slice/s]Validating & Caching [2D train] (threads=4):  63%|██████▎   | 2354/3730 [01:23<00:47, 28.79slice/s]Validating & Caching [2D train] (threads=4):  63%|██████▎   | 2359/3730 [01:24<00:44, 30.86slice/s]Validating & Caching [2D train] (threads=4):  63%|██████▎   | 2363/3730 [01:24<00:44, 30.39slice/s]Validating & Caching [2D train] (threads=4):  64%|██████▎   | 2369/3730 [01:24<00:44, 30.90slice/s]Validating & Caching [2D train] (threads=4):  64%|██████▎   | 2373/3730 [01:24<00:45, 29.77slice/s]Validating & Caching [2D train] (threads=4):  64%|██████▎   | 2377/3730 [01:24<00:47, 28.57slice/s]Validating & Caching [2D train] (threads=4):  64%|██████▍   | 2382/3730 [01:24<00:41, 32.53slice/s]Validating & Caching [2D train] (threads=4):  64%|██████▍   | 2387/3730 [01:24<00:38, 34.61slice/s]Validating & Caching [2D train] (threads=4):  64%|██████▍   | 2391/3730 [01:25<00:38, 34.66slice/s]Validating & Caching [2D train] (threads=4):  64%|██████▍   | 2396/3730 [01:25<00:35, 37.14slice/s]Validating & Caching [2D train] (threads=4):  64%|██████▍   | 2400/3730 [01:25<00:41, 32.23slice/s]Validating & Caching [2D train] (threads=4):  65%|██████▍   | 2408/3730 [01:25<00:33, 39.00slice/s]Validating & Caching [2D train] (threads=4):  65%|██████▍   | 2412/3730 [01:25<00:37, 35.56slice/s]Validating & Caching [2D train] (threads=4):  65%|██████▍   | 2417/3730 [01:25<00:34, 38.00slice/s]Validating & Caching [2D train] (threads=4):  65%|██████▍   | 2421/3730 [01:25<00:39, 32.86slice/s]Validating & Caching [2D train] (threads=4):  65%|██████▌   | 2425/3730 [01:26<00:42, 30.91slice/s]Validating & Caching [2D train] (threads=4):  65%|██████▌   | 2429/3730 [01:26<00:43, 29.78slice/s]Validating & Caching [2D train] (threads=4):  65%|██████▌   | 2433/3730 [01:26<00:41, 30.98slice/s]Validating & Caching [2D train] (threads=4):  65%|██████▌   | 2438/3730 [01:26<00:38, 33.91slice/s]Validating & Caching [2D train] (threads=4):  65%|██████▌   | 2442/3730 [01:26<00:39, 32.97slice/s]Validating & Caching [2D train] (threads=4):  66%|██████▌   | 2446/3730 [01:26<00:44, 28.83slice/s]Validating & Caching [2D train] (threads=4):  66%|██████▌   | 2450/3730 [01:26<00:52, 24.52slice/s]Validating & Caching [2D train] (threads=4):  66%|██████▌   | 2454/3730 [01:27<00:46, 27.43slice/s]Validating & Caching [2D train] (threads=4):  66%|██████▌   | 2459/3730 [01:27<00:39, 32.35slice/s]Validating & Caching [2D train] (threads=4):  66%|██████▌   | 2463/3730 [01:27<00:44, 28.20slice/s]Validating & Caching [2D train] (threads=4):  66%|██████▌   | 2467/3730 [01:27<00:41, 30.65slice/s]Validating & Caching [2D train] (threads=4):  66%|██████▌   | 2471/3730 [01:27<00:39, 31.97slice/s]Validating & Caching [2D train] (threads=4):  66%|██████▋   | 2475/3730 [01:27<00:39, 31.59slice/s]Validating & Caching [2D train] (threads=4):  66%|██████▋   | 2479/3730 [01:27<00:40, 31.03slice/s]Validating & Caching [2D train] (threads=4):  67%|██████▋   | 2484/3730 [01:27<00:36, 33.85slice/s]Validating & Caching [2D train] (threads=4):  67%|██████▋   | 2488/3730 [01:28<00:36, 33.97slice/s]Validating & Caching [2D train] (threads=4):  67%|██████▋   | 2492/3730 [01:28<00:39, 31.26slice/s]Validating & Caching [2D train] (threads=4):  67%|██████▋   | 2496/3730 [01:28<00:38, 31.94slice/s]Validating & Caching [2D train] (threads=4):  67%|██████▋   | 2501/3730 [01:28<00:35, 35.01slice/s]Validating & Caching [2D train] (threads=4):  67%|██████▋   | 2505/3730 [01:28<00:34, 35.57slice/s]Validating & Caching [2D train] (threads=4):  67%|██████▋   | 2512/3730 [01:28<00:28, 43.32slice/s]Validating & Caching [2D train] (threads=4):  67%|██████▋   | 2517/3730 [01:28<00:29, 40.60slice/s]Validating & Caching [2D train] (threads=4):  68%|██████▊   | 2522/3730 [01:28<00:30, 39.65slice/s]Validating & Caching [2D train] (threads=4):  68%|██████▊   | 2527/3730 [01:29<00:29, 40.65slice/s]Validating & Caching [2D train] (threads=4):  68%|██████▊   | 2532/3730 [01:29<00:31, 38.31slice/s]Validating & Caching [2D train] (threads=4):  68%|██████▊   | 2538/3730 [01:29<00:35, 33.98slice/s]Validating & Caching [2D train] (threads=4):  68%|██████▊   | 2542/3730 [01:29<00:36, 32.33slice/s]Validating & Caching [2D train] (threads=4):  68%|██████▊   | 2546/3730 [01:29<00:35, 33.67slice/s]Validating & Caching [2D train] (threads=4):  68%|██████▊   | 2554/3730 [01:29<00:28, 40.95slice/s]Validating & Caching [2D train] (threads=4):  69%|██████▊   | 2561/3730 [01:29<00:25, 46.72slice/s]Validating & Caching [2D train] (threads=4):  69%|██████▉   | 2566/3730 [01:30<00:28, 40.90slice/s]Validating & Caching [2D train] (threads=4):  69%|██████▉   | 2571/3730 [01:30<00:28, 40.70slice/s]Validating & Caching [2D train] (threads=4):  69%|██████▉   | 2576/3730 [01:30<00:28, 40.46slice/s]Validating & Caching [2D train] (threads=4):  69%|██████▉   | 2581/3730 [01:30<00:32, 35.81slice/s]Validating & Caching [2D train] (threads=4):  69%|██████▉   | 2585/3730 [01:30<00:33, 33.70slice/s]Validating & Caching [2D train] (threads=4):  69%|██████▉   | 2589/3730 [01:30<00:35, 32.47slice/s]Validating & Caching [2D train] (threads=4):  70%|██████▉   | 2593/3730 [01:30<00:36, 31.21slice/s]Validating & Caching [2D train] (threads=4):  70%|██████▉   | 2597/3730 [01:31<00:42, 26.81slice/s]Validating & Caching [2D train] (threads=4):  70%|██████▉   | 2601/3730 [01:31<00:43, 25.86slice/s]Validating & Caching [2D train] (threads=4):  70%|██████▉   | 2608/3730 [01:31<00:33, 33.47slice/s]Validating & Caching [2D train] (threads=4):  70%|███████   | 2612/3730 [01:31<00:35, 31.80slice/s]Validating & Caching [2D train] (threads=4):  70%|███████   | 2616/3730 [01:32<00:59, 18.58slice/s]Validating & Caching [2D train] (threads=4):  70%|███████   | 2619/3730 [01:32<01:01, 18.17slice/s]Validating & Caching [2D train] (threads=4):  70%|███████   | 2623/3730 [01:32<00:51, 21.62slice/s]Validating & Caching [2D train] (threads=4):  70%|███████   | 2626/3730 [01:32<00:49, 22.45slice/s]Validating & Caching [2D train] (threads=4):  71%|███████   | 2630/3730 [01:32<00:43, 25.40slice/s]Validating & Caching [2D train] (threads=4):  71%|███████   | 2636/3730 [01:32<00:35, 30.59slice/s]Validating & Caching [2D train] (threads=4):  71%|███████   | 2643/3730 [01:32<00:27, 39.48slice/s]Validating & Caching [2D train] (threads=4):  71%|███████   | 2648/3730 [01:32<00:27, 39.01slice/s]Validating & Caching [2D train] (threads=4):  71%|███████   | 2653/3730 [01:33<00:28, 37.55slice/s]Validating & Caching [2D train] (threads=4):  71%|███████▏  | 2658/3730 [01:33<00:34, 30.91slice/s]Validating & Caching [2D train] (threads=4):  71%|███████▏  | 2662/3730 [01:33<00:36, 29.03slice/s]Validating & Caching [2D train] (threads=4):  71%|███████▏  | 2666/3730 [01:33<00:34, 31.08slice/s]Validating & Caching [2D train] (threads=4):  72%|███████▏  | 2674/3730 [01:33<00:25, 41.62slice/s]Validating & Caching [2D train] (threads=4):  72%|███████▏  | 2679/3730 [01:33<00:33, 31.59slice/s]Validating & Caching [2D train] (threads=4):  72%|███████▏  | 2684/3730 [01:34<00:29, 34.92slice/s]Validating & Caching [2D train] (threads=4):  72%|███████▏  | 2689/3730 [01:34<00:29, 35.49slice/s]Validating & Caching [2D train] (threads=4):  72%|███████▏  | 2693/3730 [01:34<00:35, 29.25slice/s]Validating & Caching [2D train] (threads=4):  72%|███████▏  | 2697/3730 [01:34<00:38, 27.00slice/s]Validating & Caching [2D train] (threads=4):  72%|███████▏  | 2701/3730 [01:34<00:40, 25.26slice/s]Validating & Caching [2D train] (threads=4):  72%|███████▏  | 2704/3730 [01:34<00:51, 20.01slice/s]Validating & Caching [2D train] (threads=4):  73%|███████▎  | 2707/3730 [01:35<00:49, 20.60slice/s]Validating & Caching [2D train] (threads=4):  73%|███████▎  | 2710/3730 [01:35<00:49, 20.62slice/s]Validating & Caching [2D train] (threads=4):  73%|███████▎  | 2714/3730 [01:35<00:44, 23.08slice/s]Validating & Caching [2D train] (threads=4):  73%|███████▎  | 2718/3730 [01:35<00:39, 25.31slice/s]Validating & Caching [2D train] (threads=4):  73%|███████▎  | 2722/3730 [01:35<00:41, 24.28slice/s]Validating & Caching [2D train] (threads=4):  73%|███████▎  | 2728/3730 [01:35<00:33, 30.22slice/s]Validating & Caching [2D train] (threads=4):  73%|███████▎  | 2732/3730 [01:36<00:48, 20.58slice/s]Validating & Caching [2D train] (threads=4):  73%|███████▎  | 2735/3730 [01:36<00:55, 17.79slice/s]Validating & Caching [2D train] (threads=4):  73%|███████▎  | 2738/3730 [01:36<01:18, 12.65slice/s]Validating & Caching [2D train] (threads=4):  73%|███████▎  | 2741/3730 [01:36<01:07, 14.58slice/s]Validating & Caching [2D train] (threads=4):  74%|███████▎  | 2746/3730 [01:37<00:49, 19.91slice/s]Validating & Caching [2D train] (threads=4):  74%|███████▍  | 2753/3730 [01:37<00:34, 28.11slice/s]Validating & Caching [2D train] (threads=4):  74%|███████▍  | 2759/3730 [01:37<00:28, 33.79slice/s]Validating & Caching [2D train] (threads=4):  74%|███████▍  | 2767/3730 [01:37<00:25, 38.00slice/s]Validating & Caching [2D train] (threads=4):  74%|███████▍  | 2774/3730 [01:37<00:26, 35.45slice/s]Validating & Caching [2D train] (threads=4):  75%|███████▍  | 2780/3730 [01:37<00:23, 39.77slice/s]Validating & Caching [2D train] (threads=4):  75%|███████▍  | 2786/3730 [01:37<00:22, 41.66slice/s]Validating & Caching [2D train] (threads=4):  75%|███████▍  | 2791/3730 [01:38<00:25, 37.48slice/s]Validating & Caching [2D train] (threads=4):  75%|███████▍  | 2796/3730 [01:38<00:23, 39.49slice/s]Validating & Caching [2D train] (threads=4):  75%|███████▌  | 2802/3730 [01:38<00:23, 38.67slice/s]Validating & Caching [2D train] (threads=4):  75%|███████▌  | 2807/3730 [01:38<00:25, 36.89slice/s]Validating & Caching [2D train] (threads=4):  75%|███████▌  | 2814/3730 [01:38<00:21, 42.87slice/s]Validating & Caching [2D train] (threads=4):  76%|███████▌  | 2819/3730 [01:38<00:22, 41.24slice/s]Validating & Caching [2D train] (threads=4):  76%|███████▌  | 2824/3730 [01:38<00:21, 41.40slice/s]Validating & Caching [2D train] (threads=4):  76%|███████▌  | 2829/3730 [01:39<00:20, 43.50slice/s]Validating & Caching [2D train] (threads=4):  76%|███████▌  | 2834/3730 [01:39<00:21, 41.82slice/s]Validating & Caching [2D train] (threads=4):  76%|███████▌  | 2839/3730 [01:39<00:21, 41.70slice/s]Validating & Caching [2D train] (threads=4):  76%|███████▌  | 2844/3730 [01:39<00:26, 32.92slice/s]Validating & Caching [2D train] (threads=4):  76%|███████▋  | 2848/3730 [01:39<00:28, 30.63slice/s]Validating & Caching [2D train] (threads=4):  76%|███████▋  | 2853/3730 [01:39<00:25, 34.44slice/s]Validating & Caching [2D train] (threads=4):  77%|███████▋  | 2859/3730 [01:39<00:22, 38.51slice/s]Validating & Caching [2D train] (threads=4):  77%|███████▋  | 2864/3730 [01:40<00:23, 36.76slice/s]Validating & Caching [2D train] (threads=4):  77%|███████▋  | 2868/3730 [01:40<00:25, 33.86slice/s]Validating & Caching [2D train] (threads=4):  77%|███████▋  | 2873/3730 [01:40<00:22, 37.54slice/s]Validating & Caching [2D train] (threads=4):  77%|███████▋  | 2880/3730 [01:40<00:19, 42.73slice/s]Validating & Caching [2D train] (threads=4):  77%|███████▋  | 2885/3730 [01:40<00:24, 34.88slice/s]Validating & Caching [2D train] (threads=4):  78%|███████▊  | 2891/3730 [01:40<00:22, 37.79slice/s]Validating & Caching [2D train] (threads=4):  78%|███████▊  | 2896/3730 [01:40<00:23, 35.79slice/s]Validating & Caching [2D train] (threads=4):  78%|███████▊  | 2903/3730 [01:41<00:19, 42.63slice/s]Validating & Caching [2D train] (threads=4):  78%|███████▊  | 2908/3730 [01:41<00:19, 42.29slice/s]Validating & Caching [2D train] (threads=4):  78%|███████▊  | 2913/3730 [01:41<00:24, 33.69slice/s]Validating & Caching [2D train] (threads=4):  78%|███████▊  | 2917/3730 [01:41<00:26, 31.14slice/s]Validating & Caching [2D train] (threads=4):  78%|███████▊  | 2922/3730 [01:41<00:24, 33.34slice/s]Validating & Caching [2D train] (threads=4):  78%|███████▊  | 2926/3730 [01:41<00:24, 32.40slice/s]Validating & Caching [2D train] (threads=4):  79%|███████▊  | 2933/3730 [01:41<00:19, 40.59slice/s]Validating & Caching [2D train] (threads=4):  79%|███████▉  | 2938/3730 [01:42<00:22, 35.94slice/s]Validating & Caching [2D train] (threads=4):  79%|███████▉  | 2942/3730 [01:42<00:22, 34.35slice/s]Validating & Caching [2D train] (threads=4):  79%|███████▉  | 2947/3730 [01:42<00:22, 35.40slice/s]Validating & Caching [2D train] (threads=4):  79%|███████▉  | 2951/3730 [01:42<00:25, 30.60slice/s]Validating & Caching [2D train] (threads=4):  79%|███████▉  | 2955/3730 [01:42<00:27, 28.07slice/s]Validating & Caching [2D train] (threads=4):  79%|███████▉  | 2958/3730 [01:42<00:33, 22.73slice/s]Validating & Caching [2D train] (threads=4):  79%|███████▉  | 2961/3730 [01:43<00:41, 18.75slice/s]Validating & Caching [2D train] (threads=4):  79%|███████▉  | 2965/3730 [01:43<00:35, 21.66slice/s]Validating & Caching [2D train] (threads=4):  80%|███████▉  | 2969/3730 [01:43<00:30, 24.99slice/s]Validating & Caching [2D train] (threads=4):  80%|███████▉  | 2972/3730 [01:43<00:33, 22.35slice/s]Validating & Caching [2D train] (threads=4):  80%|███████▉  | 2977/3730 [01:43<00:26, 28.04slice/s]Validating & Caching [2D train] (threads=4):  80%|███████▉  | 2981/3730 [01:43<00:32, 23.32slice/s]Validating & Caching [2D train] (threads=4):  80%|████████  | 2985/3730 [01:43<00:28, 26.16slice/s]Validating & Caching [2D train] (threads=4):  80%|████████  | 2989/3730 [01:44<00:30, 24.18slice/s]Validating & Caching [2D train] (threads=4):  80%|████████  | 2993/3730 [01:44<00:29, 25.08slice/s]Validating & Caching [2D train] (threads=4):  80%|████████  | 2996/3730 [01:44<00:30, 24.26slice/s]Validating & Caching [2D train] (threads=4):  80%|████████  | 2999/3730 [01:44<00:29, 24.58slice/s]Validating & Caching [2D train] (threads=4):  81%|████████  | 3003/3730 [01:44<00:26, 27.26slice/s]Validating & Caching [2D train] (threads=4):  81%|████████  | 3009/3730 [01:44<00:21, 34.00slice/s]Validating & Caching [2D train] (threads=4):  81%|████████  | 3013/3730 [01:45<00:24, 29.67slice/s]Validating & Caching [2D train] (threads=4):  81%|████████  | 3019/3730 [01:45<00:19, 35.90slice/s]Validating & Caching [2D train] (threads=4):  81%|████████  | 3023/3730 [01:45<00:19, 35.61slice/s]Validating & Caching [2D train] (threads=4):  81%|████████  | 3030/3730 [01:45<00:15, 43.83slice/s]Validating & Caching [2D train] (threads=4):  81%|████████▏ | 3035/3730 [01:45<00:15, 44.10slice/s]Validating & Caching [2D train] (threads=4):  82%|████████▏ | 3040/3730 [01:45<00:19, 36.17slice/s]Validating & Caching [2D train] (threads=4):  82%|████████▏ | 3046/3730 [01:45<00:16, 41.34slice/s]Validating & Caching [2D train] (threads=4):  82%|████████▏ | 3051/3730 [01:45<00:18, 36.34slice/s]Validating & Caching [2D train] (threads=4):  82%|████████▏ | 3057/3730 [01:46<00:16, 40.29slice/s]Validating & Caching [2D train] (threads=4):  82%|████████▏ | 3063/3730 [01:46<00:14, 44.73slice/s]Validating & Caching [2D train] (threads=4):  82%|████████▏ | 3068/3730 [01:46<00:14, 44.87slice/s]Validating & Caching [2D train] (threads=4):  82%|████████▏ | 3073/3730 [01:46<00:15, 43.10slice/s]Validating & Caching [2D train] (threads=4):  83%|████████▎ | 3078/3730 [01:46<00:14, 44.23slice/s]Validating & Caching [2D train] (threads=4):  83%|████████▎ | 3083/3730 [01:46<00:15, 42.45slice/s]Validating & Caching [2D train] (threads=4):  83%|████████▎ | 3088/3730 [01:46<00:16, 38.44slice/s]Validating & Caching [2D train] (threads=4):  83%|████████▎ | 3094/3730 [01:46<00:15, 41.51slice/s]Validating & Caching [2D train] (threads=4):  83%|████████▎ | 3099/3730 [01:47<00:16, 38.74slice/s]Validating & Caching [2D train] (threads=4):  83%|████████▎ | 3103/3730 [01:47<00:16, 38.83slice/s]Validating & Caching [2D train] (threads=4):  83%|████████▎ | 3108/3730 [01:47<00:23, 26.29slice/s]Validating & Caching [2D train] (threads=4):  83%|████████▎ | 3113/3730 [01:47<00:21, 28.08slice/s]Validating & Caching [2D train] (threads=4):  84%|████████▎ | 3118/3730 [01:47<00:20, 29.50slice/s]Validating & Caching [2D train] (threads=4):  84%|████████▎ | 3122/3730 [01:47<00:19, 31.14slice/s]Validating & Caching [2D train] (threads=4):  84%|████████▍ | 3126/3730 [01:48<00:19, 30.20slice/s]Validating & Caching [2D train] (threads=4):  84%|████████▍ | 3130/3730 [01:48<00:19, 30.01slice/s]Validating & Caching [2D train] (threads=4):  84%|████████▍ | 3134/3730 [01:48<00:21, 28.34slice/s]Validating & Caching [2D train] (threads=4):  84%|████████▍ | 3137/3730 [01:48<00:22, 26.19slice/s]Validating & Caching [2D train] (threads=4):  84%|████████▍ | 3142/3730 [01:48<00:19, 29.84slice/s]Validating & Caching [2D train] (threads=4):  84%|████████▍ | 3146/3730 [01:48<00:19, 29.66slice/s]Validating & Caching [2D train] (threads=4):  84%|████████▍ | 3151/3730 [01:48<00:17, 33.55slice/s]Validating & Caching [2D train] (threads=4):  85%|████████▍ | 3156/3730 [01:48<00:16, 35.42slice/s]Validating & Caching [2D train] (threads=4):  85%|████████▍ | 3161/3730 [01:49<00:14, 38.59slice/s]Validating & Caching [2D train] (threads=4):  85%|████████▍ | 3167/3730 [01:49<00:13, 41.63slice/s]Validating & Caching [2D train] (threads=4):  85%|████████▌ | 3172/3730 [01:49<00:17, 32.13slice/s]Validating & Caching [2D train] (threads=4):  85%|████████▌ | 3176/3730 [01:49<00:17, 31.87slice/s]Validating & Caching [2D train] (threads=4):  85%|████████▌ | 3182/3730 [01:49<00:15, 35.08slice/s]Validating & Caching [2D train] (threads=4):  85%|████████▌ | 3186/3730 [01:50<00:22, 24.32slice/s]Validating & Caching [2D train] (threads=4):  85%|████████▌ | 3189/3730 [01:50<00:21, 25.24slice/s]Validating & Caching [2D train] (threads=4):  86%|████████▌ | 3196/3730 [01:50<00:15, 34.06slice/s]Validating & Caching [2D train] (threads=4):  86%|████████▌ | 3201/3730 [01:50<00:16, 32.53slice/s]Validating & Caching [2D train] (threads=4):  86%|████████▌ | 3205/3730 [01:50<00:18, 28.83slice/s]Validating & Caching [2D train] (threads=4):  86%|████████▌ | 3209/3730 [01:50<00:17, 29.55slice/s]Validating & Caching [2D train] (threads=4):  86%|████████▌ | 3213/3730 [01:50<00:17, 29.29slice/s]Validating & Caching [2D train] (threads=4):  86%|████████▌ | 3217/3730 [01:50<00:16, 30.57slice/s]Validating & Caching [2D train] (threads=4):  86%|████████▋ | 3221/3730 [01:51<00:16, 30.86slice/s]Validating & Caching [2D train] (threads=4):  86%|████████▋ | 3225/3730 [01:51<00:16, 30.55slice/s]Validating & Caching [2D train] (threads=4):  87%|████████▋ | 3231/3730 [01:51<00:14, 33.49slice/s]Validating & Caching [2D train] (threads=4):  87%|████████▋ | 3237/3730 [01:51<00:12, 39.35slice/s]Validating & Caching [2D train] (threads=4):  87%|████████▋ | 3242/3730 [01:51<00:14, 34.20slice/s]Validating & Caching [2D train] (threads=4):  87%|████████▋ | 3246/3730 [01:51<00:14, 33.46slice/s]Validating & Caching [2D train] (threads=4):  87%|████████▋ | 3251/3730 [01:51<00:13, 36.27slice/s]Validating & Caching [2D train] (threads=4):  87%|████████▋ | 3256/3730 [01:52<00:12, 38.97slice/s]Validating & Caching [2D train] (threads=4):  87%|████████▋ | 3261/3730 [01:52<00:11, 41.64slice/s]Validating & Caching [2D train] (threads=4):  88%|████████▊ | 3266/3730 [01:52<00:10, 43.74slice/s]Validating & Caching [2D train] (threads=4):  88%|████████▊ | 3271/3730 [01:52<00:13, 35.29slice/s]Validating & Caching [2D train] (threads=4):  88%|████████▊ | 3276/3730 [01:52<00:11, 38.53slice/s]Validating & Caching [2D train] (threads=4):  88%|████████▊ | 3281/3730 [01:52<00:12, 34.56slice/s]Validating & Caching [2D train] (threads=4):  88%|████████▊ | 3285/3730 [01:52<00:14, 29.87slice/s]Validating & Caching [2D train] (threads=4):  88%|████████▊ | 3289/3730 [01:53<00:28, 15.32slice/s]Validating & Caching [2D train] (threads=4):  88%|████████▊ | 3292/3730 [01:53<00:27, 16.15slice/s]Validating & Caching [2D train] (threads=4):  88%|████████▊ | 3295/3730 [01:53<00:24, 17.71slice/s]Validating & Caching [2D train] (threads=4):  88%|████████▊ | 3301/3730 [01:53<00:17, 24.73slice/s]Validating & Caching [2D train] (threads=4):  89%|████████▊ | 3308/3730 [01:54<00:13, 31.48slice/s]Validating & Caching [2D train] (threads=4):  89%|████████▉ | 3315/3730 [01:54<00:10, 38.34slice/s]Validating & Caching [2D train] (threads=4):  89%|████████▉ | 3321/3730 [01:54<00:09, 43.11slice/s]Validating & Caching [2D train] (threads=4):  89%|████████▉ | 3327/3730 [01:54<00:08, 46.42slice/s]Validating & Caching [2D train] (threads=4):  89%|████████▉ | 3333/3730 [01:54<00:09, 41.40slice/s]Validating & Caching [2D train] (threads=4):  89%|████████▉ | 3338/3730 [01:54<00:11, 33.41slice/s]Validating & Caching [2D train] (threads=4):  90%|████████▉ | 3342/3730 [01:54<00:11, 32.58slice/s]Validating & Caching [2D train] (threads=4):  90%|████████▉ | 3346/3730 [01:55<00:12, 30.05slice/s]Validating & Caching [2D train] (threads=4):  90%|████████▉ | 3350/3730 [01:55<00:12, 31.29slice/s]Validating & Caching [2D train] (threads=4):  90%|████████▉ | 3354/3730 [01:55<00:12, 29.54slice/s]Validating & Caching [2D train] (threads=4):  90%|█████████ | 3360/3730 [01:55<00:10, 35.20slice/s]Validating & Caching [2D train] (threads=4):  90%|█████████ | 3366/3730 [01:55<00:08, 41.04slice/s]Validating & Caching [2D train] (threads=4):  90%|█████████ | 3371/3730 [01:55<00:09, 39.65slice/s]Validating & Caching [2D train] (threads=4):  91%|█████████ | 3376/3730 [01:55<00:09, 37.99slice/s]Validating & Caching [2D train] (threads=4):  91%|█████████ | 3380/3730 [01:55<00:10, 33.89slice/s]Validating & Caching [2D train] (threads=4):  91%|█████████ | 3384/3730 [01:56<00:11, 30.11slice/s]Validating & Caching [2D train] (threads=4):  91%|█████████ | 3388/3730 [01:56<00:11, 30.89slice/s]Validating & Caching [2D train] (threads=4):  91%|█████████ | 3392/3730 [01:56<00:10, 30.73slice/s]Validating & Caching [2D train] (threads=4):  91%|█████████ | 3396/3730 [01:56<00:21, 15.46slice/s]Validating & Caching [2D train] (threads=4):  91%|█████████ | 3403/3730 [01:57<00:16, 20.10slice/s]Validating & Caching [2D train] (threads=4):  91%|█████████▏| 3410/3730 [01:57<00:11, 27.02slice/s]Validating & Caching [2D train] (threads=4):  92%|█████████▏| 3414/3730 [01:57<00:11, 28.33slice/s]Validating & Caching [2D train] (threads=4):  92%|█████████▏| 3421/3730 [01:57<00:08, 34.49slice/s]Validating & Caching [2D train] (threads=4):  92%|█████████▏| 3428/3730 [01:57<00:07, 40.58slice/s]Validating & Caching [2D train] (threads=4):  92%|█████████▏| 3433/3730 [01:57<00:07, 42.22slice/s]Validating & Caching [2D train] (threads=4):  92%|█████████▏| 3438/3730 [01:57<00:09, 31.80slice/s]Validating & Caching [2D train] (threads=4):  92%|█████████▏| 3445/3730 [01:58<00:07, 36.21slice/s]Validating & Caching [2D train] (threads=4):  93%|█████████▎| 3452/3730 [01:58<00:06, 42.57slice/s]Validating & Caching [2D train] (threads=4):  93%|█████████▎| 3459/3730 [01:58<00:05, 47.93slice/s]Validating & Caching [2D train] (threads=4):  93%|█████████▎| 3465/3730 [01:58<00:05, 47.79slice/s]Validating & Caching [2D train] (threads=4):  93%|█████████▎| 3471/3730 [01:58<00:06, 42.85slice/s]Validating & Caching [2D train] (threads=4):  93%|█████████▎| 3476/3730 [01:58<00:06, 40.82slice/s]Validating & Caching [2D train] (threads=4):  93%|█████████▎| 3481/3730 [01:59<00:07, 32.84slice/s]Validating & Caching [2D train] (threads=4):  93%|█████████▎| 3486/3730 [01:59<00:06, 35.63slice/s]Validating & Caching [2D train] (threads=4):  94%|█████████▎| 3494/3730 [01:59<00:05, 39.73slice/s]Validating & Caching [2D train] (threads=4):  94%|█████████▍| 3499/3730 [01:59<00:06, 34.33slice/s]Validating & Caching [2D train] (threads=4):  94%|█████████▍| 3503/3730 [01:59<00:07, 31.12slice/s]Validating & Caching [2D train] (threads=4):  94%|█████████▍| 3507/3730 [01:59<00:07, 28.72slice/s]Validating & Caching [2D train] (threads=4):  94%|█████████▍| 3511/3730 [01:59<00:07, 30.38slice/s]Validating & Caching [2D train] (threads=4):  94%|█████████▍| 3518/3730 [02:00<00:05, 38.00slice/s]Validating & Caching [2D train] (threads=4):  95%|█████████▍| 3526/3730 [02:00<00:04, 43.74slice/s]Validating & Caching [2D train] (threads=4):  95%|█████████▍| 3531/3730 [02:00<00:04, 40.58slice/s]Validating & Caching [2D train] (threads=4):  95%|█████████▍| 3536/3730 [02:00<00:04, 41.09slice/s]Validating & Caching [2D train] (threads=4):  95%|█████████▍| 3541/3730 [02:00<00:04, 38.06slice/s]Validating & Caching [2D train] (threads=4):  95%|█████████▌| 3545/3730 [02:00<00:04, 38.06slice/s]Validating & Caching [2D train] (threads=4):  95%|█████████▌| 3552/3730 [02:00<00:03, 45.53slice/s]Validating & Caching [2D train] (threads=4):  95%|█████████▌| 3560/3730 [02:00<00:03, 53.41slice/s]Validating & Caching [2D train] (threads=4):  96%|█████████▌| 3569/3730 [02:01<00:02, 61.84slice/s]Validating & Caching [2D train] (threads=4):  96%|█████████▌| 3576/3730 [02:01<00:02, 61.36slice/s]Validating & Caching [2D train] (threads=4):  96%|█████████▌| 3583/3730 [02:01<00:02, 62.31slice/s]Validating & Caching [2D train] (threads=4):  96%|█████████▌| 3590/3730 [02:01<00:02, 46.96slice/s]Validating & Caching [2D train] (threads=4):  96%|█████████▋| 3596/3730 [02:01<00:02, 45.74slice/s]Validating & Caching [2D train] (threads=4):  97%|█████████▋| 3602/3730 [02:01<00:03, 40.38slice/s]Validating & Caching [2D train] (threads=4):  97%|█████████▋| 3607/3730 [02:02<00:03, 36.52slice/s]Validating & Caching [2D train] (threads=4):  97%|█████████▋| 3611/3730 [02:02<00:03, 32.93slice/s]Validating & Caching [2D train] (threads=4):  97%|█████████▋| 3615/3730 [02:02<00:03, 33.85slice/s]Validating & Caching [2D train] (threads=4):  97%|█████████▋| 3619/3730 [02:02<00:04, 25.02slice/s]Validating & Caching [2D train] (threads=4):  97%|█████████▋| 3624/3730 [02:02<00:03, 27.39slice/s]Validating & Caching [2D train] (threads=4):  97%|█████████▋| 3628/3730 [02:02<00:03, 28.89slice/s]Validating & Caching [2D train] (threads=4):  97%|█████████▋| 3632/3730 [02:03<00:03, 25.74slice/s]Validating & Caching [2D train] (threads=4):  97%|█████████▋| 3635/3730 [02:03<00:03, 26.45slice/s]Validating & Caching [2D train] (threads=4):  98%|█████████▊| 3638/3730 [02:03<00:03, 26.76slice/s]Validating & Caching [2D train] (threads=4):  98%|█████████▊| 3641/3730 [02:03<00:03, 23.33slice/s]Validating & Caching [2D train] (threads=4):  98%|█████████▊| 3644/3730 [02:03<00:03, 24.56slice/s]Validating & Caching [2D train] (threads=4):  98%|█████████▊| 3650/3730 [02:03<00:02, 32.99slice/s]Validating & Caching [2D train] (threads=4):  98%|█████████▊| 3654/3730 [02:03<00:02, 30.73slice/s]Validating & Caching [2D train] (threads=4):  98%|█████████▊| 3658/3730 [02:03<00:02, 32.69slice/s]Validating & Caching [2D train] (threads=4):  98%|█████████▊| 3663/3730 [02:04<00:01, 33.98slice/s]Validating & Caching [2D train] (threads=4):  98%|█████████▊| 3667/3730 [02:04<00:02, 31.01slice/s]Validating & Caching [2D train] (threads=4):  98%|█████████▊| 3671/3730 [02:04<00:01, 30.04slice/s]Validating & Caching [2D train] (threads=4):  99%|█████████▊| 3677/3730 [02:04<00:01, 35.96slice/s]Validating & Caching [2D train] (threads=4):  99%|█████████▊| 3681/3730 [02:04<00:01, 31.35slice/s]Validating & Caching [2D train] (threads=4):  99%|█████████▉| 3685/3730 [02:04<00:01, 31.70slice/s]Validating & Caching [2D train] (threads=4):  99%|█████████▉| 3689/3730 [02:04<00:01, 31.62slice/s]Validating & Caching [2D train] (threads=4):  99%|█████████▉| 3695/3730 [02:04<00:00, 35.69slice/s]Validating & Caching [2D train] (threads=4):  99%|█████████▉| 3700/3730 [02:05<00:00, 36.25slice/s]Validating & Caching [2D train] (threads=4):  99%|█████████▉| 3704/3730 [02:05<00:00, 36.89slice/s]Validating & Caching [2D train] (threads=4):  99%|█████████▉| 3709/3730 [02:05<00:00, 34.89slice/s]Validating & Caching [2D train] (threads=4): 100%|█████████▉| 3714/3730 [02:05<00:00, 37.43slice/s]Validating & Caching [2D train] (threads=4): 100%|█████████▉| 3718/3730 [02:05<00:00, 23.69slice/s]Validating & Caching [2D train] (threads=4): 100%|█████████▉| 3722/3730 [02:06<00:00, 18.72slice/s]Validating & Caching [2D train] (threads=4): 100%|█████████▉| 3725/3730 [02:06<00:00, 19.57slice/s]Validating & Caching [2D train] (threads=4): 100%|██████████| 3730/3730 [02:06<00:00, 29.51slice/s]
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0041/1.3.6.1.4.1.14519.5.2.1.6655.2359.311966617924514341802171355118_image.nii.gz @ z=101): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0066/1.3.6.1.4.1.14519.5.2.1.6655.2359.115432191511422823620477914899_image.nii.gz @ z=71): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0009/1.3.6.1.4.1.14519.5.2.1.6655.2359.277391510589615136343853600426_image.nii.gz @ z=41): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0264/1.3.6.1.4.1.14519.5.2.1.6655.2359.100619369903138089918944042091_image.nii.gz @ z=35): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0260/1.3.6.1.4.1.14519.5.2.1.6655.2359.265657909279093757270987178654_image.nii.gz @ z=81): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0004/1.3.6.1.4.1.14519.5.2.1.6655.2359.128573427051718165079150282719_image.nii.gz @ z=73): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0008/1.3.6.1.4.1.14519.5.2.1.6655.2359.470624421300695872039355049385_image.nii.gz @ z=101): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0019/1.3.6.1.4.1.14519.5.2.1.6655.2359.573819172280153360489534321998_image.nii.gz @ z=55): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0043/1.3.6.1.4.1.14519.5.2.1.6655.2359.148661115365840306775979117435_image.nii.gz @ z=118): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0031/1.3.6.1.4.1.14519.5.2.1.6655.2359.269178008582949937116227853144_image.nii.gz @ z=50): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0036/1.3.6.1.4.1.14519.5.2.1.6655.2359.132208834373887834567488990688_image.nii.gz @ z=106): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0040/1.3.6.1.4.1.14519.5.2.1.6655.2359.148253024943571734565766678660_image.nii.gz @ z=50): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0053/1.3.6.1.4.1.14519.5.2.1.6655.2359.251794374963815812092336879289_image.nii.gz @ z=80): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0084/1.3.6.1.4.1.14519.5.2.1.6655.2359.107537050910602839646213737934_image.nii.gz @ z=55): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0104/1.3.6.1.4.1.14519.5.2.1.6655.2359.157178637518116815305998928258_image.nii.gz @ z=144): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0144/1.3.6.1.4.1.14519.5.2.1.6655.2359.247382825055042512312318107835_image.nii.gz @ z=63): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0253/1.3.6.1.4.1.14519.5.2.1.6655.2359.169324076803786376815674802804_image.nii.gz @ z=129): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+Failed sample (/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0041/1.3.6.1.4.1.14519.5.2.1.6655.2359.139446213329793871369638062780_image.nii.gz @ z=92): applying transform <monai.transforms.spatial.dictionary.RandFlipd object at 0x7f2fa28c67e0>
+[2D train] Kept 3712/3730 valid slices.
+[2D] PersistentDataset cache_dir='/home/hansstem/.cache/monai_lung_pet_ct_clean_2d/img224_crop96_mp1/val'
+Validating & Caching [2D val] (threads=4):   0%|          | 0/786 [00:00<?, ?slice/s]Validating & Caching [2D val] (threads=4):   1%|          | 4/786 [00:00<00:19, 39.24slice/s]Validating & Caching [2D val] (threads=4):   1%|▏         | 11/786 [00:00<00:14, 53.33slice/s]Validating & Caching [2D val] (threads=4):   2%|▏         | 17/786 [00:00<00:14, 53.60slice/s]Validating & Caching [2D val] (threads=4):   4%|▎         | 28/786 [00:00<00:11, 68.35slice/s]Validating & Caching [2D val] (threads=4):   5%|▍         | 37/786 [00:00<00:11, 64.36slice/s]Validating & Caching [2D val] (threads=4):   6%|▌         | 44/786 [00:00<00:14, 50.12slice/s]Validating & Caching [2D val] (threads=4):   7%|▋         | 52/786 [00:00<00:13, 55.12slice/s]Validating & Caching [2D val] (threads=4):   8%|▊         | 59/786 [00:01<00:12, 58.07slice/s]Validating & Caching [2D val] (threads=4):   8%|▊         | 66/786 [00:01<00:13, 52.12slice/s]Validating & Caching [2D val] (threads=4):   9%|▉         | 72/786 [00:01<00:13, 52.61slice/s]Validating & Caching [2D val] (threads=4):  10%|█         | 79/786 [00:01<00:12, 54.82slice/s]Validating & Caching [2D val] (threads=4):  11%|█▏        | 90/786 [00:01<00:10, 68.11slice/s]Validating & Caching [2D val] (threads=4):  12%|█▏        | 98/786 [00:01<00:12, 57.32slice/s]Validating & Caching [2D val] (threads=4):  13%|█▎        | 105/786 [00:01<00:12, 56.74slice/s]Validating & Caching [2D val] (threads=4):  14%|█▍        | 112/786 [00:02<00:13, 49.22slice/s]Validating & Caching [2D val] (threads=4):  15%|█▌        | 118/786 [00:02<00:14, 47.50slice/s]Validating & Caching [2D val] (threads=4):  16%|█▌        | 124/786 [00:02<00:13, 47.97slice/s]Validating & Caching [2D val] (threads=4):  17%|█▋        | 130/786 [00:02<00:13, 49.20slice/s]Validating & Caching [2D val] (threads=4):  18%|█▊        | 140/786 [00:02<00:10, 60.03slice/s]Validating & Caching [2D val] (threads=4):  19%|█▊        | 147/786 [00:02<00:11, 54.54slice/s]Validating & Caching [2D val] (threads=4):  19%|█▉        | 153/786 [00:02<00:11, 54.42slice/s]Validating & Caching [2D val] (threads=4):  20%|██        | 161/786 [00:02<00:11, 52.67slice/s]Validating & Caching [2D val] (threads=4):  21%|██▏       | 168/786 [00:03<00:10, 56.23slice/s]Validating & Caching [2D val] (threads=4):  22%|██▏       | 175/786 [00:03<00:10, 59.36slice/s]Validating & Caching [2D val] (threads=4):  23%|██▎       | 182/786 [00:03<00:09, 60.60slice/s]Validating & Caching [2D val] (threads=4):  24%|██▍       | 189/786 [00:03<00:09, 61.41slice/s]Validating & Caching [2D val] (threads=4):  25%|██▍       | 196/786 [00:03<00:11, 52.43slice/s]Validating & Caching [2D val] (threads=4):  26%|██▌       | 202/786 [00:03<00:13, 44.44slice/s]Validating & Caching [2D val] (threads=4):  26%|██▋       | 207/786 [00:03<00:12, 45.17slice/s]Validating & Caching [2D val] (threads=4):  27%|██▋       | 215/786 [00:03<00:11, 50.49slice/s]Validating & Caching [2D val] (threads=4):  28%|██▊       | 221/786 [00:04<00:12, 43.55slice/s]Validating & Caching [2D val] (threads=4):  29%|██▉       | 226/786 [00:04<00:17, 32.73slice/s]Validating & Caching [2D val] (threads=4):  29%|██▉       | 230/786 [00:04<00:20, 27.17slice/s]Validating & Caching [2D val] (threads=4):  30%|██▉       | 234/786 [00:04<00:19, 29.02slice/s]Validating & Caching [2D val] (threads=4):  31%|███       | 241/786 [00:04<00:16, 33.72slice/s]Validating & Caching [2D val] (threads=4):  31%|███▏      | 246/786 [00:05<00:16, 33.65slice/s]Validating & Caching [2D val] (threads=4):  32%|███▏      | 251/786 [00:05<00:14, 36.79slice/s]Validating & Caching [2D val] (threads=4):  32%|███▏      | 255/786 [00:05<00:20, 25.67slice/s]Validating & Caching [2D val] (threads=4):  33%|███▎      | 260/786 [00:05<00:17, 29.70slice/s]Validating & Caching [2D val] (threads=4):  34%|███▍      | 269/786 [00:05<00:12, 41.21slice/s]Validating & Caching [2D val] (threads=4):  35%|███▍      | 274/786 [00:05<00:13, 38.24slice/s]Validating & Caching [2D val] (threads=4):  35%|███▌      | 279/786 [00:06<00:13, 36.91slice/s]Validating & Caching [2D val] (threads=4):  36%|███▋      | 285/786 [00:06<00:13, 35.99slice/s]Validating & Caching [2D val] (threads=4):  37%|███▋      | 289/786 [00:06<00:14, 35.27slice/s]Validating & Caching [2D val] (threads=4):  37%|███▋      | 293/786 [00:06<00:13, 36.24slice/s]Validating & Caching [2D val] (threads=4):  38%|███▊      | 297/786 [00:06<00:13, 36.90slice/s]Validating & Caching [2D val] (threads=4):  38%|███▊      | 301/786 [00:06<00:13, 35.13slice/s]Validating & Caching [2D val] (threads=4):  39%|███▉      | 310/786 [00:06<00:11, 41.47slice/s]Validating & Caching [2D val] (threads=4):  40%|████      | 317/786 [00:06<00:10, 46.54slice/s]Validating & Caching [2D val] (threads=4):  41%|████      | 322/786 [00:07<00:11, 38.70slice/s]Validating & Caching [2D val] (threads=4):  42%|████▏     | 332/786 [00:07<00:08, 51.90slice/s]Validating & Caching [2D val] (threads=4):  44%|████▎     | 343/786 [00:07<00:06, 63.98slice/s]Validating & Caching [2D val] (threads=4):  45%|████▌     | 356/786 [00:07<00:05, 71.75slice/s]Validating & Caching [2D val] (threads=4):  46%|████▋     | 364/786 [00:07<00:06, 60.48slice/s]Validating & Caching [2D val] (threads=4):  47%|████▋     | 371/786 [00:07<00:09, 45.54slice/s]Validating & Caching [2D val] (threads=4):  48%|████▊     | 379/786 [00:08<00:08, 49.79slice/s]Validating & Caching [2D val] (threads=4):  49%|████▉     | 385/786 [00:08<00:08, 48.38slice/s]Validating & Caching [2D val] (threads=4):  50%|████▉     | 391/786 [00:08<00:07, 50.31slice/s]Validating & Caching [2D val] (threads=4):  51%|█████     | 397/786 [00:08<00:09, 41.78slice/s]Validating & Caching [2D val] (threads=4):  51%|█████     | 402/786 [00:08<00:08, 42.83slice/s]Validating & Caching [2D val] (threads=4):  52%|█████▏    | 409/786 [00:08<00:07, 47.79slice/s]Validating & Caching [2D val] (threads=4):  53%|█████▎    | 415/786 [00:08<00:08, 44.95slice/s]Validating & Caching [2D val] (threads=4):  54%|█████▎    | 422/786 [00:09<00:07, 48.95slice/s]Validating & Caching [2D val] (threads=4):  54%|█████▍    | 428/786 [00:09<00:07, 48.97slice/s]Validating & Caching [2D val] (threads=4):  55%|█████▌    | 434/786 [00:09<00:07, 46.09slice/s]Validating & Caching [2D val] (threads=4):  57%|█████▋    | 446/786 [00:09<00:05, 63.39slice/s]Validating & Caching [2D val] (threads=4):  58%|█████▊    | 453/786 [00:09<00:05, 64.80slice/s]Validating & Caching [2D val] (threads=4):  59%|█████▉    | 462/786 [00:09<00:04, 67.12slice/s]Validating & Caching [2D val] (threads=4):  60%|█████▉    | 469/786 [00:09<00:05, 63.17slice/s]Validating & Caching [2D val] (threads=4):  61%|██████    | 476/786 [00:09<00:05, 55.20slice/s]Validating & Caching [2D val] (threads=4):  61%|██████▏   | 482/786 [00:10<00:07, 39.68slice/s]Validating & Caching [2D val] (threads=4):  62%|██████▏   | 488/786 [00:10<00:08, 35.77slice/s]Validating & Caching [2D val] (threads=4):  63%|██████▎   | 496/786 [00:10<00:06, 43.03slice/s]Validating & Caching [2D val] (threads=4):  64%|██████▍   | 502/786 [00:10<00:06, 42.57slice/s]Validating & Caching [2D val] (threads=4):  65%|██████▍   | 507/786 [00:10<00:06, 41.63slice/s]Validating & Caching [2D val] (threads=4):  65%|██████▌   | 512/786 [00:10<00:06, 42.99slice/s]Validating & Caching [2D val] (threads=4):  66%|██████▌   | 517/786 [00:10<00:06, 43.83slice/s]Validating & Caching [2D val] (threads=4):  66%|██████▋   | 522/786 [00:11<00:06, 42.72slice/s]Validating & Caching [2D val] (threads=4):  67%|██████▋   | 527/786 [00:11<00:06, 41.50slice/s]Validating & Caching [2D val] (threads=4):  68%|██████▊   | 532/786 [00:11<00:07, 34.10slice/s]Validating & Caching [2D val] (threads=4):  68%|██████▊   | 536/786 [00:11<00:09, 26.79slice/s]Validating & Caching [2D val] (threads=4):  69%|██████▊   | 540/786 [00:11<00:09, 26.56slice/s]Validating & Caching [2D val] (threads=4):  69%|██████▉   | 544/786 [00:12<00:09, 26.67slice/s]Validating & Caching [2D val] (threads=4):  70%|██████▉   | 547/786 [00:12<00:08, 26.89slice/s]Validating & Caching [2D val] (threads=4):  70%|███████   | 552/786 [00:12<00:07, 31.96slice/s]Validating & Caching [2D val] (threads=4):  71%|███████   | 559/786 [00:12<00:05, 38.62slice/s]Validating & Caching [2D val] (threads=4):  72%|███████▏  | 568/786 [00:12<00:04, 47.41slice/s]Validating & Caching [2D val] (threads=4):  73%|███████▎  | 576/786 [00:12<00:04, 50.49slice/s]Validating & Caching [2D val] (threads=4):  74%|███████▍  | 584/786 [00:12<00:03, 55.94slice/s]Validating & Caching [2D val] (threads=4):  75%|███████▌  | 590/786 [00:12<00:03, 51.07slice/s]Validating & Caching [2D val] (threads=4):  76%|███████▋  | 601/786 [00:12<00:02, 62.32slice/s]Validating & Caching [2D val] (threads=4):  77%|███████▋  | 609/786 [00:13<00:02, 66.33slice/s]Validating & Caching [2D val] (threads=4):  78%|███████▊  | 617/786 [00:13<00:02, 64.91slice/s]Validating & Caching [2D val] (threads=4):  80%|███████▉  | 625/786 [00:13<00:02, 67.70slice/s]Validating & Caching [2D val] (threads=4):  80%|████████  | 632/786 [00:13<00:02, 62.11slice/s]Validating & Caching [2D val] (threads=4):  81%|████████▏ | 639/786 [00:13<00:02, 54.01slice/s]Validating & Caching [2D val] (threads=4):  82%|████████▏ | 645/786 [00:13<00:02, 52.70slice/s]Validating & Caching [2D val] (threads=4):  83%|████████▎ | 651/786 [00:13<00:02, 47.44slice/s]Validating & Caching [2D val] (threads=4):  83%|████████▎ | 656/786 [00:14<00:02, 45.20slice/s]Validating & Caching [2D val] (threads=4):  84%|████████▍ | 661/786 [00:14<00:03, 40.37slice/s]Validating & Caching [2D val] (threads=4):  85%|████████▍ | 666/786 [00:14<00:02, 40.35slice/s]Validating & Caching [2D val] (threads=4):  85%|████████▌ | 671/786 [00:14<00:02, 41.50slice/s]Validating & Caching [2D val] (threads=4):  86%|████████▌ | 676/786 [00:14<00:03, 36.48slice/s]Validating & Caching [2D val] (threads=4):  87%|████████▋ | 680/786 [00:14<00:03, 31.75slice/s]Validating & Caching [2D val] (threads=4):  87%|████████▋ | 687/786 [00:14<00:02, 38.13slice/s]Validating & Caching [2D val] (threads=4):  88%|████████▊ | 692/786 [00:15<00:02, 38.82slice/s]Validating & Caching [2D val] (threads=4):  89%|████████▉ | 699/786 [00:15<00:01, 45.87slice/s]Validating & Caching [2D val] (threads=4):  90%|████████▉ | 704/786 [00:15<00:01, 46.41slice/s]Validating & Caching [2D val] (threads=4):  90%|█████████ | 709/786 [00:15<00:01, 43.88slice/s]Validating & Caching [2D val] (threads=4):  91%|█████████ | 714/786 [00:15<00:02, 32.04slice/s]Validating & Caching [2D val] (threads=4):  91%|█████████▏| 719/786 [00:15<00:01, 35.37slice/s]Validating & Caching [2D val] (threads=4):  92%|█████████▏| 724/786 [00:15<00:01, 37.00slice/s]Validating & Caching [2D val] (threads=4):  93%|█████████▎| 729/786 [00:16<00:01, 37.14slice/s]Validating & Caching [2D val] (threads=4):  94%|█████████▎| 735/786 [00:16<00:01, 38.18slice/s]Validating & Caching [2D val] (threads=4):  94%|█████████▍| 740/786 [00:16<00:01, 37.82slice/s]Validating & Caching [2D val] (threads=4):  95%|█████████▍| 744/786 [00:16<00:01, 31.77slice/s]Validating & Caching [2D val] (threads=4):  95%|█████████▌| 748/786 [00:16<00:01, 32.92slice/s]Validating & Caching [2D val] (threads=4):  96%|█████████▌| 752/786 [00:16<00:01, 31.97slice/s]Validating & Caching [2D val] (threads=4):  97%|█████████▋| 759/786 [00:16<00:00, 40.35slice/s]Validating & Caching [2D val] (threads=4):  98%|█████████▊| 768/786 [00:16<00:00, 50.32slice/s]Validating & Caching [2D val] (threads=4):  99%|█████████▉| 777/786 [00:17<00:00, 57.13slice/s]Validating & Caching [2D val] (threads=4): 100%|██████████| 786/786 [00:17<00:00, 57.75slice/s]Validating & Caching [2D val] (threads=4): 100%|██████████| 786/786 [00:17<00:00, 45.61slice/s]
+[2D val] Kept 786/786 valid slices.
+[2D] PersistentDataset cache_dir='/home/hansstem/.cache/monai_lung_pet_ct_clean_2d/img224_crop96_mp1/test'
+Validating & Caching [2D test] (threads=4):   0%|          | 0/834 [00:00<?, ?slice/s]Validating & Caching [2D test] (threads=4):   0%|          | 2/834 [00:00<00:46, 18.03slice/s]Validating & Caching [2D test] (threads=4):   1%|          | 9/834 [00:00<00:18, 44.25slice/s]Validating & Caching [2D test] (threads=4):   2%|▏         | 14/834 [00:00<00:20, 39.08slice/s]Validating & Caching [2D test] (threads=4):   2%|▏         | 18/834 [00:00<00:21, 37.95slice/s]Validating & Caching [2D test] (threads=4):   3%|▎         | 24/834 [00:00<00:21, 37.86slice/s]Validating & Caching [2D test] (threads=4):   4%|▎         | 31/834 [00:00<00:18, 42.61slice/s]Validating & Caching [2D test] (threads=4):   4%|▍         | 36/834 [00:00<00:18, 44.18slice/s]Validating & Caching [2D test] (threads=4):   5%|▍         | 41/834 [00:00<00:17, 44.75slice/s]Validating & Caching [2D test] (threads=4):   6%|▌         | 47/834 [00:01<00:16, 48.43slice/s]Validating & Caching [2D test] (threads=4):   6%|▋         | 53/834 [00:01<00:16, 48.27slice/s]Validating & Caching [2D test] (threads=4):   7%|▋         | 58/834 [00:01<00:21, 36.74slice/s]Validating & Caching [2D test] (threads=4):   8%|▊         | 68/834 [00:01<00:15, 50.04slice/s]Validating & Caching [2D test] (threads=4):   9%|▉         | 74/834 [00:01<00:15, 48.58slice/s]Validating & Caching [2D test] (threads=4):  10%|▉         | 80/834 [00:01<00:18, 41.66slice/s]Validating & Caching [2D test] (threads=4):  11%|█         | 89/834 [00:01<00:14, 50.46slice/s]Validating & Caching [2D test] (threads=4):  11%|█▏        | 95/834 [00:02<00:14, 50.23slice/s]Validating & Caching [2D test] (threads=4):  12%|█▏        | 101/834 [00:02<00:14, 51.26slice/s]Validating & Caching [2D test] (threads=4):  13%|█▎        | 107/834 [00:02<00:14, 49.87slice/s]Validating & Caching [2D test] (threads=4):  14%|█▍        | 117/834 [00:02<00:12, 58.48slice/s]Validating & Caching [2D test] (threads=4):  15%|█▍        | 123/834 [00:02<00:12, 55.65slice/s]Validating & Caching [2D test] (threads=4):  16%|█▌        | 131/834 [00:02<00:11, 60.09slice/s]Validating & Caching [2D test] (threads=4):  17%|█▋        | 138/834 [00:02<00:12, 53.95slice/s]Validating & Caching [2D test] (threads=4):  17%|█▋        | 145/834 [00:02<00:12, 57.12slice/s]Validating & Caching [2D test] (threads=4):  18%|█▊        | 153/834 [00:03<00:11, 58.82slice/s]Validating & Caching [2D test] (threads=4):  19%|█▉        | 160/834 [00:03<00:16, 39.99slice/s]Validating & Caching [2D test] (threads=4):  20%|█▉        | 165/834 [00:03<00:17, 37.75slice/s]Validating & Caching [2D test] (threads=4):  21%|██        | 174/834 [00:03<00:13, 47.94slice/s]Validating & Caching [2D test] (threads=4):  22%|██▏       | 181/834 [00:03<00:12, 52.08slice/s]Validating & Caching [2D test] (threads=4):  22%|██▏       | 187/834 [00:03<00:12, 52.85slice/s]Validating & Caching [2D test] (threads=4):  23%|██▎       | 193/834 [00:04<00:12, 52.72slice/s]Validating & Caching [2D test] (threads=4):  24%|██▍       | 199/834 [00:04<00:13, 48.48slice/s]Validating & Caching [2D test] (threads=4):  25%|██▌       | 209/834 [00:04<00:10, 60.37slice/s]Validating & Caching [2D test] (threads=4):  26%|██▌       | 216/834 [00:04<00:10, 58.21slice/s]Validating & Caching [2D test] (threads=4):  27%|██▋       | 226/834 [00:04<00:08, 67.68slice/s]Validating & Caching [2D test] (threads=4):  28%|██▊       | 236/834 [00:04<00:08, 72.79slice/s]Validating & Caching [2D test] (threads=4):  29%|██▉       | 244/834 [00:04<00:08, 66.53slice/s]Validating & Caching [2D test] (threads=4):  30%|███       | 252/834 [00:04<00:08, 68.78slice/s]Validating & Caching [2D test] (threads=4):  31%|███       | 260/834 [00:04<00:08, 71.35slice/s]Validating & Caching [2D test] (threads=4):  32%|███▏      | 268/834 [00:05<00:11, 50.75slice/s]Validating & Caching [2D test] (threads=4):  33%|███▎      | 275/834 [00:05<00:11, 48.27slice/s]Validating & Caching [2D test] (threads=4):  34%|███▎      | 281/834 [00:05<00:13, 42.26slice/s]Validating & Caching [2D test] (threads=4):  35%|███▍      | 291/834 [00:05<00:10, 52.02slice/s]Validating & Caching [2D test] (threads=4):  36%|███▌      | 298/834 [00:05<00:09, 54.17slice/s]Validating & Caching [2D test] (threads=4):  36%|███▋      | 304/834 [00:06<00:11, 46.94slice/s]Validating & Caching [2D test] (threads=4):  37%|███▋      | 310/834 [00:06<00:12, 43.12slice/s]Validating & Caching [2D test] (threads=4):  38%|███▊      | 315/834 [00:06<00:12, 40.58slice/s]Validating & Caching [2D test] (threads=4):  38%|███▊      | 320/834 [00:06<00:14, 36.14slice/s]Validating & Caching [2D test] (threads=4):  39%|███▉      | 325/834 [00:06<00:14, 34.50slice/s]Validating & Caching [2D test] (threads=4):  39%|███▉      | 329/834 [00:06<00:14, 35.34slice/s]Validating & Caching [2D test] (threads=4):  40%|███▉      | 333/834 [00:06<00:15, 32.79slice/s]Validating & Caching [2D test] (threads=4):  41%|████      | 338/834 [00:07<00:15, 32.08slice/s]Validating & Caching [2D test] (threads=4):  41%|████▏     | 346/834 [00:07<00:11, 41.74slice/s]Validating & Caching [2D test] (threads=4):  42%|████▏     | 351/834 [00:07<00:11, 43.37slice/s]Validating & Caching [2D test] (threads=4):  43%|████▎     | 356/834 [00:07<00:12, 38.97slice/s]Validating & Caching [2D test] (threads=4):  44%|████▍     | 368/834 [00:07<00:08, 56.60slice/s]Validating & Caching [2D test] (threads=4):  45%|████▍     | 375/834 [00:07<00:08, 51.71slice/s]Validating & Caching [2D test] (threads=4):  46%|████▌     | 381/834 [00:07<00:10, 43.48slice/s]Validating & Caching [2D test] (threads=4):  46%|████▋     | 386/834 [00:08<00:11, 37.50slice/s]Validating & Caching [2D test] (threads=4):  47%|████▋     | 391/834 [00:08<00:11, 39.49slice/s]Validating & Caching [2D test] (threads=4):  47%|████▋     | 396/834 [00:08<00:12, 35.95slice/s]Validating & Caching [2D test] (threads=4):  49%|████▉     | 407/834 [00:08<00:08, 51.20slice/s]Validating & Caching [2D test] (threads=4):  50%|█████     | 417/834 [00:08<00:06, 61.77slice/s]Validating & Caching [2D test] (threads=4):  51%|█████     | 424/834 [00:08<00:07, 57.00slice/s]Validating & Caching [2D test] (threads=4):  52%|█████▏    | 431/834 [00:08<00:07, 57.26slice/s]Validating & Caching [2D test] (threads=4):  53%|█████▎    | 438/834 [00:09<00:07, 51.00slice/s]Validating & Caching [2D test] (threads=4):  53%|█████▎    | 444/834 [00:09<00:07, 52.80slice/s]Validating & Caching [2D test] (threads=4):  54%|█████▍    | 451/834 [00:09<00:06, 55.87slice/s]Validating & Caching [2D test] (threads=4):  55%|█████▍    | 458/834 [00:09<00:06, 58.16slice/s]Validating & Caching [2D test] (threads=4):  56%|█████▌    | 467/834 [00:09<00:05, 64.37slice/s]Validating & Caching [2D test] (threads=4):  57%|█████▋    | 474/834 [00:09<00:05, 63.61slice/s]Validating & Caching [2D test] (threads=4):  58%|█████▊    | 482/834 [00:09<00:05, 66.81slice/s]Validating & Caching [2D test] (threads=4):  59%|█████▊    | 489/834 [00:09<00:05, 66.67slice/s]Validating & Caching [2D test] (threads=4):  59%|█████▉    | 496/834 [00:10<00:06, 53.30slice/s]Validating & Caching [2D test] (threads=4):  60%|██████    | 504/834 [00:10<00:05, 57.32slice/s]Validating & Caching [2D test] (threads=4):  62%|██████▏   | 513/834 [00:10<00:05, 63.56slice/s]Validating & Caching [2D test] (threads=4):  62%|██████▏   | 521/834 [00:10<00:04, 67.46slice/s]Validating & Caching [2D test] (threads=4):  63%|██████▎   | 529/834 [00:10<00:04, 62.44slice/s]Validating & Caching [2D test] (threads=4):  65%|██████▍   | 538/834 [00:10<00:04, 69.10slice/s]Validating & Caching [2D test] (threads=4):  65%|██████▌   | 546/834 [00:10<00:05, 53.97slice/s]Validating & Caching [2D test] (threads=4):  66%|██████▋   | 553/834 [00:10<00:05, 52.71slice/s]Validating & Caching [2D test] (threads=4):  67%|██████▋   | 559/834 [00:11<00:05, 47.43slice/s]Validating & Caching [2D test] (threads=4):  68%|██████▊   | 567/834 [00:11<00:04, 53.72slice/s]Validating & Caching [2D test] (threads=4):  69%|██████▊   | 573/834 [00:11<00:05, 49.14slice/s]Validating & Caching [2D test] (threads=4):  70%|██████▉   | 580/834 [00:11<00:04, 53.53slice/s]Validating & Caching [2D test] (threads=4):  70%|███████   | 586/834 [00:11<00:04, 50.50slice/s]Validating & Caching [2D test] (threads=4):  71%|███████   | 593/834 [00:11<00:04, 53.70slice/s]Validating & Caching [2D test] (threads=4):  72%|███████▏  | 602/834 [00:11<00:03, 62.75slice/s]Validating & Caching [2D test] (threads=4):  73%|███████▎  | 609/834 [00:12<00:04, 54.11slice/s]Validating & Caching [2D test] (threads=4):  74%|███████▎  | 615/834 [00:12<00:04, 54.65slice/s]Validating & Caching [2D test] (threads=4):  75%|███████▌  | 626/834 [00:12<00:03, 66.22slice/s]Validating & Caching [2D test] (threads=4):  76%|███████▌  | 633/834 [00:12<00:03, 55.84slice/s]Validating & Caching [2D test] (threads=4):  77%|███████▋  | 640/834 [00:12<00:04, 46.64slice/s]Validating & Caching [2D test] (threads=4):  77%|███████▋  | 646/834 [00:12<00:03, 48.77slice/s]Validating & Caching [2D test] (threads=4):  78%|███████▊  | 652/834 [00:12<00:03, 50.87slice/s]Validating & Caching [2D test] (threads=4):  79%|███████▉  | 658/834 [00:12<00:03, 50.62slice/s]Validating & Caching [2D test] (threads=4):  80%|███████▉  | 664/834 [00:13<00:03, 50.06slice/s]Validating & Caching [2D test] (threads=4):  80%|████████  | 671/834 [00:13<00:03, 50.90slice/s]Validating & Caching [2D test] (threads=4):  81%|████████  | 677/834 [00:13<00:02, 53.07slice/s]Validating & Caching [2D test] (threads=4):  82%|████████▏ | 685/834 [00:13<00:02, 59.12slice/s]Validating & Caching [2D test] (threads=4):  83%|████████▎ | 692/834 [00:13<00:03, 46.08slice/s]Validating & Caching [2D test] (threads=4):  84%|████████▎ | 698/834 [00:13<00:03, 40.82slice/s]Validating & Caching [2D test] (threads=4):  84%|████████▍ | 703/834 [00:13<00:03, 41.16slice/s]Validating & Caching [2D test] (threads=4):  85%|████████▌ | 710/834 [00:14<00:02, 46.57slice/s]Validating & Caching [2D test] (threads=4):  87%|████████▋ | 723/834 [00:14<00:01, 63.04slice/s]Validating & Caching [2D test] (threads=4):  88%|████████▊ | 731/834 [00:14<00:01, 66.66slice/s]Validating & Caching [2D test] (threads=4):  89%|████████▊ | 739/834 [00:14<00:01, 59.94slice/s]Validating & Caching [2D test] (threads=4):  89%|████████▉ | 746/834 [00:14<00:01, 59.32slice/s]Validating & Caching [2D test] (threads=4):  90%|█████████ | 753/834 [00:14<00:01, 40.66slice/s]Validating & Caching [2D test] (threads=4):  92%|█████████▏| 764/834 [00:15<00:01, 53.11slice/s]Validating & Caching [2D test] (threads=4):  92%|█████████▏| 771/834 [00:15<00:01, 50.30slice/s]Validating & Caching [2D test] (threads=4):  93%|█████████▎| 777/834 [00:15<00:01, 44.20slice/s]Validating & Caching [2D test] (threads=4):  94%|█████████▍| 783/834 [00:15<00:01, 42.59slice/s]Validating & Caching [2D test] (threads=4):  94%|█████████▍| 788/834 [00:15<00:01, 44.07slice/s]Validating & Caching [2D test] (threads=4):  95%|█████████▌| 794/834 [00:15<00:00, 44.92slice/s]Validating & Caching [2D test] (threads=4):  96%|█████████▌| 802/834 [00:15<00:00, 50.42slice/s]Validating & Caching [2D test] (threads=4):  97%|█████████▋| 808/834 [00:16<00:00, 46.58slice/s]Validating & Caching [2D test] (threads=4):  97%|█████████▋| 813/834 [00:16<00:00, 46.44slice/s]Validating & Caching [2D test] (threads=4):  98%|█████████▊| 821/834 [00:16<00:00, 52.12slice/s]Validating & Caching [2D test] (threads=4): 100%|█████████▉| 830/834 [00:16<00:00, 60.41slice/s]Validating & Caching [2D test] (threads=4): 100%|██████████| 834/834 [00:16<00:00, 50.53slice/s]
+[2D test] Kept 834/834 valid slices.
+[WRS lung_pet_ct_dx] counts {0=2597, 1=440, 2=675} | oversample_factor=5.90 (max_weight/min_weight)
+[lung_pet_ct_dx] Train class distribution: {0: 2597, 1: 440, 2: 675}
+
+--- dapt Epoch 1/20 | lr=1.00e-06 ---
+[2D] Epoch 1 [50/78] Loss: 1.1004 Time: 19.87s
+[2D] Epoch 1 [78/78] Loss: 1.1017 Time: 4.38s
+[2D] Train Epoch 1 (slice-level) => Loss: 1.1017, Acc: 0.3346, MacroF1: 0.2729
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.2774, MacroF1: 0.2475
+[2D] Val (volume-level, n=101) => Loss: 1.0992, Acc: 0.2673, BalancedAcc: 0.3047, MacroPrecision: 0.2900, MacroRecall: 0.3047, MacroF1: 0.1926
+[2D] Val (patient-level, n=52) => Acc: 0.3077, BalancedAcc: 0.3964, MacroPrecision: 0.3598, MacroRecall: 0.3964, MacroF1: 0.2169
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  15              2               55              
+Y:Small Cell      2               0               10              
+Y:Squamous        4               1               12              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  7               0               30              
+Y:Small Cell      1               0               5               
+Y:Squamous        0               0               9               
+
+[dapt] Epoch 1 Summary => TrainLoss: 1.1017, TrainMacroF1: 0.2729, ValMacroF1(patient): 0.2169/0.2169 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.3077/0.3077, balanced_accuracy 0.3964/0.3964, macro_precision 0.3598/0.3598, macro_recall 0.3964/0.3964, macro_f1 0.2169/0.2169
+
+--- dapt Epoch 2/20 | lr=3.40e-05 ---
+[2D] Epoch 2 [50/78] Loss: 1.0961 Time: 6.56s
+[2D] Epoch 2 [78/78] Loss: 1.0937 Time: 3.26s
+[2D] Train Epoch 2 (slice-level) => Loss: 1.0937, Acc: 0.3720, MacroF1: 0.3666
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.3817, MacroF1: 0.3524
+[2D] Val (volume-level, n=101) => Loss: 1.0945, Acc: 0.3960, BalancedAcc: 0.4439, MacroPrecision: 0.4614, MacroRecall: 0.4439, MacroF1: 0.3905
+[2D] Val (patient-level, n=52) => Acc: 0.3462, BalancedAcc: 0.3674, MacroPrecision: 0.4417, MacroRecall: 0.3674, MacroF1: 0.3401
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  26              5               41              
+Y:Small Cell      0               6               6               
+Y:Squamous        5               4               8               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  12              1               24              
+Y:Small Cell      0               2               4               
+Y:Squamous        3               2               4               
+
+[dapt] Epoch 2 Summary => TrainLoss: 1.0937, TrainMacroF1: 0.3666, ValMacroF1(patient): 0.3401/0.2785 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.3462/0.3269, balanced_accuracy 0.3674/0.3819, macro_precision 0.4417/0.4008, macro_recall 0.3674/0.3819, macro_f1 0.3401/0.2785
+
+--- dapt Epoch 3/20 | lr=6.70e-05 ---
+[2D] Epoch 3 [50/78] Loss: 1.0718 Time: 6.71s
+[2D] Epoch 3 [78/78] Loss: 1.0685 Time: 3.30s
+[2D] Train Epoch 3 (slice-level) => Loss: 1.0685, Acc: 0.4453, MacroF1: 0.4435
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.5038, MacroF1: 0.3945
+[2D] Val (volume-level, n=101) => Loss: 1.0565, Acc: 0.5248, BalancedAcc: 0.4523, MacroPrecision: 0.4066, MacroRecall: 0.4523, MacroF1: 0.4005
+[2D] Val (patient-level, n=52) => Acc: 0.5192, BalancedAcc: 0.4389, MacroPrecision: 0.4090, MacroRecall: 0.4389, MacroF1: 0.3963
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  43              15              14              
+Y:Small Cell      1               7               4               
+Y:Squamous        8               6               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  22              7               8               
+Y:Small Cell      1               3               2               
+Y:Squamous        3               4               2               
+
+[dapt] Epoch 3 Summary => TrainLoss: 1.0685, TrainMacroF1: 0.4435, ValMacroF1(patient): 0.3963/0.3178 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.5192/0.3910, balanced_accuracy 0.4389/0.4009, macro_precision 0.4090/0.4035, macro_recall 0.4389/0.4009, macro_f1 0.3963/0.3178
+
+--- dapt Epoch 4/20 | lr=1.00e-04 ---
+[2D] Epoch 4 [50/78] Loss: 1.0492 Time: 6.52s
+[2D] Epoch 4 [78/78] Loss: 1.0432 Time: 3.27s
+[2D] Train Epoch 4 (slice-level) => Loss: 1.0432, Acc: 0.4952, MacroF1: 0.4894
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.5267, MacroF1: 0.3718
+[2D] Val (volume-level, n=101) => Loss: 1.0144, Acc: 0.5644, BalancedAcc: 0.4491, MacroPrecision: 0.3470, MacroRecall: 0.4491, MacroF1: 0.3560
+[2D] Val (patient-level, n=52) => Acc: 0.5769, BalancedAcc: 0.5030, MacroPrecision: 0.3667, MacroRecall: 0.5030, MacroF1: 0.3760
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  49              21              2               
+Y:Small Cell      2               8               2               
+Y:Squamous        8               9               0               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  25              11              1               
+Y:Small Cell      0               5               1               
+Y:Squamous        4               5               0               
+
+[dapt] Epoch 4 Summary => TrainLoss: 1.0432, TrainMacroF1: 0.4894, ValMacroF1(patient): 0.3760/0.3708 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.5769/0.4808, balanced_accuracy 0.5030/0.4364, macro_precision 0.3667/0.4058, macro_recall 0.5030/0.4364, macro_f1 0.3760/0.3708
+
+--- dapt Epoch 5/20 | lr=9.91e-05 ---
+[2D] Epoch 5 [50/78] Loss: 1.0181 Time: 6.49s
+[2D] Epoch 5 [78/78] Loss: 1.0260 Time: 3.20s
+[2D] Train Epoch 5 (slice-level) => Loss: 1.0260, Acc: 0.5097, MacroF1: 0.5048
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6107, MacroF1: 0.4436
+[2D] Val (volume-level, n=101) => Loss: 0.9149, Acc: 0.6436, BalancedAcc: 0.4929, MacroPrecision: 0.4428, MacroRecall: 0.4929, MacroF1: 0.4460
+[2D] Val (patient-level, n=52) => Acc: 0.5962, BalancedAcc: 0.4189, MacroPrecision: 0.3362, MacroRecall: 0.4189, MacroF1: 0.3610
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  56              11              5               
+Y:Small Cell      2               7               3               
+Y:Squamous        8               7               2               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  28              7               2               
+Y:Small Cell      2               3               1               
+Y:Squamous        6               3               0               
+
+[dapt] Epoch 5 Summary => TrainLoss: 1.0260, TrainMacroF1: 0.5048, ValMacroF1(patient): 0.3610/0.3777 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.5962/0.5641, balanced_accuracy 0.4189/0.4536, macro_precision 0.3362/0.3706, macro_recall 0.4189/0.4536, macro_f1 0.3610/0.3777
+
+--- dapt Epoch 6/20 | lr=9.66e-05 ---
+[2D] Epoch 6 [50/78] Loss: 1.0080 Time: 6.50s
+[2D] Epoch 6 [78/78] Loss: 1.0037 Time: 3.24s
+[2D] Train Epoch 6 (slice-level) => Loss: 1.0037, Acc: 0.5391, MacroF1: 0.5324
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6272, MacroF1: 0.5079
+[2D] Val (volume-level, n=101) => Loss: 0.9250, Acc: 0.6832, BalancedAcc: 0.6394, MacroPrecision: 0.5629, MacroRecall: 0.6394, MacroF1: 0.5814
+[2D] Val (patient-level, n=52) => Acc: 0.7115, BalancedAcc: 0.6877, MacroPrecision: 0.6014, MacroRecall: 0.6877, MacroF1: 0.6244
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  52              10              10              
+Y:Small Cell      2               8               2               
+Y:Squamous        4               4               9               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  27              4               6               
+Y:Small Cell      0               4               2               
+Y:Squamous        2               1               6               
+
+[dapt] Epoch 6 Summary => TrainLoss: 1.0037, TrainMacroF1: 0.5324, ValMacroF1(patient): 0.6244/0.4538 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7115/0.6282, balanced_accuracy 0.6877/0.5365, macro_precision 0.6014/0.4348, macro_recall 0.6877/0.5365, macro_f1 0.6244/0.4538
+
+--- dapt Epoch 7/20 | lr=9.25e-05 ---
+[2D] Epoch 7 [50/78] Loss: 0.9893 Time: 6.53s
+[2D] Epoch 7 [78/78] Loss: 0.9957 Time: 3.23s
+[2D] Train Epoch 7 (slice-level) => Loss: 0.9957, Acc: 0.5512, MacroF1: 0.5481
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.5967, MacroF1: 0.4757
+[2D] Val (volume-level, n=101) => Loss: 0.9459, Acc: 0.6634, BalancedAcc: 0.6383, MacroPrecision: 0.5781, MacroRecall: 0.6383, MacroF1: 0.5638
+[2D] Val (patient-level, n=52) => Acc: 0.6731, BalancedAcc: 0.6416, MacroPrecision: 0.5833, MacroRecall: 0.6416, MacroF1: 0.5718
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  50              16              6               
+Y:Small Cell      1               9               2               
+Y:Squamous        1               8               8               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  26              8               3               
+Y:Small Cell      0               4               2               
+Y:Squamous        0               4               5               
+
+[dapt] Epoch 7 Summary => TrainLoss: 0.9957, TrainMacroF1: 0.5481, ValMacroF1(patient): 0.5718/0.5191 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.6731/0.6603, balanced_accuracy 0.6416/0.5827, macro_precision 0.5833/0.5070, macro_recall 0.6416/0.5827, macro_f1 0.5718/0.5191
+
+--- dapt Epoch 8/20 | lr=8.70e-05 ---
+[2D] Epoch 8 [50/78] Loss: 0.9693 Time: 6.58s
+[2D] Epoch 8 [78/78] Loss: 0.9740 Time: 3.31s
+[2D] Train Epoch 8 (slice-level) => Loss: 0.9740, Acc: 0.5733, MacroF1: 0.5733
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6031, MacroF1: 0.5001
+[2D] Val (volume-level, n=101) => Loss: 0.9507, Acc: 0.6634, BalancedAcc: 0.6533, MacroPrecision: 0.5783, MacroRecall: 0.6533, MacroF1: 0.5708
+[2D] Val (patient-level, n=52) => Acc: 0.6538, BalancedAcc: 0.6326, MacroPrecision: 0.5705, MacroRecall: 0.6326, MacroF1: 0.5612
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  49              16              7               
+Y:Small Cell      0               9               3               
+Y:Squamous        1               7               9               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  25              9               3               
+Y:Small Cell      0               4               2               
+Y:Squamous        1               3               5               
+
+[dapt] Epoch 8 Summary => TrainLoss: 0.9740, TrainMacroF1: 0.5733, ValMacroF1(patient): 0.5612/0.5858 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.6538/0.6795, balanced_accuracy 0.6326/0.6540, macro_precision 0.5705/0.5851, macro_recall 0.6326/0.6540, macro_f1 0.5612/0.5858
+
+--- dapt Epoch 9/20 | lr=8.01e-05 ---
+[2D] Epoch 9 [50/78] Loss: 0.9638 Time: 6.61s
+[2D] Epoch 9 [78/78] Loss: 0.9571 Time: 3.32s
+[2D] Train Epoch 9 (slice-level) => Loss: 0.9571, Acc: 0.5889, MacroF1: 0.5875
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6463, MacroF1: 0.4983
+[2D] Val (volume-level, n=101) => Loss: 0.8623, Acc: 0.6436, BalancedAcc: 0.5310, MacroPrecision: 0.4864, MacroRecall: 0.5310, MacroF1: 0.4781
+[2D] Val (patient-level, n=52) => Acc: 0.6923, BalancedAcc: 0.5946, MacroPrecision: 0.5484, MacroRecall: 0.5946, MacroF1: 0.5542
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  54              14              4               
+Y:Small Cell      2               8               2               
+Y:Squamous        10              4               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  29              5               3               
+Y:Small Cell      1               4               1               
+Y:Squamous        4               2               3               
+
+[dapt] Epoch 9 Summary => TrainLoss: 0.9571, TrainMacroF1: 0.5875, ValMacroF1(patient): 0.5542/0.5624 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.6923/0.6731, balanced_accuracy 0.5946/0.6230, macro_precision 0.5484/0.5674, macro_recall 0.5946/0.6230, macro_f1 0.5542/0.5624
+
+--- dapt Epoch 10/20 | lr=7.23e-05 ---
+[2D] Epoch 10 [50/78] Loss: 0.9452 Time: 6.69s
+[2D] Epoch 10 [78/78] Loss: 0.9404 Time: 3.30s
+[2D] Train Epoch 10 (slice-level) => Loss: 0.9404, Acc: 0.6153, MacroF1: 0.6141
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6578, MacroF1: 0.5473
+[2D] Val (volume-level, n=101) => Loss: 0.8704, Acc: 0.7426, BalancedAcc: 0.6890, MacroPrecision: 0.6172, MacroRecall: 0.6890, MacroF1: 0.6416
+[2D] Val (patient-level, n=52) => Acc: 0.7500, BalancedAcc: 0.7337, MacroPrecision: 0.6367, MacroRecall: 0.7337, MacroF1: 0.6635
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  56              8               8               
+Y:Small Cell      2               7               3               
+Y:Squamous        3               2               12              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  28              4               5               
+Y:Small Cell      0               4               2               
+Y:Squamous        1               1               7               
+
+[dapt] Epoch 10 Summary => TrainLoss: 0.9404, TrainMacroF1: 0.6141, ValMacroF1(patient): 0.6635/0.5930 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7500/0.6987, balanced_accuracy 0.7337/0.6537, macro_precision 0.6367/0.5852, macro_recall 0.7337/0.6537, macro_f1 0.6635/0.5930
+
+--- dapt Epoch 11/20 | lr=6.37e-05 ---
+[2D] Epoch 11 [50/78] Loss: 0.9443 Time: 6.45s
+[2D] Epoch 11 [78/78] Loss: 0.9343 Time: 3.30s
+[2D] Train Epoch 11 (slice-level) => Loss: 0.9343, Acc: 0.6016, MacroF1: 0.5980
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6463, MacroF1: 0.5196
+[2D] Val (volume-level, n=101) => Loss: 0.8899, Acc: 0.6634, BalancedAcc: 0.5852, MacroPrecision: 0.5361, MacroRecall: 0.5852, MacroF1: 0.5335
+[2D] Val (patient-level, n=52) => Acc: 0.6923, BalancedAcc: 0.6226, MacroPrecision: 0.5652, MacroRecall: 0.6226, MacroF1: 0.5643
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  53              13              6               
+Y:Small Cell      2               8               2               
+Y:Squamous        5               6               6               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  28              6               3               
+Y:Small Cell      0               4               2               
+Y:Squamous        1               4               4               
+
+[dapt] Epoch 11 Summary => TrainLoss: 0.9343, TrainMacroF1: 0.5980, ValMacroF1(patient): 0.5643/0.5940 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.6923/0.7115, balanced_accuracy 0.6226/0.6503, macro_precision 0.5652/0.5834, macro_recall 0.6226/0.6503, macro_f1 0.5643/0.5940
+
+--- dapt Epoch 12/20 | lr=5.46e-05 ---
+[2D] Epoch 12 [50/78] Loss: 0.9271 Time: 6.55s
+[2D] Epoch 12 [78/78] Loss: 0.9431 Time: 3.29s
+[2D] Train Epoch 12 (slice-level) => Loss: 0.9431, Acc: 0.5999, MacroF1: 0.5993
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6069, MacroF1: 0.5177
+[2D] Val (volume-level, n=101) => Loss: 0.9445, Acc: 0.6832, BalancedAcc: 0.6912, MacroPrecision: 0.5870, MacroRecall: 0.6912, MacroF1: 0.6024
+[2D] Val (patient-level, n=52) => Acc: 0.7115, BalancedAcc: 0.7157, MacroPrecision: 0.6101, MacroRecall: 0.7157, MacroF1: 0.6264
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  48              13              11              
+Y:Small Cell      1               7               4               
+Y:Squamous        1               2               14              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  26              5               6               
+Y:Small Cell      0               4               2               
+Y:Squamous        0               2               7               
+
+[dapt] Epoch 12 Summary => TrainLoss: 0.9431, TrainMacroF1: 0.5993, ValMacroF1(patient): 0.6264/0.6181 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7115/0.7179, balanced_accuracy 0.7157/0.6907, macro_precision 0.6101/0.6040, macro_recall 0.7157/0.6907, macro_f1 0.6264/0.6181
+
+--- dapt Epoch 13/20 | lr=4.54e-05 ---
+[2D] Epoch 13 [50/78] Loss: 0.9212 Time: 6.60s
+[2D] Epoch 13 [78/78] Loss: 0.9100 Time: 3.27s
+[2D] Train Epoch 13 (slice-level) => Loss: 0.9100, Acc: 0.6355, MacroF1: 0.6354
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6056, MacroF1: 0.5125
+[2D] Val (volume-level, n=101) => Loss: 0.9258, Acc: 0.6832, BalancedAcc: 0.6694, MacroPrecision: 0.5968, MacroRecall: 0.6694, MacroF1: 0.5932
+[2D] Val (patient-level, n=52) => Acc: 0.6923, BalancedAcc: 0.6787, MacroPrecision: 0.6040, MacroRecall: 0.6787, MacroF1: 0.6021
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  50              16              6               
+Y:Small Cell      0               8               4               
+Y:Squamous        0               6               11              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  26              8               3               
+Y:Small Cell      0               4               2               
+Y:Squamous        0               3               6               
+
+[dapt] Epoch 13 Summary => TrainLoss: 0.9100, TrainMacroF1: 0.6354, ValMacroF1(patient): 0.6021/0.5976 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.6923/0.6987, balanced_accuracy 0.6787/0.6723, macro_precision 0.6040/0.5931, macro_recall 0.6787/0.6723, macro_f1 0.6021/0.5976
+
+--- dapt Epoch 14/20 | lr=3.63e-05 ---
+[2D] Epoch 14 [50/78] Loss: 0.8895 Time: 6.49s
+[2D] Epoch 14 [78/78] Loss: 0.8964 Time: 3.26s
+[2D] Train Epoch 14 (slice-level) => Loss: 0.8964, Acc: 0.6509, MacroF1: 0.6497
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6056, MacroF1: 0.5134
+[2D] Val (volume-level, n=101) => Loss: 0.9327, Acc: 0.6832, BalancedAcc: 0.6762, MacroPrecision: 0.5822, MacroRecall: 0.6762, MacroF1: 0.5959
+[2D] Val (patient-level, n=52) => Acc: 0.7308, BalancedAcc: 0.7247, MacroPrecision: 0.6212, MacroRecall: 0.7247, MacroF1: 0.6410
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  49              13              10              
+Y:Small Cell      1               7               4               
+Y:Squamous        1               3               13              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  27              5               5               
+Y:Small Cell      0               4               2               
+Y:Squamous        0               2               7               
+
+[dapt] Epoch 14 Summary => TrainLoss: 0.8964, TrainMacroF1: 0.6497, ValMacroF1(patient): 0.6410/0.6232 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7308/0.7115, balanced_accuracy 0.7247/0.7064, macro_precision 0.6212/0.6118, macro_recall 0.7247/0.7064, macro_f1 0.6410/0.6232
+
+--- dapt Epoch 15/20 | lr=2.77e-05 ---
+[2D] Epoch 15 [50/78] Loss: 0.9094 Time: 6.59s
+[2D] Epoch 15 [78/78] Loss: 0.9113 Time: 3.37s
+[2D] Train Epoch 15 (slice-level) => Loss: 0.9113, Acc: 0.6255, MacroF1: 0.6255
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6196, MacroF1: 0.5212
+[2D] Val (volume-level, n=101) => Loss: 0.9258, Acc: 0.7030, BalancedAcc: 0.6936, MacroPrecision: 0.6104, MacroRecall: 0.6936, MacroF1: 0.6149
+[2D] Val (patient-level, n=52) => Acc: 0.6923, BalancedAcc: 0.6787, MacroPrecision: 0.6040, MacroRecall: 0.6787, MacroF1: 0.6021
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  51              15              6               
+Y:Small Cell      0               8               4               
+Y:Squamous        0               5               12              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  26              8               3               
+Y:Small Cell      0               4               2               
+Y:Squamous        0               3               6               
+
+[dapt] Epoch 15 Summary => TrainLoss: 0.9113, TrainMacroF1: 0.6255, ValMacroF1(patient): 0.6021/0.6151 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.6923/0.7051, balanced_accuracy 0.6787/0.6940, macro_precision 0.6040/0.6098, macro_recall 0.6787/0.6940, macro_f1 0.6021/0.6151
+
+--- dapt Epoch 16/20 | lr=1.99e-05 ---
+[2D] Epoch 16 [50/78] Loss: 0.9191 Time: 6.64s
+[2D] Epoch 16 [78/78] Loss: 0.9128 Time: 3.29s
+[2D] Train Epoch 16 (slice-level) => Loss: 0.9128, Acc: 0.6312, MacroF1: 0.6311
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6209, MacroF1: 0.5270
+[2D] Val (volume-level, n=101) => Loss: 0.9206, Acc: 0.7030, BalancedAcc: 0.7086, MacroPrecision: 0.6067, MacroRecall: 0.7086, MacroF1: 0.6189
+[2D] Val (patient-level, n=52) => Acc: 0.7308, BalancedAcc: 0.7247, MacroPrecision: 0.6303, MacroRecall: 0.7247, MacroF1: 0.6438
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  50              13              9               
+Y:Small Cell      0               8               4               
+Y:Squamous        0               4               13              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  27              7               3               
+Y:Small Cell      0               4               2               
+Y:Squamous        0               2               7               
+
+[dapt] Epoch 16 Summary => TrainLoss: 0.9128, TrainMacroF1: 0.6311, ValMacroF1(patient): 0.6438/0.6290 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7308/0.7179, balanced_accuracy 0.7247/0.7094, macro_precision 0.6303/0.6185, macro_recall 0.7247/0.7094, macro_f1 0.6438/0.6290
+
+--- dapt Epoch 17/20 | lr=1.30e-05 ---
+[2D] Epoch 17 [50/78] Loss: 0.9163 Time: 6.53s
+[2D] Epoch 17 [78/78] Loss: 0.9038 Time: 3.27s
+[2D] Train Epoch 17 (slice-level) => Loss: 0.9038, Acc: 0.6509, MacroF1: 0.6506
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6438, MacroF1: 0.5327
+[2D] Val (volume-level, n=101) => Loss: 0.8923, Acc: 0.7129, BalancedAcc: 0.6751, MacroPrecision: 0.6003, MacroRecall: 0.6751, MacroF1: 0.6130
+[2D] Val (patient-level, n=52) => Acc: 0.7500, BalancedAcc: 0.7337, MacroPrecision: 0.6389, MacroRecall: 0.7337, MacroF1: 0.6575
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  53              13              6               
+Y:Small Cell      1               7               4               
+Y:Squamous        1               4               12              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  28              6               3               
+Y:Small Cell      0               4               2               
+Y:Squamous        0               2               7               
+
+[dapt] Epoch 17 Summary => TrainLoss: 0.9038, TrainMacroF1: 0.6506, ValMacroF1(patient): 0.6575/0.6345 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7500/0.7244, balanced_accuracy 0.7337/0.7124, macro_precision 0.6389/0.6244, macro_recall 0.7337/0.7124, macro_f1 0.6575/0.6345
+
+--- dapt Epoch 18/20 | lr=7.49e-06 ---
+[2D] Epoch 18 [50/78] Loss: 0.8812 Time: 6.41s
+[2D] Epoch 18 [78/78] Loss: 0.8832 Time: 3.25s
+[2D] Train Epoch 18 (slice-level) => Loss: 0.8832, Acc: 0.6546, MacroF1: 0.6546
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6361, MacroF1: 0.5325
+[2D] Val (volume-level, n=101) => Loss: 0.8953, Acc: 0.7327, BalancedAcc: 0.7143, MacroPrecision: 0.6217, MacroRecall: 0.7143, MacroF1: 0.6431
+[2D] Val (patient-level, n=52) => Acc: 0.7500, BalancedAcc: 0.7337, MacroPrecision: 0.6389, MacroRecall: 0.7337, MacroF1: 0.6575
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  53              13              6               
+Y:Small Cell      1               7               4               
+Y:Squamous        1               2               14              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  28              6               3               
+Y:Small Cell      0               4               2               
+Y:Squamous        0               2               7               
+
+[dapt] Epoch 18 Summary => TrainLoss: 0.8832, TrainMacroF1: 0.6546, ValMacroF1(patient): 0.6575/0.6530 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7500/0.7436, balanced_accuracy 0.7337/0.7307, macro_precision 0.6389/0.6360, macro_recall 0.7337/0.7307, macro_f1 0.6575/0.6530
+
+--- dapt Epoch 19/20 | lr=3.38e-06 ---
+[2D] Epoch 19 [50/78] Loss: 0.9114 Time: 6.44s
+[2D] Epoch 19 [78/78] Loss: 0.9093 Time: 3.25s
+[2D] Train Epoch 19 (slice-level) => Loss: 0.9093, Acc: 0.6447, MacroF1: 0.6447
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6463, MacroF1: 0.5407
+[2D] Val (volume-level, n=101) => Loss: 0.8936, Acc: 0.7228, BalancedAcc: 0.6947, MacroPrecision: 0.6111, MacroRecall: 0.6947, MacroF1: 0.6282
+[2D] Val (patient-level, n=52) => Acc: 0.7500, BalancedAcc: 0.7337, MacroPrecision: 0.6340, MacroRecall: 0.7337, MacroF1: 0.6562
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  53              13              6               
+Y:Small Cell      1               7               4               
+Y:Squamous        1               3               13              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  28              5               4               
+Y:Small Cell      0               4               2               
+Y:Squamous        0               2               7               
+
+[dapt] Epoch 19 Summary => TrainLoss: 0.9093, TrainMacroF1: 0.6447, ValMacroF1(patient): 0.6562/0.6571 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7500/0.7500, balanced_accuracy 0.7337/0.7337, macro_precision 0.6340/0.6373, macro_recall 0.7337/0.7337, macro_f1 0.6562/0.6571
+
+--- dapt Epoch 20/20 | lr=8.51e-07 ---
+[2D] Epoch 20 [50/78] Loss: 0.9164 Time: 6.51s
+[2D] Epoch 20 [78/78] Loss: 0.9144 Time: 3.17s
+[2D] Train Epoch 20 (slice-level) => Loss: 0.9144, Acc: 0.6193, MacroF1: 0.6191
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6196, MacroF1: 0.5152
+[2D] Val (volume-level, n=101) => Loss: 0.9058, Acc: 0.7228, BalancedAcc: 0.6947, MacroPrecision: 0.6111, MacroRecall: 0.6947, MacroF1: 0.6282
+[2D] Val (patient-level, n=52) => Acc: 0.7308, BalancedAcc: 0.7247, MacroPrecision: 0.6303, MacroRecall: 0.7247, MacroF1: 0.6438
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  53              13              6               
+Y:Small Cell      1               7               4               
+Y:Squamous        1               3               13              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  27              7               3               
+Y:Small Cell      0               4               2               
+Y:Squamous        0               2               7               
+
+[dapt] Epoch 20 Summary => TrainLoss: 0.9144, TrainMacroF1: 0.6191, ValMacroF1(patient): 0.6438/0.6525 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7308/0.7436, balanced_accuracy 0.7247/0.7307, macro_precision 0.6303/0.6344, macro_recall 0.7247/0.7307, macro_f1 0.6438/0.6525
+
+[2D] Starting validation...
+/home/hansstem/anaconda3/envs/sclc/lib/python3.12/site-packages/monai/utils/deprecate_utils.py:321: FutureWarning: monai.transforms.spatial.dictionary Orientationd.__init__:labels: Current default value of argument `labels=(('L', 'R'), ('P', 'A'), ('I', 'S'))` was changed in version None from `labels=(('L', 'R'), ('P', 'A'), ('I', 'S'))` to `labels=None`. Default value changed to None meaning that the transform now uses the 'space' of a meta-tensor, if applicable, to determine appropriate axis labels.
+  warn_deprecated(argname, msg, warning_category)
+[2D] Val (slice-level, n=834) => Acc: 0.6307, MacroF1: 0.4929
+[2D] Val (volume-level, n=106) => Loss: 0.9253, Acc: 0.6792, BalancedAcc: 0.5838, MacroPrecision: 0.5256, MacroRecall: 0.5838, MacroF1: 0.5293
+[2D] Val (patient-level, n=53) => Acc: 0.7358, BalancedAcc: 0.6335, MacroPrecision: 0.5795, MacroRecall: 0.6335, MacroF1: 0.5876
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  55              9               12              
+Y:Small Cell      1               3               8               
+Y:Squamous        1               3               14              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  30              3               5               
+Y:Small Cell      0               2               4               
+Y:Squamous        1               1               7               
+
+Warning: Unknown morphological group 'Non-small cell carcinoma' for patient patient_020843 — skipping
+[3D big_lunge] Excluding 3 truncated-lung-mask patients: ['patient_022269', 'patient_057069', 'patient_091821']
+Found 302 patients with labels.
+Split 'train': 211 patients.
+  211 images, class distribution: {2: 71, 0: 73, 1: 67}
+Split 'val': 45 patients.
+  45 images, class distribution: {0: 16, 2: 15, 1: 14}
+Split 'test': 46 patients.
+  46 images, class distribution: {1: 14, 2: 16, 0: 16}
+[2D big_lunge train] 1510 slices from 196 volumes / 196 patients (dropped: no_mask=3, no_tumor_slices=12), classes={2: 529, 0: 500, 1: 481}
+[2D big_lunge val] 322 slices from 41 volumes / 41 patients (dropped: no_mask=1, no_tumor_slices=3), classes={0: 120, 2: 98, 1: 104}
+[2D big_lunge test] 332 slices from 43 volumes / 43 patients (dropped: no_mask=0, no_tumor_slices=3), classes={1: 99, 2: 118, 0: 115}
+[2D big_lunge] dropped-patient inventory -> /home/hansstem/.cache/monai_biglunge_2d/img224_crop96_mp1/dropped_patients.json
+[2D] PersistentDataset cache_dir='/home/hansstem/.cache/monai_biglunge_2d/img224_crop96_mp1/train'
+[2D] PersistentDataset cache_dir='/home/hansstem/.cache/monai_biglunge_2d/img224_crop96_mp1/val'
+[2D] PersistentDataset cache_dir='/home/hansstem/.cache/monai_biglunge_2d/img224_crop96_mp1/test'
+[WRS big_lunge] counts {0=500, 1=481, 2=529} | oversample_factor=1.10 (max_weight/min_weight)
+[big_lunge] Train class distribution: {2: 529, 0: 500, 1: 481}
+
+--- finetune Epoch 1/40 | lr(backbone/head)=3.00e-06/3.00e-05 ---
+[2D] Epoch 1 [32/32] Loss: 1.2076 Time: 24.57s
+[2D] Train Epoch 1 (slice-level) => Loss: 1.2076, Acc: 0.3603, MacroF1: 0.3579
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=322) => Acc: 0.3913, MacroF1: 0.3879
+[2D] Val (volume-level, n=41) => Loss: 1.1775, Acc: 0.4146, BalancedAcc: 0.4188, MacroPrecision: 0.4024, MacroRecall: 0.4188, MacroF1: 0.4092
+[2D] Val (patient-level, n=41) => Acc: 0.4146, BalancedAcc: 0.4188, MacroPrecision: 0.4024, MacroRecall: 0.4188, MacroF1: 0.4092
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  5               3               7               
+Y:Small Cell      2               9               2               
+Y:Squamous        7               3               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  5               3               7               
+Y:Small Cell      2               9               2               
+Y:Squamous        7               3               3               
+
+[finetune] Epoch 1 Summary => TrainLoss: 1.2076, TrainMacroF1: 0.3579, ValMacroF1(patient): 0.4092/0.4092 (cur/roll3)
+[finetune] Patient current vs rolling-3: accuracy 0.4146/0.4146, balanced_accuracy 0.4188/0.4188, macro_precision 0.4024/0.4024, macro_recall 0.4188/0.4188, macro_f1 0.4092/0.4092
+
+--- finetune Epoch 2/40 | lr(backbone/head)=3.00e-06/3.00e-05 ---
+[2D] Epoch 2 [32/32] Loss: 1.1929 Time: 12.35s
+[2D] Train Epoch 2 (slice-level) => Loss: 1.1929, Acc: 0.3530, MacroF1: 0.3521
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=322) => Acc: 0.3944, MacroF1: 0.3913
+[2D] Val (volume-level, n=41) => Loss: 1.1658, Acc: 0.4146, BalancedAcc: 0.4188, MacroPrecision: 0.4024, MacroRecall: 0.4188, MacroF1: 0.4092
+[2D] Val (patient-level, n=41) => Acc: 0.4146, BalancedAcc: 0.4188, MacroPrecision: 0.4024, MacroRecall: 0.4188, MacroF1: 0.4092
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  5               3               7               
+Y:Small Cell      2               9               2               
+Y:Squamous        7               3               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  5               3               7               
+Y:Small Cell      2               9               2               
+Y:Squamous        7               3               3               
+
+[finetune] Epoch 2 Summary => TrainLoss: 1.1929, TrainMacroF1: 0.3521, ValMacroF1(patient): 0.4092/0.4092 (cur/roll3)
+[finetune] Patient current vs rolling-3: accuracy 0.4146/0.4146, balanced_accuracy 0.4188/0.4188, macro_precision 0.4024/0.4024, macro_recall 0.4188/0.4188, macro_f1 0.4092/0.4092
+
+--- finetune Epoch 3/40 | lr(backbone/head)=2.98e-06/2.98e-05 ---
+[2D] Epoch 3 [32/32] Loss: 1.1622 Time: 5.96s
+[2D] Train Epoch 3 (slice-level) => Loss: 1.1622, Acc: 0.3642, MacroF1: 0.3614
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=322) => Acc: 0.4037, MacroF1: 0.3937
+[2D] Val (volume-level, n=41) => Loss: 1.1498, Acc: 0.4390, BalancedAcc: 0.4410, MacroPrecision: 0.4242, MacroRecall: 0.4410, MacroF1: 0.4310
+[2D] Val (patient-level, n=41) => Acc: 0.4390, BalancedAcc: 0.4410, MacroPrecision: 0.4242, MacroRecall: 0.4410, MacroF1: 0.4310
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  6               3               6               
+Y:Small Cell      2               9               2               
+Y:Squamous        7               3               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  6               3               6               
+Y:Small Cell      2               9               2               
+Y:Squamous        7               3               3               
+
+[finetune] Epoch 3 Summary => TrainLoss: 1.1622, TrainMacroF1: 0.3614, ValMacroF1(patient): 0.4310/0.4165 (cur/roll3)
+[finetune] Patient current vs rolling-3: accuracy 0.4390/0.4228, balanced_accuracy 0.4410/0.4262, macro_precision 0.4242/0.4097, macro_recall 0.4410/0.4262, macro_f1 0.4310/0.4165
+
+--- finetune Epoch 4/40 | lr(backbone/head)=2.96e-06/2.96e-05 ---
+[2D] Epoch 4 [32/32] Loss: 1.1621 Time: 4.84s
+[2D] Train Epoch 4 (slice-level) => Loss: 1.1621, Acc: 0.3728, MacroF1: 0.3708
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=322) => Acc: 0.3851, MacroF1: 0.3858
+[2D] Val (volume-level, n=41) => Loss: 1.1471, Acc: 0.3659, BalancedAcc: 0.3675, MacroPrecision: 0.3802, MacroRecall: 0.3675, MacroF1: 0.3730
+[2D] Val (patient-level, n=41) => Acc: 0.3659, BalancedAcc: 0.3675, MacroPrecision: 0.3802, MacroRecall: 0.3675, MacroF1: 0.3730
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  5               2               8               
+Y:Small Cell      2               7               4               
+Y:Squamous        7               3               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  5               2               8               
+Y:Small Cell      2               7               4               
+Y:Squamous        7               3               3               
+
+[finetune] Epoch 4 Summary => TrainLoss: 1.1621, TrainMacroF1: 0.3708, ValMacroF1(patient): 0.3730/0.4044 (cur/roll3)
+[finetune] Patient current vs rolling-3: accuracy 0.3659/0.4065, balanced_accuracy 0.3675/0.4091, macro_precision 0.3802/0.4023, macro_recall 0.3675/0.4091, macro_f1 0.3730/0.4044
+
+--- finetune Epoch 5/40 | lr(backbone/head)=2.93e-06/2.93e-05 ---
+[2D] Epoch 5 [32/32] Loss: 1.1394 Time: 3.69s
+[2D] Train Epoch 5 (slice-level) => Loss: 1.1394, Acc: 0.3722, MacroF1: 0.3722
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=322) => Acc: 0.4161, MacroF1: 0.4096
+[2D] Val (volume-level, n=41) => Loss: 1.1308, Acc: 0.4390, BalancedAcc: 0.4410, MacroPrecision: 0.4208, MacroRecall: 0.4410, MacroF1: 0.4272
+[2D] Val (patient-level, n=41) => Acc: 0.4390, BalancedAcc: 0.4410, MacroPrecision: 0.4208, MacroRecall: 0.4410, MacroF1: 0.4272
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  6               4               5               
+Y:Small Cell      2               9               2               
+Y:Squamous        7               3               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  6               4               5               
+Y:Small Cell      2               9               2               
+Y:Squamous        7               3               3               
+
+[finetune] Epoch 5 Summary => TrainLoss: 1.1394, TrainMacroF1: 0.3722, ValMacroF1(patient): 0.4272/0.4104 (cur/roll3)
+[finetune] Patient current vs rolling-3: accuracy 0.4390/0.4146, balanced_accuracy 0.4410/0.4165, macro_precision 0.4208/0.4084, macro_recall 0.4410/0.4165, macro_f1 0.4272/0.4104
+
+--- finetune Epoch 6/40 | lr(backbone/head)=2.89e-06/2.89e-05 ---
+[2D] Epoch 6 [32/32] Loss: 1.1491 Time: 5.08s
+[2D] Train Epoch 6 (slice-level) => Loss: 1.1491, Acc: 0.3709, MacroF1: 0.3703
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=322) => Acc: 0.3882, MacroF1: 0.3875
+[2D] Val (volume-level, n=41) => Loss: 1.1239, Acc: 0.3415, BalancedAcc: 0.3419, MacroPrecision: 0.3736, MacroRecall: 0.3419, MacroF1: 0.3540
+[2D] Val (patient-level, n=41) => Acc: 0.3415, BalancedAcc: 0.3419, MacroPrecision: 0.3736, MacroRecall: 0.3419, MacroF1: 0.3540
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  5               1               9               
+Y:Small Cell      3               6               4               
+Y:Squamous        7               3               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  5               1               9               
+Y:Small Cell      3               6               4               
+Y:Squamous        7               3               3               
+
+[finetune] Epoch 6 Summary => TrainLoss: 1.1491, TrainMacroF1: 0.3703, ValMacroF1(patient): 0.3540/0.3847 (cur/roll3)
+[finetune] Patient current vs rolling-3: accuracy 0.3415/0.3821, balanced_accuracy 0.3419/0.3835, macro_precision 0.3736/0.3915, macro_recall 0.3419/0.3835, macro_f1 0.3540/0.3847
+
+--- finetune Epoch 7/40 | lr(backbone/head)=2.84e-06/2.84e-05 ---
+[2D] Epoch 7 [32/32] Loss: 1.1096 Time: 4.39s
+[2D] Train Epoch 7 (slice-level) => Loss: 1.1096, Acc: 0.4013, MacroF1: 0.4016
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=322) => Acc: 0.3944, MacroF1: 0.3923
+[2D] Val (volume-level, n=41) => Loss: 1.1183, Acc: 0.4146, BalancedAcc: 0.4188, MacroPrecision: 0.3990, MacroRecall: 0.4188, MacroF1: 0.4059
+[2D] Val (patient-level, n=41) => Acc: 0.4146, BalancedAcc: 0.4188, MacroPrecision: 0.3990, MacroRecall: 0.4188, MacroF1: 0.4059
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  5               3               7               
+Y:Small Cell      2               9               2               
+Y:Squamous        6               4               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  5               3               7               
+Y:Small Cell      2               9               2               
+Y:Squamous        6               4               3               
+
+[finetune] Epoch 7 Summary => TrainLoss: 1.1096, TrainMacroF1: 0.4016, ValMacroF1(patient): 0.4059/0.3957 (cur/roll3)
+[finetune] Patient current vs rolling-3: accuracy 0.4146/0.3984, balanced_accuracy 0.4188/0.4006, macro_precision 0.3990/0.3978, macro_recall 0.4188/0.4006, macro_f1 0.4059/0.3957
+
+--- finetune Epoch 8/40 | lr(backbone/head)=2.78e-06/2.78e-05 ---
+[2D] Epoch 8 [32/32] Loss: 1.1228 Time: 4.32s
+[2D] Train Epoch 8 (slice-level) => Loss: 1.1228, Acc: 0.3642, MacroF1: 0.3646
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=322) => Acc: 0.3851, MacroF1: 0.3807
+[2D] Val (volume-level, n=41) => Loss: 1.1117, Acc: 0.4146, BalancedAcc: 0.4085, MacroPrecision: 0.4251, MacroRecall: 0.4085, MacroF1: 0.4125
+[2D] Val (patient-level, n=41) => Acc: 0.4146, BalancedAcc: 0.4085, MacroPrecision: 0.4251, MacroRecall: 0.4085, MacroF1: 0.4125
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  8               1               6               
+Y:Small Cell      3               6               4               
+Y:Squamous        7               3               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  8               1               6               
+Y:Small Cell      3               6               4               
+Y:Squamous        7               3               3               
+
+[finetune] Epoch 8 Summary => TrainLoss: 1.1228, TrainMacroF1: 0.3646, ValMacroF1(patient): 0.4125/0.3908 (cur/roll3)
+[finetune] Patient current vs rolling-3: accuracy 0.4146/0.3902, balanced_accuracy 0.4085/0.3897, macro_precision 0.4251/0.3992, macro_recall 0.4085/0.3897, macro_f1 0.4125/0.3908
+
+--- finetune Epoch 9/40 | lr(backbone/head)=2.71e-06/2.71e-05 ---
+[2D] Epoch 9 [32/32] Loss: 1.1186 Time: 4.30s
+[2D] Train Epoch 9 (slice-level) => Loss: 1.1186, Acc: 0.3821, MacroF1: 0.3800
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=322) => Acc: 0.3882, MacroF1: 0.3868
+[2D] Val (volume-level, n=41) => Loss: 1.1095, Acc: 0.3659, BalancedAcc: 0.3641, MacroPrecision: 0.3681, MacroRecall: 0.3641, MacroF1: 0.3659
+[2D] Val (patient-level, n=41) => Acc: 0.3659, BalancedAcc: 0.3641, MacroPrecision: 0.3681, MacroRecall: 0.3641, MacroF1: 0.3659
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  6               3               6               
+Y:Small Cell      2               6               5               
+Y:Squamous        6               4               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  6               3               6               
+Y:Small Cell      2               6               5               
+Y:Squamous        6               4               3               
+
+[finetune] Epoch 9 Summary => TrainLoss: 1.1186, TrainMacroF1: 0.3800, ValMacroF1(patient): 0.3659/0.3947 (cur/roll3)
+[finetune] Patient current vs rolling-3: accuracy 0.3659/0.3984, balanced_accuracy 0.3641/0.3972, macro_precision 0.3681/0.3974, macro_recall 0.3641/0.3972, macro_f1 0.3659/0.3947
+
+--- finetune Epoch 10/40 | lr(backbone/head)=2.64e-06/2.64e-05 ---
+[2D] Epoch 10 [32/32] Loss: 1.0993 Time: 4.23s
+[2D] Train Epoch 10 (slice-level) => Loss: 1.0993, Acc: 0.4079, MacroF1: 0.4058
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=322) => Acc: 0.3851, MacroF1: 0.3777
+[2D] Val (volume-level, n=41) => Loss: 1.1033, Acc: 0.4146, BalancedAcc: 0.4085, MacroPrecision: 0.4131, MacroRecall: 0.4085, MacroF1: 0.4069
+[2D] Val (patient-level, n=41) => Acc: 0.4146, BalancedAcc: 0.4085, MacroPrecision: 0.4131, MacroRecall: 0.4085, MacroF1: 0.4069
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  8               2               5               
+Y:Small Cell      4               6               3               
+Y:Squamous        7               3               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  8               2               5               
+Y:Small Cell      4               6               3               
+Y:Squamous        7               3               3               
+
+[finetune] Epoch 10 Summary => TrainLoss: 1.0993, TrainMacroF1: 0.4058, ValMacroF1(patient): 0.4069/0.3951 (cur/roll3)
+[finetune] Patient current vs rolling-3: accuracy 0.4146/0.3984, balanced_accuracy 0.4085/0.3937, macro_precision 0.4131/0.4021, macro_recall 0.4085/0.3937, macro_f1 0.4069/0.3951
+
+--- finetune Epoch 11/40 | lr(backbone/head)=2.56e-06/2.56e-05 ---
+[2D] Epoch 11 [32/32] Loss: 1.0919 Time: 4.38s
+[2D] Train Epoch 11 (slice-level) => Loss: 1.0919, Acc: 0.3993, MacroF1: 0.3955
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=322) => Acc: 0.3944, MacroF1: 0.3862
+[2D] Val (volume-level, n=41) => Loss: 1.1046, Acc: 0.4146, BalancedAcc: 0.4085, MacroPrecision: 0.4281, MacroRecall: 0.4085, MacroF1: 0.4109
+[2D] Val (patient-level, n=41) => Acc: 0.4146, BalancedAcc: 0.4085, MacroPrecision: 0.4281, MacroRecall: 0.4085, MacroF1: 0.4109
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  8               2               5               
+Y:Small Cell      4               5               4               
+Y:Squamous        7               2               4               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  8               2               5               
+Y:Small Cell      4               5               4               
+Y:Squamous        7               2               4               
+
+[finetune] Epoch 11 Summary => TrainLoss: 1.0919, TrainMacroF1: 0.3955, ValMacroF1(patient): 0.4109/0.3946 (cur/roll3)
+[finetune] Patient current vs rolling-3: accuracy 0.4146/0.3984, balanced_accuracy 0.4085/0.3937, macro_precision 0.4281/0.4031, macro_recall 0.4085/0.3937, macro_f1 0.4109/0.3946
+
+--- finetune Epoch 12/40 | lr(backbone/head)=2.47e-06/2.47e-05 ---
+[2D] Epoch 12 [32/32] Loss: 1.0969 Time: 4.33s
+[2D] Train Epoch 12 (slice-level) => Loss: 1.0969, Acc: 0.4013, MacroF1: 0.3994
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=322) => Acc: 0.3851, MacroF1: 0.3809
+[2D] Val (volume-level, n=41) => Loss: 1.1029, Acc: 0.4146, BalancedAcc: 0.4120, MacroPrecision: 0.4120, MacroRecall: 0.4120, MacroF1: 0.4120
+[2D] Val (patient-level, n=41) => Acc: 0.4146, BalancedAcc: 0.4120, MacroPrecision: 0.4120, MacroRecall: 0.4120, MacroF1: 0.4120
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  7               3               5               
+Y:Small Cell      3               6               4               
+Y:Squamous        5               4               4               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  7               3               5               
+Y:Small Cell      3               6               4               
+Y:Squamous        5               4               4               
+
+[finetune] Epoch 12 Summary => TrainLoss: 1.0969, TrainMacroF1: 0.3994, ValMacroF1(patient): 0.4120/0.4099 (cur/roll3)
+[finetune] Patient current vs rolling-3: accuracy 0.4146/0.4146, balanced_accuracy 0.4120/0.4097, macro_precision 0.4120/0.4177, macro_recall 0.4120/0.4097, macro_f1 0.4120/0.4099
+
+--- finetune Epoch 13/40 | lr(backbone/head)=2.38e-06/2.38e-05 ---
+[2D] Epoch 13 [32/32] Loss: 1.0956 Time: 4.34s
+[2D] Train Epoch 13 (slice-level) => Loss: 1.0956, Acc: 0.3974, MacroF1: 0.3975
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=322) => Acc: 0.4130, MacroF1: 0.4046
+[2D] Val (volume-level, n=41) => Loss: 1.0973, Acc: 0.4146, BalancedAcc: 0.4120, MacroPrecision: 0.4014, MacroRecall: 0.4120, MacroF1: 0.4042
+[2D] Val (patient-level, n=41) => Acc: 0.4146, BalancedAcc: 0.4120, MacroPrecision: 0.4014, MacroRecall: 0.4120, MacroF1: 0.4042
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  7               3               5               
+Y:Small Cell      4               7               2               
+Y:Squamous        5               5               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  7               3               5               
+Y:Small Cell      4               7               2               
+Y:Squamous        5               5               3               
+
+[finetune] Epoch 13 Summary => TrainLoss: 1.0956, TrainMacroF1: 0.3975, ValMacroF1(patient): 0.4042/0.4090 (cur/roll3)
+[finetune] Patient current vs rolling-3: accuracy 0.4146/0.4146, balanced_accuracy 0.4120/0.4108, macro_precision 0.4014/0.4138, macro_recall 0.4120/0.4108, macro_f1 0.4042/0.4090
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=332) => Acc: 0.3193, MacroF1: 0.3091
+[2D] Val (volume-level, n=43) => Loss: 1.2473, Acc: 0.3488, BalancedAcc: 0.3504, MacroPrecision: 0.3819, MacroRecall: 0.3504, MacroF1: 0.3398
+[2D] Val (patient-level, n=43) => Acc: 0.3488, BalancedAcc: 0.3504, MacroPrecision: 0.3819, MacroRecall: 0.3504, MacroF1: 0.3398
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  7               7               1               
+Y:Small Cell      6               5               2               
+Y:Squamous        8               4               3               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  7               7               1               
+Y:Small Cell      6               5               2               
+Y:Squamous        8               4               3               
+

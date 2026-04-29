@@ -14,9 +14,8 @@ import torchvision
 from data.transforms import (
     get_train_transforms_3d,
     get_val_transforms_3d,
-    get_train_transforms_2p5d,
-    get_val_transforms_2p5d,
 )
+from data.exclusions import TRUNCATED_LUNG_MASK
 
 from sklearn.model_selection import train_test_split
 
@@ -80,14 +79,20 @@ def get_lung_pet_ct_dx_data_list(
     patient_labels = []
     
     for pid in all_patients:
-        label = -1
-        for key, val in CLASS_MAP.items():
-            if f"-{key}" in pid:
-                label = val
-                break
-        if label != -1:
+        # Strict match: exactly one CLASS_MAP key must match. Multiple matches
+        # mean the substring rule is ambiguous for this folder name (e.g. a
+        # hypothetical 'Lung_Dx-GA-0001' would hit both -G and -A); first-match
+        # wins silently in dict iteration order, which is a sleeper bug. See
+        # flaws.md 3.1.
+        matched = [val for key, val in CLASS_MAP.items() if f"-{key}" in pid]
+        if len(matched) == 1:
             valid_patients.append(pid)
-            patient_labels.append(label)
+            patient_labels.append(matched[0])
+        elif len(matched) > 1:
+            raise ValueError(
+                f"[lung_pet_ct_dx] ambiguous CLASS_MAP match for patient '{pid}': "
+                f"hits {len(matched)} keys ({matched}). Refusing to silently pick one."
+            )
 
     val_test_frac = val_frac + test_frac
     if val_test_frac > 0:
@@ -121,13 +126,14 @@ def get_lung_pet_ct_dx_data_list(
 
         data_list = []
         for pid in selected:
-            label = -1
-            for key, val in CLASS_MAP.items():
-                if f"-{key}" in pid:
-                    label = val
-                    break
-            if label == -1:
-                continue
+            matched = [val for key, val in CLASS_MAP.items() if f"-{key}" in pid]
+            if len(matched) != 1:
+                # Unreachable: ambiguity is caught upstream when valid_patients
+                # is built. Fail loud rather than silently dropping.
+                raise ValueError(
+                    f"[lung_pet_ct_dx] expected exactly one CLASS_MAP match for '{pid}', got {matched}."
+                )
+            label = matched[0]
                 
             patient_dir = data_root / pid
             images = sorted(
@@ -145,6 +151,13 @@ def get_lung_pet_ct_dx_data_list(
                 entry: Dict[str, Any] = {
                     "image": str(img_path),
                     "scan_label": label,
+                    # Patient identity is the parent-folder name. Carrying it in
+                    # every entry lets the 3D validate_epoch aggregate
+                    # multi-scan patients to a single patient-level prediction
+                    # (matches what 2D and MIL do). The 2D builder overwrites
+                    # this downstream with the same value, so adding it here is
+                    # idempotent for the 2D path.
+                    "patient_id": pid,
                 }
 
                 series_uid = img_path.name.replace("_image.nii.gz", "")
@@ -194,6 +207,13 @@ def get_biglunge_data_list(
         e.name for e in data_root.iterdir()
         if e.is_dir() and e.name in patient_labels
     )
+    # Drop patients whose lung mask is truncated — the 3D pipeline uses
+    # this list to bound a CropForegroundd, so a partial mask produces a
+    # wrongly-bounded volume. Same exclusion the MIL pipeline applies.
+    excluded = [pid for pid in patient_folders if pid in TRUNCATED_LUNG_MASK]
+    if excluded:
+        print(f"[3D big_lunge] Excluding {len(excluded)} truncated-lung-mask patients: {excluded}")
+        patient_folders = [pid for pid in patient_folders if pid not in TRUNCATED_LUNG_MASK]
 
     if not patient_folders:
         raise ValueError(
@@ -254,6 +274,17 @@ def get_biglunge_data_list(
                 lung_mask_path = patient_dir / f"{pid}_label_lungs.nii.gz"
                 if lung_mask_path.exists():
                     entry["lung_mask"] = str(lung_mask_path)
+                # Algorithmic tumor segmentation. Most BigLunge patients
+                # (~80%, per scripts/audit_multifocal.py) are multifocal,
+                # so the 3D ExtractSubVolumed centers Z on the LARGEST
+                # connected component — same logic the 2D pipeline's
+                # CropAroundTumord uses. Note: we deliberately do NOT
+                # use this mask as a seg-aux loss target during fine-tune
+                # (auto-seg → seg-head distillation is circular); it's
+                # only consumed for spatial centering.
+                tumor_mask_path = patient_dir / f"{pid}_label_tc.nii.gz"
+                if tumor_mask_path.exists():
+                    entry["mask"] = str(tumor_mask_path)
                 data_list.append(entry)
                 if testing and len(data_list) >= 32:
                     break
@@ -274,7 +305,7 @@ def create_dataset(
     data_path: str,
     csv_path: str = "",
     img_size: int = 224,
-    depth_size: int = 64,   
+    depth_size: int = 64,
     convert_to_rgb: bool = True,
     use_multichannel_windowing: bool = False,
     cache_dir: Optional[str] = None,
@@ -285,6 +316,8 @@ def create_dataset(
     val_frac: float = 0.15,
     test_frac: float = 0.15,
     seed: int = 42,
+    strong_augs: bool = False,
+    clear_cache: bool = False,
     **kwargs: Any,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
     """
@@ -310,11 +343,30 @@ def create_dataset(
     else:
         raise ValueError(f"Unknown dataset_type: {dataset_type}")
 
+    # Run-specific cache parent (the parameterized path that holds train/
+    # val/test subdirs for THIS img_size/depth_size combo). When
+    # clear_cache=True we rmtree this once before the per-split loop, so
+    # only the cache that this run will rebuild gets wiped — sibling
+    # configs with different img_size/depth_size stay intact.
+    if cache_dir is None:
+        mode_key = "3d" if use_3d else "2d"
+        test_suffix = "_testing" if testing else ""
+        run_cache_root = os.path.join(
+            os.path.expanduser("~"), ".cache", cache_name,
+            f"{mode_key}_img{img_size}_d{depth_size}{test_suffix}",
+        )
+    else:
+        run_cache_root = cache_dir
+    if clear_cache and os.path.isdir(run_cache_root):
+        import shutil as _shutil
+        print(f"[--clear-cache] Removing {run_cache_root}")
+        _shutil.rmtree(run_cache_root)
+
     datasets = []
-    
+
     # Import nibabel here to safely read NIfTI headers without fully loading
     import nibabel as nib
-    
+
     for split in ("train", "val", "test"):
         data_list = all_splits[split]
 
@@ -328,6 +380,7 @@ def create_dataset(
                 transforms = get_train_transforms_3d(
                     img_size=img_size, depth_size=depth_size,
                     use_lung_crop=use_lung_crop,
+                    strong_augs=strong_augs,
                 )
             else:
                 transforms = get_val_transforms_3d(
@@ -336,18 +389,8 @@ def create_dataset(
                 )
 
 
-        if cache_dir is None:
-            mode_key = "3d" if use_3d else "2d"
-            test_suffix = "_testing" if testing else ""
-            current_cache_dir = os.path.join(
-                os.path.expanduser("~"),
-                ".cache",
-                cache_name,
-                f"{mode_key}_img{img_size}_d{depth_size}{test_suffix}",
-                split,
-            )
-        else:
-            current_cache_dir = os.path.join(cache_dir, split)
+        # Per-split subdir inside the run cache root computed above.
+        current_cache_dir = os.path.join(run_cache_root, split)
             
         os.makedirs(current_cache_dir, exist_ok=True)
         print(f"PersistentDataset cache_dir='{current_cache_dir}'")
@@ -358,9 +401,20 @@ def create_dataset(
 
         # Cache key covers everything that can change the split or preprocessing shape.
         # If any of these drift from what's on disk, the cache is rebuilt.
+        # Bump CACHE_SCHEMA_VERSION whenever the deterministic prefix of the
+        # 3D / 2.5D pipelines changes (Spacingd pixdim, intensity window,
+        # ExtractSubVolume centering rule, etc.) so existing on-disk caches
+        # are invalidated even if every other field above is unchanged.
+        CACHE_SCHEMA_VERSION = 3  # bumped: BigLunge tumor mask attached + ExtractSubVolumed largest-CC centering (2026-04-29)
         current_meta = {
+            "schema_version": CACHE_SCHEMA_VERSION,
             "dataset_type": dataset_type,
             "data_list_len": len(data_list),
+            # data_list_keys catches schema drift in the entry dict (e.g.
+            # adding ``patient_id`` for patient-level validate aggregation).
+            # Without this the cache silently reuses stale entries that lack
+            # the new key and validate_epoch fails to find it at runtime.
+            "data_list_keys": sorted(data_list[0].keys()) if data_list else [],
             "testing": bool(testing),
             "val_frac": float(val_frac),
             "test_frac": float(test_frac),
@@ -420,260 +474,9 @@ def create_dataset(
     return datasets[0], datasets[1], datasets[2]
 
 
-def get_biglunge_2p5d_data_list(
-    data_path: str,
-    csv_path: str,
-    tumor_mask_suffix: str = "_label_tumor.nii.gz",
-    val_frac: float = 0.15,
-    test_frac: float = 0.15,
-    seed: int = 42,
-    testing: bool = False,
-    require_tumor_mask: bool = True,
-) -> Dict[str, List[Dict[str, Any]]]:
-    """BigLunge data list for the 2.5D pipeline.
-
-    Each entry has ``image`` (CT), ``tumor_mask`` (segmentation used for
-    centering the crop), ``scan_label``, ``patient_id``. Patients lacking a
-    tumor mask are dropped when ``require_tumor_mask=True``.
-    """
-    if not os.path.isdir(data_path):
-        raise ValueError(f"Data path '{data_path}' does not exist.")
-    if not os.path.isfile(csv_path):
-        raise ValueError(f"CSV '{csv_path}' does not exist.")
-
-    patient_labels = load_patient_labels(csv_path)
-    data_root = Path(data_path)
-    patient_folders = sorted(
-        e.name for e in data_root.iterdir()
-        if e.is_dir() and e.name in patient_labels
-    )
-
-    # Keep only patients that actually have a tumor mask on disk.
-    usable_patients: List[str] = []
-    for pid in patient_folders:
-        mask_path = data_root / pid / f"{pid}{tumor_mask_suffix}"
-        if mask_path.exists() or not require_tumor_mask:
-            usable_patients.append(pid)
-    dropped = len(patient_folders) - len(usable_patients)
-    if dropped:
-        print(f"[2.5D] Dropped {dropped} patients without tumor mask '{tumor_mask_suffix}'.")
-    if not usable_patients:
-        raise ValueError(
-            f"No patients with tumor masks found under '{data_path}' "
-            f"(expected suffix '{tumor_mask_suffix}')."
-        )
-
-    patient_classes = [patient_labels[pid] for pid in usable_patients]
-
-    val_test_frac = val_frac + test_frac
-    if val_test_frac > 0:
-        train_ids, temp_ids, _, temp_cls = train_test_split(
-            usable_patients, patient_classes,
-            test_size=val_test_frac, random_state=seed, stratify=patient_classes,
-        )
-        if test_frac > 0 and val_frac > 0:
-            test_ratio = test_frac / val_test_frac
-            val_ids, test_ids, _, _ = train_test_split(
-                temp_ids, temp_cls,
-                test_size=test_ratio, random_state=seed, stratify=temp_cls,
-            )
-        elif test_frac > 0:
-            val_ids, test_ids = [], temp_ids
-        else:
-            val_ids, test_ids = temp_ids, []
-    else:
-        train_ids, val_ids, test_ids = usable_patients, [], []
-
-    split_patients = {"train": train_ids, "val": val_ids, "test": test_ids}
-    result: Dict[str, List[Dict[str, Any]]] = {}
-    for split, selected in split_patients.items():
-        print(f"[2.5D] Split '{split}': {len(selected)} patients.")
-        data_list: List[Dict[str, Any]] = []
-        for pid in selected:
-            patient_dir = data_root / pid
-            if not patient_dir.is_dir():
-                continue
-            label = patient_labels[pid]
-            mask_path = patient_dir / f"{pid}{tumor_mask_suffix}"
-            for nii in patient_dir.glob("*.nii*"):
-                if "_label_" in nii.name:
-                    continue
-                entry: Dict[str, Any] = {
-                    "image": str(nii),
-                    "scan_label": label,
-                    "patient_id": pid,
-                }
-                if mask_path.exists():
-                    entry["tumor_mask"] = str(mask_path)
-                elif require_tumor_mask:
-                    continue
-                data_list.append(entry)
-                if testing and len(data_list) >= 32:
-                    break
-            if testing and len(data_list) >= 32:
-                break
-
-        class_counts: Dict[int, int] = {}
-        for item in data_list:
-            class_counts[item["scan_label"]] = class_counts.get(item["scan_label"], 0) + 1
-        print(f"  {len(data_list)} images, class distribution: {class_counts}")
-        result[split] = data_list
-
-    return result
-
-
-def get_lung_pet_ct_dx_2p5d_data_list(
-    data_path: str,
-    val_frac: float = 0.15,
-    test_frac: float = 0.15,
-    seed: int = 42,
-    testing: bool = False,
-    max_scans_per_patient: int = 2,
-    require_tumor_mask: bool = True,
-) -> Dict[str, List[Dict[str, Any]]]:
-    """Lung-PET-CT-Dx list for the 2.5D pipeline.
-
-    Reuses the 3D builder for split + class logic, then renames each entry's
-    ``mask`` key to ``tumor_mask`` so ``CropAroundTumord`` picks it up. Entries
-    without a mask are dropped when ``require_tumor_mask=True``.
-    """
-    base = get_lung_pet_ct_dx_data_list(
-        data_path=data_path, val_frac=val_frac, test_frac=test_frac,
-        seed=seed, testing=testing, max_scans_per_patient=max_scans_per_patient,
-    )
-    out: Dict[str, List[Dict[str, Any]]] = {}
-    for split, data_list in base.items():
-        kept: List[Dict[str, Any]] = []
-        for e in data_list:
-            if "mask" in e:
-                new_entry = {k: v for k, v in e.items() if k != "mask"}
-                new_entry["tumor_mask"] = e["mask"]
-                kept.append(new_entry)
-            elif not require_tumor_mask:
-                kept.append(dict(e))
-        dropped = len(data_list) - len(kept)
-        if dropped:
-            print(f"[2.5D lung_pet_ct_dx {split}] dropped {dropped} entries without a mask.")
-        out[split] = kept
-    return out
-
-
-def create_dataset_2p5d(
-    data_path: str,
-    csv_path: str = "",
-    dataset_type: str = "big_lunge",
-    img_size: int = 96,
-    num_slices: int = 5,
-    tumor_mask_suffix: str = "_label_tumor.nii.gz",
-    cache_dir: Optional[str] = None,
-    val_frac: float = 0.15,
-    test_frac: float = 0.15,
-    seed: int = 42,
-    testing: bool = False,
-    warm_cache: bool = False,
-    require_tumor_mask: bool = True,
-) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
-    """Create train/val/test PersistentDatasets for the 2.5D, tumor-cropped
-    pipeline. Each sample yields ``image`` of shape (num_slices, img_size,
-    img_size) suitable for a 2D CNN with num_slices input channels.
-
-    Supported ``dataset_type``:
-      - ``"big_lunge"``: BigLunge patients with a per-patient ``{pid}{tumor_mask_suffix}``.
-      - ``"lung_pet_ct_dx"``: Lung-PET-CT-Dx with per-series ``{series}_mask.nii.gz``.
-        ``csv_path`` and ``tumor_mask_suffix`` are ignored in this mode.
-    """
-    if dataset_type == "big_lunge":
-        if not csv_path:
-            raise ValueError("csv_path is required for dataset_type='big_lunge'.")
-        all_splits = get_biglunge_2p5d_data_list(
-            data_path=data_path, csv_path=csv_path,
-            tumor_mask_suffix=tumor_mask_suffix,
-            val_frac=val_frac, test_frac=test_frac, seed=seed,
-            testing=testing, require_tumor_mask=require_tumor_mask,
-        )
-        cache_name = "monai_biglunge_2p5d"
-    elif dataset_type == "lung_pet_ct_dx":
-        all_splits = get_lung_pet_ct_dx_2p5d_data_list(
-            data_path=data_path, val_frac=val_frac, test_frac=test_frac,
-            seed=seed, testing=testing, require_tumor_mask=require_tumor_mask,
-        )
-        cache_name = "monai_lung_pet_ct_clean_2p5d"
-    else:
-        raise ValueError(f"Unknown dataset_type for 2.5D: '{dataset_type}'.")
-
-    datasets: List[PersistentDataset] = []
-    for split in ("train", "val", "test"):
-        data_list = all_splits[split]
-        if split == "train":
-            transforms = get_train_transforms_2p5d(img_size=img_size, num_slices=num_slices)
-        else:
-            transforms = get_val_transforms_2p5d(img_size=img_size, num_slices=num_slices)
-
-        if cache_dir is None:
-            test_suffix = "_testing" if testing else ""
-            current_cache_dir = os.path.join(
-                os.path.expanduser("~"), ".cache", cache_name,
-                f"img{img_size}_n{num_slices}{test_suffix}", split,
-            )
-        else:
-            current_cache_dir = os.path.join(cache_dir, split)
-        os.makedirs(current_cache_dir, exist_ok=True)
-        print(f"[2.5D] PersistentDataset cache_dir='{current_cache_dir}'")
-
-        import json
-        valid_data_file = os.path.join(current_cache_dir, "valid_data.json")
-        meta_file = os.path.join(current_cache_dir, "meta.json")
-        current_meta = {
-            "pipeline": "2p5d",
-            "data_list_len": len(data_list),
-            "testing": bool(testing),
-            "val_frac": float(val_frac), "test_frac": float(test_frac),
-            "seed": int(seed),
-            "img_size": int(img_size), "num_slices": int(num_slices),
-            "tumor_mask_suffix": tumor_mask_suffix,
-            "split": split,
-        }
-
-        cached_meta = None
-        if os.path.exists(meta_file):
-            try:
-                with open(meta_file, "r") as f:
-                    cached_meta = json.load(f)
-            except Exception:
-                cached_meta = None
-        cache_valid = (
-            os.path.exists(valid_data_file)
-            and not warm_cache
-            and cached_meta == current_meta
-        )
-
-        if cache_valid:
-            with open(valid_data_file, "r") as f:
-                valid_data = json.load(f)
-            ds = PersistentDataset(data=valid_data, transform=transforms, cache_dir=current_cache_dir)
-        else:
-            ds = PersistentDataset(data=data_list, transform=transforms, cache_dir=current_cache_dir)
-            valid_data = []
-            for i in tqdm(range(len(ds)), desc=f"Validating & Caching [2.5D {split}]", unit="img"):
-                try:
-                    _ = ds[i]
-                    valid_data.append(data_list[i])
-                except Exception as e:
-                    print(f"Failed sample ({data_list[i].get('image', 'N/A')}): {e}")
-            print(f"[2.5D {split}] Kept {len(valid_data)}/{len(data_list)} valid samples.")
-            with open(valid_data_file, "w") as f:
-                json.dump(valid_data, f)
-            with open(meta_file, "w") as f:
-                json.dump(current_meta, f, indent=2)
-            ds = PersistentDataset(data=valid_data, transform=transforms, cache_dir=current_cache_dir)
-
-        datasets.append(ds)
-
-    return datasets[0], datasets[1], datasets[2]
-
-
 def get_class_names() -> List[str]:
     return CLASS_NAMES.copy()
+
 
 def get_num_classes() -> int:
     return len(CLASS_NAMES)

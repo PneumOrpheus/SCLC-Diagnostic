@@ -28,11 +28,14 @@ training:
   finetune_warmup_epochs: 2
   warmup_start_lr: 1.0e-6
   finetune_backbone_lr_scale: 0.1
+  finetune_freeze_backbone_epochs: 5
   weight_decay: 1.0e-3
   batch_size: 64
   accumulation_steps: 1
   monitor_rolling_window: 3
   seg_loss_weight: 0.0
+  strong_augs: true
+  mixup_alpha: 0.2
 
 system:
   num_workers: 4
@@ -45,4 +48,5 @@ system:
 pipeline_2d:
   img_size_2d: 224
   max_slices_per_volume: 8
-  tumor_mask_suffix: _label_tumor.nii.gz
+  tumor_mask_suffix: _label_tc.nii.gz
+  min_tumor_pixels: 1

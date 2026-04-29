@@ -112,17 +112,33 @@ def _expand_volume_entries_to_slices(
     mask_key: str,
     tumor_slice_index: Dict[str, List[int]],
     max_slices_per_volume: Optional[int] = None,
-) -> List[Dict[str, Any]]:
+) -> Tuple[List[Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
     """One volume -> one entry per tumor slice. ``mask_key`` names the
     per-volume tumor mask on the input entry.
+
+    Returns (kept_slices, dropped) where ``dropped`` has two keys:
+    ``no_mask`` (volume has no mask sidecar) and ``no_tumor_slices`` (mask
+    exists but no axial slice passes ``min_tumor_pixels``). Logging silently-
+    dropped volumes is required so cross-pipeline (2D vs MIL) comparisons run
+    on a known patient set — see flaws.md 1.3 / 4.3.
     """
     out: List[Dict[str, Any]] = []
+    dropped_no_mask: List[Dict[str, Any]] = []
+    dropped_no_slices: List[Dict[str, Any]] = []
     for v in volume_entries:
         mask_path = v.get(mask_key)
+        meta = {
+            "patient_id": v.get("patient_id"),
+            "image": v.get("image"),
+            "scan_label": v.get("scan_label"),
+        }
         if not mask_path:
+            dropped_no_mask.append(meta)
             continue
         slices = tumor_slice_index.get(mask_path, [])
         if not slices:
+            meta["mask_path"] = mask_path
+            dropped_no_slices.append(meta)
             continue
         # Deterministic subsample: evenly spaced across the tumor extent, so
         # even volumes with 40+ tumor slices don't dominate the training set.
@@ -137,7 +153,7 @@ def _expand_volume_entries_to_slices(
             # Volume identity — used for patient/series-level eval aggregation.
             entry.setdefault("volume_id", v.get("image"))
             out.append(entry)
-    return out
+    return out, {"no_mask": dropped_no_mask, "no_tumor_slices": dropped_no_slices}
 
 
 def _testing_subset_balanced(
@@ -200,7 +216,7 @@ def get_biglunge_2d_data_list(
     data_path: str,
     csv_path: str,
     cache_root: str,
-    tumor_mask_suffix: str = "_label_tumor.nii.gz",
+    tumor_mask_suffix: str = "_label_tc.nii.gz",
     val_frac: float = 0.15,
     test_frac: float = 0.15,
     seed: int = 42,
@@ -235,8 +251,9 @@ def get_biglunge_2d_data_list(
     )
 
     out: Dict[str, List[Dict[str, Any]]] = {}
+    drops_summary: Dict[str, Any] = {}
     for split, split_entries in volumes.items():
-        expanded = _expand_volume_entries_to_slices(
+        expanded, dropped = _expand_volume_entries_to_slices(
             split_entries, mask_key="tumor_mask",
             tumor_slice_index=tumor_index,
             max_slices_per_volume=max_slices_per_volume,
@@ -246,8 +263,32 @@ def get_biglunge_2d_data_list(
         cls_counts: Dict[int, int] = {}
         for e in expanded:
             cls_counts[e["scan_label"]] = cls_counts.get(e["scan_label"], 0) + 1
-        print(f"[2D big_lunge {split}] {len(expanded)} slices from {len(split_entries)} volumes, classes={cls_counts}")
+        kept_pids = sorted({e.get("patient_id") for e in expanded if e.get("patient_id")})
+        n_no_mask = len(dropped["no_mask"])
+        n_no_slices = len(dropped["no_tumor_slices"])
+        drops_summary[split] = {
+            "kept_patients": kept_pids,
+            "kept_volumes": len(set((e.get("image"), e.get("patient_id")) for e in expanded)),
+            "kept_slices": len(expanded),
+            "dropped_no_mask": dropped["no_mask"],
+            "dropped_no_tumor_slices": dropped["no_tumor_slices"],
+        }
+        print(
+            f"[2D big_lunge {split}] {len(expanded)} slices from "
+            f"{len(set(e.get('volume_id') for e in expanded))} volumes / "
+            f"{len(kept_pids)} patients (dropped: no_mask={n_no_mask}, "
+            f"no_tumor_slices={n_no_slices}), classes={cls_counts}"
+        )
         out[split] = expanded
+
+    drops_path = os.path.join(cache_root, "dropped_patients.json")
+    os.makedirs(cache_root, exist_ok=True)
+    tmp = drops_path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(drops_summary, f, indent=2)
+    os.replace(tmp, drops_path)
+    print(f"[2D big_lunge] dropped-patient inventory -> {drops_path}")
+
     return out
 
 
@@ -290,8 +331,9 @@ def get_lung_pet_ct_dx_2d_data_list(
     )
 
     out: Dict[str, List[Dict[str, Any]]] = {}
+    drops_summary: Dict[str, Any] = {}
     for split, split_entries in volumes.items():
-        expanded = _expand_volume_entries_to_slices(
+        expanded, dropped = _expand_volume_entries_to_slices(
             split_entries, mask_key="tumor_mask",
             tumor_slice_index=tumor_index,
             max_slices_per_volume=max_slices_per_volume,
@@ -301,8 +343,32 @@ def get_lung_pet_ct_dx_2d_data_list(
         cls_counts: Dict[int, int] = {}
         for e in expanded:
             cls_counts[e["scan_label"]] = cls_counts.get(e["scan_label"], 0) + 1
-        print(f"[2D lung_pet_ct_dx {split}] {len(expanded)} slices from {len(split_entries)} volumes, classes={cls_counts}")
+        kept_pids = sorted({e.get("patient_id") for e in expanded if e.get("patient_id")})
+        n_no_mask = len(dropped["no_mask"])
+        n_no_slices = len(dropped["no_tumor_slices"])
+        drops_summary[split] = {
+            "kept_patients": kept_pids,
+            "kept_volumes": len(set((e.get("image"), e.get("patient_id")) for e in expanded)),
+            "kept_slices": len(expanded),
+            "dropped_no_mask": dropped["no_mask"],
+            "dropped_no_tumor_slices": dropped["no_tumor_slices"],
+        }
+        print(
+            f"[2D lung_pet_ct_dx {split}] {len(expanded)} slices from "
+            f"{len(set(e.get('volume_id') for e in expanded))} volumes / "
+            f"{len(kept_pids)} patients (dropped: no_mask={n_no_mask}, "
+            f"no_tumor_slices={n_no_slices}), classes={cls_counts}"
+        )
         out[split] = expanded
+
+    drops_path = os.path.join(cache_root, "dropped_patients.json")
+    os.makedirs(cache_root, exist_ok=True)
+    tmp = drops_path + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(drops_summary, f, indent=2)
+    os.replace(tmp, drops_path)
+    print(f"[2D lung_pet_ct_dx] dropped-patient inventory -> {drops_path}")
+
     return out
 
 
@@ -311,7 +377,7 @@ def create_dataset_2d(
     csv_path: str = "",
     dataset_type: str = "big_lunge",
     img_size: int = 224,
-    tumor_mask_suffix: str = "_label_tumor.nii.gz",
+    tumor_mask_suffix: str = "_label_tc.nii.gz",
     max_slices_per_volume: Optional[int] = None,
     min_tumor_pixels: int = 1,
     cache_dir: Optional[str] = None,
@@ -321,6 +387,9 @@ def create_dataset_2d(
     testing: bool = False,
     warm_cache: bool = False,
     cache_workers: int = 8,
+    strong_augs: bool = False,
+    crop_size: int = 96,
+    clear_cache: bool = False,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
     """Create train/val/test ``PersistentDataset``s of 2D tumor slices.
     Samples are (C=1, img_size, img_size). Supported ``dataset_type``:
@@ -333,10 +402,18 @@ def create_dataset_2d(
     else:
         raise ValueError(f"Unknown dataset_type for 2D: '{dataset_type}'.")
 
+    # Cache is keyed on (img_size, crop_size, min_tumor_pixels) because all
+    # three change the on-disk tensor content. Different values live in
+    # separate directories so switching between configs doesn't invalidate
+    # the prior cache (and doesn't silently reuse stale tensors either).
     cache_root = os.path.join(
         os.path.expanduser("~"), ".cache", cache_name,
-        f"img{img_size}{'_testing' if testing else ''}",
+        f"img{img_size}_crop{int(crop_size)}_mp{int(min_tumor_pixels)}{'_testing' if testing else ''}",
     )
+    if clear_cache and os.path.isdir(cache_root):
+        import shutil as _shutil
+        print(f"[--clear-cache] Removing {cache_root}")
+        _shutil.rmtree(cache_root)
     os.makedirs(cache_root, exist_ok=True)
 
     if dataset_type == "big_lunge":
@@ -362,9 +439,9 @@ def create_dataset_2d(
     for split in ("train", "val", "test"):
         data_list = all_splits[split]
         transforms = (
-            get_train_transforms_2d(img_size=img_size)
+            get_train_transforms_2d(img_size=img_size, strong_augs=strong_augs, crop_size=crop_size)
             if split == "train"
-            else get_val_transforms_2d(img_size=img_size)
+            else get_val_transforms_2d(img_size=img_size, crop_size=crop_size)
         )
 
         if cache_dir is None:
@@ -384,10 +461,18 @@ def create_dataset_2d(
             "val_frac": float(val_frac), "test_frac": float(test_frac),
             "seed": int(seed),
             "img_size": int(img_size),
+            "crop_size": int(crop_size),
             "tumor_mask_suffix": tumor_mask_suffix,
             "min_tumor_pixels": int(min_tumor_pixels),
             "max_slices_per_volume": max_slices_per_volume,
             "split": split,
+            # Bumped 2026-04-28: CropAroundTumord now picks the largest CC
+            # (≥ 50 voxels) instead of centroid-of-all. Old caches contained
+            # crops centered between disjoint tumor components on multifocal
+            # patients (~70% of BigLunge). Keep this string in lockstep with
+            # CropAroundTumord's algorithm; bump it when min_component_voxels
+            # or the connectivity changes. flaws.md §1.7.
+            "centroid_algo": "largest_cc_min50",
         }
 
         cached_meta = None

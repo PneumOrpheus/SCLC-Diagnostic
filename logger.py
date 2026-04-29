@@ -37,11 +37,15 @@ def create_logger(output_dir, dist_rank=0, name=''):
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
         
-    # Create a timestamped filename
-    now_str = datetime.datetime.now().strftime('%Y-%m-%d_%H')
-    log_filename = f'{name}_{now_str}_logs.txt'
-    
-    file_handler = logging.FileHandler(os.path.join(output_dir, log_filename), mode='a')
+    # Create a timestamped filename. Include minutes + PID so two runs of the
+    # same model started within one hour (or even one minute, on a fast kick-off)
+    # do not collide into a single interleaved log. PID is the tiebreaker for
+    # truly simultaneous launches; `mode='w'` keeps each file's contents
+    # scoped to exactly one run so nothing can silently append to a prior log.
+    now_str = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
+    log_filename = f'{name}_{now_str}_pid{os.getpid()}_logs.txt'
+
+    file_handler = logging.FileHandler(os.path.join(output_dir, log_filename), mode='w')
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter(fmt=fmt, datefmt='%Y-%m-%d %H:%M:%S'))
     logger.addHandler(file_handler)

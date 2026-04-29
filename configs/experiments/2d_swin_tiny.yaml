@@ -1,0 +1,64 @@
+experiment:
+  name: 2d_swin_tiny
+  notes: >-
+    2D Swin-Tiny (patch4, window7, 224) with RadImageNet-pretrained weights
+    adapted to 1-channel CT. RadImageNet is ~1.35M 2D radiology images
+    across CT/MR/US — domain-closer prior than ImageNet.
+    Stem averaged from RGB, MS→timm downsample-key remap at load time,
+    head replaced with 3-class linear. DAPT on Lung-PET-CT-Dx, fine-tune on
+    BigLunge. Unlike EffNet/DenseNet/ResNet, Swin has a fixed window tied to
+    the input resolution (window=7 over 224-input): img_size_2d MUST stay at
+    224 — going to 96/128 would break the window-attention pattern.
+
+model_type: swin_tiny_2d
+mode: full
+
+data:
+  dapt_dataset: /home/data/Lung-PET-CT-Dx-Clean
+  finetune_dataset: /home/data/TrainingData
+  finetune_csv: /home/data/TrainingData/patients_parameters.csv
+
+checkpoints:
+  # Leave empty -> main.py auto-defaults to the RadImageNet RIN checkpoint.
+  # Swap to /home/hansstem/RadImageNet_swin/img2rin_swintf.pth to use the
+  # ImageNet->RadImageNet transfer variant.
+  initial_checkpoint: ""
+  model_checkpoint: ""
+  checkpoint_dir: /home/data/trained_models
+  output_dir: output
+
+training:
+  dapt_epochs: 30
+  # Swin-Tiny is ~28M params and has no native regularization like EfficientNet's
+  # DropConnect. Keep LR modest to avoid the large-backbone instability ResNet50
+  # showed (train F1 0.99 by ep10).
+  dapt_lr: 5.0e-5
+  dapt_warmup_epochs: 5
+  dapt_weight_decay: 5.0e-2
+  finetune_epochs: 40
+  finetune_lr: 2.0e-5
+  finetune_warmup_epochs: 3
+  warmup_start_lr: 1.0e-6
+  finetune_backbone_lr_scale: 0.1
+  finetune_freeze_backbone_epochs: 5
+  weight_decay: 5.0e-2
+  batch_size: 32
+  accumulation_steps: 2
+  monitor_rolling_window: 3
+  seg_loss_weight: 0.0
+  strong_augs: true
+  mixup_alpha: 0.2
+
+system:
+  num_workers: 4
+  cache_workers: 4
+  seed: 42
+  disable_amp: false
+  testing: false
+  clear_cache: false
+
+pipeline_2d:
+  img_size_2d: 224
+  max_slices_per_volume: 8
+  tumor_mask_suffix: _label_tc.nii.gz
+  min_tumor_pixels: 1

@@ -1,0 +1,7 @@
+=== SwinUNETR resume (FT then inference) at Wed Apr 29 07:56:39 UTC 2026 ===
+DAPT pbest: /home/data/trained_models/3d/swin_unetr/Apr_29_04_dapt_pbest_raw.pth
+[07:56:39] === START: FT ===
+[09:47:08] === DONE: FT ===
+[09:47:08] === START: inference (ckpt=/home/data/trained_models/3d/swin_unetr/Apr_29_04_finetune_pbest_raw.pth) ===
+[09:47:36] === DONE: inference ===
+=== ALL DONE at Wed Apr 29 09:47:36 UTC 2026 ===

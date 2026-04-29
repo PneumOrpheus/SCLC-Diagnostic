@@ -1,0 +1,40 @@
+{
+  "model_type": "resnet50_2d_rin",
+  "pipeline": "2d",
+  "generated_at": "2026-04-29T08:53:19",
+  "metrics_jsonl_source": "output/2d/resnet50_2d_rin/metrics.jsonl",
+  "canonical_dapt_run": {
+    "n_epochs": 30,
+    "first_timestamp": "2026-04-29T08:28:40",
+    "last_timestamp": "2026-04-29T08:35:39",
+    "first_epoch": 1,
+    "last_epoch": 30,
+    "peak_val_macro_f1_raw": 0.7089403350272915,
+    "peak_val_macro_f1_raw_epoch": 18,
+    "peak_val_macro_f1_rolling": 0.6882381613839413,
+    "peak_val_macro_f1_rolling_epoch": 20
+  },
+  "canonical_finetune_run": {
+    "n_epochs": 18,
+    "first_timestamp": "2026-04-29T08:35:52",
+    "last_timestamp": "2026-04-29T08:38:23",
+    "first_epoch": 1,
+    "last_epoch": 18,
+    "peak_val_macro_f1_raw": 0.4228896103896104,
+    "peak_val_macro_f1_raw_epoch": 6,
+    "peak_val_macro_f1_rolling": 0.41860134489166745,
+    "peak_val_macro_f1_rolling_epoch": 8
+  },
+  "dapt_test_timestamp": "2026-04-29T08:35:44",
+  "biglunge_test_timestamp": "2026-04-29T08:38:27",
+  "inference_probs_sources": {
+    "dapt_test": "/home/hansstem/SCLC-Classification/output/2d/resnet50_2d_rin/resnet50_2d_rin_2026-04-29_08-35-44_dapt_inference_probabilities.json",
+    "biglunge_test": "/home/hansstem/SCLC-Classification/output/2d/resnet50_2d_rin/resnet50_2d_rin_2026-04-29_08-38-27_inference_probabilities.json"
+  },
+  "checkpoints": {
+    "dapt_pbest_raw": "/home/data/trained_models/2d/resnet50_2d_rin/Apr_29_04_dapt_pbest_raw.pth",
+    "dapt_pbest_roll": "/home/data/trained_models/2d/resnet50_2d_rin/Apr_29_04_dapt_pbest_roll.pth",
+    "finetune_pbest_raw": "/home/data/trained_models/2d/resnet50_2d_rin/Apr_29_04_finetune_pbest_raw.pth",
+    "finetune_pbest_roll": "/home/data/trained_models/2d/resnet50_2d_rin/Apr_29_04_finetune_pbest_roll.pth"
+  }
+}
