@@ -24,42 +24,74 @@ Large Cell (`E` / `Storcellet`) and other morphological groups are filtered out.
 
 ```
 SCLC-Classification/
-├── main.py                      # pipeline entrypoint (DAPT -> fine-tune -> inference)
-├── model_selection.py           # get_sclc_model factory + classifier wrappers
-├── logger.py
-├── configs/experiments/         # one YAML per model
-├── data/
-│   ├── data_loader.py           # 3D dataset, splits, class maps
-│   ├── dataset_2d.py            # 2D per-slice dataset
-│   ├── dataset_mil.py           # MIL bag dataset
-│   ├── transforms.py            # MONAI transforms (3D / 2D / MIL)
-│   └── exclusions.py            # patient blocklist (truncated lung masks)
-├── training/
-│   ├── train.py                 # 3D train/validate
-│   ├── train_2d.py              # 2D train/validate
-│   ├── train_mil.py             # MIL train/validate
-│   └── bootstrap.py             # patient-level bootstrap CIs
-├── scripts/
-│   ├── build_thesis_results.py  # consolidates output/ into thesis_results/
-│   ├── audit_multifocal.py      # multifocal-mask audit (BigLunge)
-│   ├── report_test_metrics.py   # markdown summary of metrics.jsonl
-│   ├── thesis_plots.py          # learning curves, confusion matrices, ROC
-│   ├── run_all_2d_v3.sh         # sequential runner for the 6 2D configs
-│   └── run_swinunetr_ft_then_infer.sh
-├── data_exploration/
-│   ├── create_masks_2.py        # produces /home/data/Lung-PET-CT-Dx-Clean
-│   ├── BigLunge_expl.ipynb      # BigLunge tumor-mask audit
-│   └── 2d_data_expl.ipynb       # 2D EDA used in thesis
-├── thesis_results/              # per-model tables + figures
-├── output/                      # raw per-run logs + metrics.jsonl + inference probs
-├── flaws.md                     # current limitations / methodological audit
+├── README.md                       # you are here
+├── LICENSE
+├── pyproject.toml                  # `pip install -e .` makes the `sclc` package importable
 ├── environment.yaml
-└── requirements.txt
+├── requirements.txt
+├── Dockerfile
+│
+├── sclc/                           # the source package
+│   ├── main.py                     # pipeline entrypoint (DAPT -> fine-tune -> inference)
+│   ├── logger.py
+│   ├── models/                     # model factory + classifier wrappers
+│   │   ├── factory.py              # get_sclc_model + pipeline helpers
+│   │   ├── swin_unetr.py
+│   │   ├── classifiers_2d.py       # ImageNet 2D wrappers
+│   │   ├── classifiers_rin.py      # RadImageNet 2D wrappers
+│   │   └── classifiers_mil.py      # MIL bag classifier
+│   ├── data/                       # runtime data loading
+│   │   ├── loaders.py              # 3D dataset + splits + class maps
+│   │   ├── dataset_2d.py
+│   │   ├── dataset_mil.py
+│   │   ├── transforms.py           # MONAI transforms (3D / 2D / MIL)
+│   │   └── exclusions.py           # patient blocklist
+│   ├── training/
+│   │   ├── train_3d.py             # 3D train/validate
+│   │   ├── train_2d.py
+│   │   ├── train_mil.py
+│   │   └── bootstrap.py            # patient-level bootstrap CIs
+│   └── grad_cam/                   # interpretability tooling
+│       ├── grad_cam.py             # `python -m sclc.grad_cam.grad_cam ...`
+│       ├── colorize.py
+│       └── mock.py
+│
+├── configs/experiments/            # one YAML per model
+│
+├── scripts/                        # runnable analysis / orchestration tools
+│   ├── build_thesis_results.py     # consolidates results/output/ into results/thesis/
+│   ├── thesis_plots.py             # learning curves, confusion matrices, ROC
+│   ├── report_test_metrics.py      # markdown summary of metrics.jsonl
+│   ├── audit_multifocal.py         # multifocal-mask audit (BigLunge)
+│   └── runners/                    # bash chains
+│       ├── run_all_2d_v3.sh        # sequential runner for the 6 2D configs
+│       ├── run_swinunetr_ft_then_infer.sh
+│       └── run_swinunetr_then_mil.sh
+│
+├── data_pipeline/                  # one-shot dataset acquisition / preprocessing
+│   ├── README.md                   # reproducibility chain
+│   ├── create_masks.py             # produces /home/data/Lung-PET-CT-Dx-Clean
+│   ├── annotation_mapping.py
+│   ├── recover_annotations.py
+│   ├── fetch_tcia.ipynb
+│   └── notebooks/                  # exploratory data analysis
+│       ├── biglunge_audit.ipynb
+│       └── eda_2d.ipynb
+│
+├── results/                        # all training artifacts under one tree
+│   ├── output/<pipeline>/<model>/  # raw per-run logs + metrics.jsonl + inference probs
+│   ├── runs/                       # per-run shell-script summaries
+│   ├── thesis/                     # consolidated tables + figures
+│   └── figures/                    # standalone thesis PDFs
+│
+└── docs/
+    ├── limitations.md              # methodological audit
+    └── augmentations_2d.md         # strong-augs experiment notes
 ```
 
 ## Default data paths
 
-Hardcoded in `main.py` and `data/data_loader.py`:
+Hardcoded in `sclc/main.py` and `sclc/data/loaders.py`:
 
 - DAPT: `/home/data/Lung-PET-CT-Dx-Clean/{patient}/{series_uid}_image.nii.gz` (+ optional `_mask.nii.gz`)
 - Fine-tune: `/home/data/BigLunge/pre_formatting_ws_iso1.0mm_croplungs_bb/1` + `patients_parameters.csv`
@@ -72,23 +104,28 @@ Hardcoded in `main.py` and `data/data_loader.py`:
 
 Always launch long jobs in **tmux** (a typical full run is 1-6 h).
 
+First, install the package in editable mode (one-time setup):
+```bash
+pip install -e .
+```
+
 ```bash
 # Full pipeline: DAPT -> DAPT-test -> fine-tune -> BL-test
-python main.py --config configs/experiments/2d_efficientnet_b0.yaml
+python -m sclc.main --config configs/experiments/2d_efficientnet_b0.yaml
 
 # DAPT only (stops after DAPT-test)
-python main.py --config configs/experiments/3d_swin_unetr.yaml --mode dapt
+python -m sclc.main --config configs/experiments/3d_swin_unetr.yaml --mode dapt
 
 # Resume fine-tune from a saved DAPT pbest checkpoint
-python main.py --config configs/experiments/3d_swin_unetr.yaml \
+python -m sclc.main --config configs/experiments/3d_swin_unetr.yaml \
     --mode finetune --model-checkpoint /path/to/dapt_pbest_raw.pth
 
 # Inference only (BL-test) from a fine-tune pbest
-python main.py --config configs/experiments/3d_swin_unetr.yaml \
+python -m sclc.main --config configs/experiments/3d_swin_unetr.yaml \
     --mode inference --model-checkpoint /path/to/finetune_pbest_raw.pth
 
 # Sequential runner: all 6 2D models, dapt 30 ep
-bash scripts/run_all_2d_v3.sh runs/$(date +%Y-%m-%d)_2d
+bash scripts/runners/run_all_2d_v3.sh results/runs/$(date +%Y-%m-%d)_2d
 ```
 
 Common CLI overrides (otherwise read from the YAML):
@@ -114,25 +151,25 @@ Both phases use:
 ## Outputs
 
 ```
-output/<pipeline>/<model_type>/
+results/output/<pipeline>/<model_type>/
 ├── metrics.jsonl                          # one row per epoch + DAPT-test + BL-test
 ├── inference_probabilities_*.json         # per-patient softmax + labels
 ├── misclassifications_*.csv
 └── *.log
 
-thesis_results/<pipeline>/
+results/thesis/<pipeline>/
 ├── per_model/<model_type>/                # CSVs, confusion matrices, ROC
 ├── tables/headline.md                     # overall + per-class metrics with bootstrap CIs
 ├── figures/                               # accuracy / AUC / F1 bar plots, learning curves
 └── README.md                              # auto-generated summary
 ```
 
-`scripts/build_thesis_results.py --pipeline {2d,mil,3d}` rebuilds the `thesis_results/` tree from `output/` and snapshots the previous version under `thesis_results/_archive/` before overwriting.
+`python scripts/build_thesis_results.py --pipeline {2d,mil,3d}` rebuilds the `results/thesis/` tree from `results/output/` and snapshots the previous version under `results/thesis/_archive/` before overwriting.
 
 ## See also
 
-- `flaws.md` — thesis limitations / known caveats (tumor-mask multifocality, lung vs tumor anchoring, RadImageNet weight provenance).
-- `data_exploration/BigLunge_expl.ipynb` — BigLunge tumor-mask audit; `min_tumor_pixels` and the truncated-lung-mask exclusion list (`data/exclusions.py`) are derived from it.
+- `docs/limitations.md` — thesis limitations / known caveats (tumor-mask multifocality, lung vs tumor anchoring, RadImageNet weight provenance).
+- `data_pipeline/notebooks/biglunge_audit.ipynb` — BigLunge tumor-mask audit; `min_tumor_pixels` and the truncated-lung-mask exclusion list (`sclc/data/exclusions.py`) are derived from it.
 
 ## Acknowledgments
 

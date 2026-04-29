@@ -90,7 +90,7 @@ def _format_with_ci(value: Optional[float], lo: Optional[float], hi: Optional[fl
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--output-root", default="output",
+        "--output-root", default="results/output",
         help="Root of the per-model output tree ({pipeline}/{model_type}/metrics.jsonl).",
     )
     parser.add_argument(

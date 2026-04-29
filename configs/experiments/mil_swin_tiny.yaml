@@ -1,0 +1,91 @@
+experiment:
+  name: mil_swin_tiny
+  notes: >-
+    MIL Swin-Tiny (timm swin_tiny_patch4_window7_224, RadImageNet-pretrained,
+    1-channel stem averaged from RGB). DAPT on Lung-PET-CT-Dx as whole-slice
+    per-slice classification (tumor-containing slices only, no tumor-centered
+    crop) using SwinTiny2DClassifier. Fine-tune on BigLunge as attention-MIL
+    over bags of N whole-slice images evenly spaced across the lung mask's
+    axial extent (tumor mask is NOT used at MIL time). Counterpart to
+    mil_resnet50 — same MIL pipeline, swap the backbone family. See
+    sclc/models/classifiers_mil.py::MILSwinTinyClassifier and
+    sclc/training/train_mil.py.
+
+model_type: mil_swin_tiny
+mode: full
+
+data:
+  dapt_dataset: /home/data/Lung-PET-CT-Dx-Clean
+  finetune_dataset: /home/data/TrainingData
+  finetune_csv: /home/data/TrainingData/patients_parameters.csv
+
+checkpoints:
+  # Empty -> main.py auto-defaults to the RadImageNet Swin-Tiny checkpoint
+  # (/home/hansstem/RadImageNet_swin/rin_swintf.pth). MILSwinTinyClassifier
+  # also falls back to that path when constructed via the inference branch.
+  initial_checkpoint: ""
+  model_checkpoint: ""
+  checkpoint_dir: /home/data/trained_models
+  output_dir: results/output
+
+training:
+  # DAPT: per-slice whole-slice classification with SwinTiny2DClassifier.
+  # Mirrors the 2d_swin_tiny.yaml schedule (Swin-Tiny is ~28M params and has
+  # no DropConnect; keep LR modest to avoid the large-backbone train F1=0.99
+  # collapse the ResNet50 MIL DAPT showed at ep10).
+  dapt_epochs: 30
+  dapt_lr: 5.0e-5
+  dapt_warmup_epochs: 5
+  dapt_weight_decay: 5.0e-2
+  # Fine-tune: bag-level MIL on BigLunge. Same AMP-fp16 NaN risk as the
+  # ResNet50 MIL variant (random-init attention head on top of a strong
+  # backbone). Lower head LR + longer warmup; recommend --disable-amp for
+  # the first run.
+  finetune_epochs: 40
+  finetune_lr: 1.0e-5
+  finetune_warmup_epochs: 3
+  warmup_start_lr: 1.0e-6
+  finetune_backbone_lr_scale: 0.1
+  # Native LP-FT: head trains on a frozen Swin-Tiny backbone for 5 epochs,
+  # then differential-LR fine-tune resumes for 35 epochs.
+  finetune_freeze_backbone_epochs: 5
+  weight_decay: 5.0e-2
+  # Bag size * B is what sits on the GPU per step; keep batch_size small and
+  # use accumulation_steps to hit a larger effective batch.
+  batch_size: 2
+  accumulation_steps: 4
+  monitor_rolling_window: 3
+  seg_loss_weight: 0.0
+  # MixUp at the bag level: keep on by default as part of the
+  # strong-augs + mixup regularization bundle.
+  mixup_alpha: 0.2
+  strong_augs: true
+  # Bag-instance dropout: zero a Bernoulli(p) subset of slices per bag at
+  # train time. Forces attention to spread across multiple slices instead
+  # of latching onto one.
+  bag_dropout: 0.15
+
+system:
+  num_workers: 4
+  cache_workers: 4
+  seed: 42
+  disable_amp: false
+  testing: false
+  clear_cache: false
+
+pipeline_mil:
+  # Swin-Tiny has window=7 over 224-input window-attention; img_size_mil
+  # MUST stay at 224. Going to 384 (the mil_resnet50 default) would break
+  # the window-attention pattern for the timm checkpoint we use.
+  img_size_mil: 224
+  # Bag size. Memory scales linearly with this; 224 is smaller than the
+  # 384 mil_resnet50 uses, so 32 still fits on H100 with bs=2 + AMP.
+  bag_size: 32
+  mil_mode: att
+  mil_trans_blocks: 4
+  mil_trans_dropout: 0.0
+  lung_mask_suffix: _label_lungs.nii.gz
+  # DAPT-side knobs (from the 2D pipeline; applied to whole-slice DAPT).
+  min_tumor_pixels: 100
+  max_slices_per_volume: 8
+  tumor_mask_suffix: _label_tc.nii.gz

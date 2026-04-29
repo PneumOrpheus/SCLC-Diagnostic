@@ -1,0 +1,3 @@
+model_type,phase,n_epochs,first_epoch,last_epoch,peak_val_macro_f1_raw,peak_val_macro_f1_raw_epoch,peak_val_macro_f1_rolling,peak_val_macro_f1_rolling_epoch,first_timestamp,last_timestamp
+mil_resnet50,dapt,12,1,12,0.548611111111111,5,0.4641124893428225,12,2026-04-28T22:56:36,2026-04-28T23:14:40
+mil_resnet50,finetune,16,1,16,0.4584023777584892,8,0.43173598045945155,6,2026-04-29T10:49:35,2026-04-29T11:58:33

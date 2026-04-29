@@ -1,682 +1,0 @@
-<frozen importlib._bootstrap_external>:1301: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
-/home/hansstem/anaconda3/envs/sclc/lib/python3.12/site-packages/monai/utils/deprecate_utils.py:321: FutureWarning: monai.transforms.spatial.dictionary Orientationd.__init__:labels: Current default value of argument `labels=(('L', 'R'), ('P', 'A'), ('I', 'S'))` was changed in version None from `labels=(('L', 'R'), ('P', 'A'), ('I', 'S'))` to `labels=None`. Default value changed to None meaning that the transform now uses the 'space' of a meta-tensor, if applicable, to determine appropriate axis labels.
-  warn_deprecated(argname, msg, warning_category)
-[*] Loading pretrained SwinUNETR weights from /home/data/pre_trained_models/model_swin_unetr_btcv_segmentation_v1.pt
-[*] Pretrained weights loaded. Matched 157/157 keys.
-Initialized swin_unetr Classifier. Total Params: 62,188,966
-Split 'train': 242 patients.
-  482 images (482 w/ masks), class distribution: {0: 341, 1: 56, 2: 85}
-Split 'val': 52 patients.
-  102 images (102 w/ masks), class distribution: {2: 17, 0: 73, 1: 12}
-Split 'test': 53 patients.
-  106 images (106 w/ masks), class distribution: {0: 76, 2: 18, 1: 12}
-PersistentDataset cache_dir='/home/hansstem/.cache/monai_lung_pet_ct_clean/3d_img224_d128/train'
-Validating & Caching [train]:   0%|          | 0/482 [00:00<?, ?img/s]Validating & Caching [train]:   0%|          | 1/482 [00:05<45:40,  5.70s/img]Validating & Caching [train]:   0%|          | 2/482 [00:12<49:51,  6.23s/img]Validating & Caching [train]:   1%|          | 3/482 [00:15<39:51,  4.99s/img]Validating & Caching [train]:   1%|          | 4/482 [00:38<1:35:05, 11.94s/img]Validating & Caching [train]:   1%|          | 5/482 [00:41<1:08:15,  8.59s/img]Validating & Caching [train]:   1%|          | 6/482 [00:57<1:30:35, 11.42s/img]Validating & Caching [train]:   1%|▏         | 7/482 [01:05<1:20:21, 10.15s/img]Validating & Caching [train]:   2%|▏         | 8/482 [01:16<1:22:18, 10.42s/img]Validating & Caching [train]:   2%|▏         | 9/482 [01:21<1:07:57,  8.62s/img]Validating & Caching [train]:   2%|▏         | 10/482 [01:24<54:17,  6.90s/img] Validating & Caching [train]:   2%|▏         | 11/482 [01:26<43:13,  5.51s/img]Validating & Caching [train]:   2%|▏         | 12/482 [01:28<34:46,  4.44s/img]Validating & Caching [train]:   3%|▎         | 13/482 [01:30<29:02,  3.72s/img]Validating & Caching [train]:   3%|▎         | 14/482 [01:34<28:43,  3.68s/img]Validating & Caching [train]:   3%|▎         | 15/482 [01:48<53:46,  6.91s/img]Validating & Caching [train]:   3%|▎         | 16/482 [02:03<1:13:04,  9.41s/img]Validating & Caching [train]:   4%|▎         | 17/482 [02:07<58:25,  7.54s/img]  Validating & Caching [train]:   4%|▎         | 18/482 [02:16<1:02:20,  8.06s/img]Validating & Caching [train]:   4%|▍         | 19/482 [02:21<54:56,  7.12s/img]  Validating & Caching [train]:   4%|▍         | 20/482 [02:26<50:03,  6.50s/img]Validating & Caching [train]:   4%|▍         | 21/482 [02:28<39:20,  5.12s/img]Validating & Caching [train]:   5%|▍         | 22/482 [02:47<1:12:16,  9.43s/img]Validating & Caching [train]:   5%|▍         | 23/482 [03:17<1:57:54, 15.41s/img]Validating & Caching [train]:   5%|▍         | 24/482 [03:19<1:27:01, 11.40s/img]Validating & Caching [train]:   5%|▌         | 25/482 [03:20<1:04:47,  8.51s/img]Validating & Caching [train]:   5%|▌         | 26/482 [03:35<1:18:20, 10.31s/img]Validating & Caching [train]:   6%|▌         | 27/482 [03:50<1:29:46, 11.84s/img]Validating & Caching [train]:   6%|▌         | 28/482 [03:54<1:11:56,  9.51s/img]Validating & Caching [train]:   6%|▌         | 29/482 [03:58<57:52,  7.67s/img]  Validating & Caching [train]:   6%|▌         | 30/482 [04:02<50:38,  6.72s/img]Validating & Caching [train]:   6%|▋         | 31/482 [04:06<43:08,  5.74s/img]Validating & Caching [train]:   7%|▋         | 32/482 [04:21<1:05:32,  8.74s/img]Validating & Caching [train]:   7%|▋         | 33/482 [04:38<1:22:38, 11.04s/img]Validating & Caching [train]:   7%|▋         | 34/482 [04:49<1:23:17, 11.15s/img]Validating & Caching [train]:   7%|▋         | 35/482 [04:53<1:05:34,  8.80s/img]Validating & Caching [train]:   7%|▋         | 36/482 [05:09<1:21:59, 11.03s/img]Validating & Caching [train]:   8%|▊         | 37/482 [05:24<1:31:24, 12.33s/img]Validating & Caching [train]:   8%|▊         | 38/482 [05:27<1:09:49,  9.43s/img]Validating & Caching [train]:   8%|▊         | 39/482 [05:32<1:00:52,  8.24s/img]Validating & Caching [train]:   8%|▊         | 40/482 [05:35<49:26,  6.71s/img]  Validating & Caching [train]:   9%|▊         | 41/482 [05:38<40:15,  5.48s/img]Validating & Caching [train]:   9%|▊         | 42/482 [05:40<32:03,  4.37s/img]Validating & Caching [train]:   9%|▉         | 43/482 [05:56<57:26,  7.85s/img]Validating & Caching [train]:   9%|▉         | 44/482 [06:12<1:16:18, 10.45s/img]Validating & Caching [train]:   9%|▉         | 45/482 [06:28<1:27:01, 11.95s/img]Validating & Caching [train]:  10%|▉         | 46/482 [06:45<1:37:51, 13.47s/img]Validating & Caching [train]:  10%|▉         | 47/482 [06:48<1:15:00, 10.35s/img]Validating & Caching [train]:  10%|▉         | 48/482 [06:50<57:59,  8.02s/img]  Validating & Caching [train]:  10%|█         | 49/482 [06:52<43:28,  6.02s/img]Validating & Caching [train]:  10%|█         | 50/482 [06:54<34:16,  4.76s/img]Validating & Caching [train]:  11%|█         | 51/482 [07:12<1:03:39,  8.86s/img]Validating & Caching [train]:  11%|█         | 52/482 [07:30<1:23:14, 11.62s/img]Validating & Caching [train]:  11%|█         | 53/482 [07:33<1:03:40,  8.91s/img]Validating & Caching [train]:  11%|█         | 54/482 [07:37<52:49,  7.40s/img]  Validating & Caching [train]:  11%|█▏        | 55/482 [07:41<45:44,  6.43s/img]Validating & Caching [train]:  12%|█▏        | 56/482 [07:50<52:49,  7.44s/img]Validating & Caching [train]:  12%|█▏        | 57/482 [08:08<1:13:33, 10.38s/img]Validating & Caching [train]:  12%|█▏        | 58/482 [08:21<1:18:34, 11.12s/img]Validating & Caching [train]:  12%|█▏        | 59/482 [08:24<1:01:08,  8.67s/img]Validating & Caching [train]:  12%|█▏        | 60/482 [08:27<49:58,  7.11s/img]  Validating & Caching [train]:  13%|█▎        | 61/482 [08:30<41:20,  5.89s/img]Validating & Caching [train]:  13%|█▎        | 62/482 [08:33<35:46,  5.11s/img]Validating & Caching [train]:  13%|█▎        | 63/482 [08:40<38:15,  5.48s/img]Validating & Caching [train]:  13%|█▎        | 64/482 [08:42<30:54,  4.44s/img]Validating & Caching [train]:  13%|█▎        | 65/482 [08:45<29:11,  4.20s/img]Validating & Caching [train]:  14%|█▎        | 66/482 [08:47<24:26,  3.52s/img]Validating & Caching [train]:  14%|█▍        | 67/482 [08:50<23:11,  3.35s/img]Validating & Caching [train]:  14%|█▍        | 68/482 [08:53<22:54,  3.32s/img]Validating & Caching [train]:  14%|█▍        | 69/482 [08:56<21:57,  3.19s/img]Validating & Caching [train]:  15%|█▍        | 70/482 [09:00<22:07,  3.22s/img]Validating & Caching [train]:  15%|█▍        | 71/482 [09:16<49:34,  7.24s/img]Validating & Caching [train]:  15%|█▍        | 72/482 [09:32<1:06:27,  9.72s/img]Validating & Caching [train]:  15%|█▌        | 73/482 [09:36<54:05,  7.94s/img]  Validating & Caching [train]:  15%|█▌        | 74/482 [09:38<42:41,  6.28s/img]Validating & Caching [train]:  16%|█▌        | 75/482 [09:40<33:21,  4.92s/img]Validating & Caching [train]:  16%|█▌        | 76/482 [09:42<28:42,  4.24s/img]Validating & Caching [train]:  16%|█▌        | 77/482 [09:45<26:21,  3.90s/img]Validating & Caching [train]:  16%|█▌        | 78/482 [09:50<26:41,  3.96s/img]Validating & Caching [train]:  16%|█▋        | 79/482 [09:52<22:47,  3.39s/img]Validating & Caching [train]:  17%|█▋        | 80/482 [09:55<23:39,  3.53s/img]Validating & Caching [train]:  17%|█▋        | 81/482 [09:58<20:45,  3.11s/img]Validating & Caching [train]:  17%|█▋        | 82/482 [10:01<20:57,  3.14s/img]Validating & Caching [train]:  17%|█▋        | 83/482 [10:22<55:58,  8.42s/img]Validating & Caching [train]:  17%|█▋        | 84/482 [10:29<53:00,  7.99s/img]Validating & Caching [train]:  18%|█▊        | 85/482 [10:37<53:17,  8.06s/img]Validating & Caching [train]:  18%|█▊        | 86/482 [10:52<1:06:39, 10.10s/img]Validating & Caching [train]:  18%|█▊        | 87/482 [10:57<57:12,  8.69s/img]  Validating & Caching [train]:  18%|█▊        | 88/482 [11:18<1:21:18, 12.38s/img]Validating & Caching [train]:  18%|█▊        | 89/482 [11:20<1:00:30,  9.24s/img]Validating & Caching [train]:  19%|█▊        | 90/482 [11:23<47:21,  7.25s/img]  Validating & Caching [train]:  19%|█▉        | 91/482 [11:29<45:38,  7.00s/img]Validating & Caching [train]:  19%|█▉        | 92/482 [11:47<1:06:53, 10.29s/img]Validating & Caching [train]:  19%|█▉        | 93/482 [11:49<50:32,  7.80s/img]  Validating & Caching [train]:  20%|█▉        | 94/482 [11:52<41:53,  6.48s/img]Validating & Caching [train]:  20%|█▉        | 95/482 [12:09<1:01:28,  9.53s/img]Validating & Caching [train]:  20%|█▉        | 96/482 [12:18<1:00:43,  9.44s/img]Validating & Caching [train]:  20%|██        | 97/482 [12:31<1:06:32, 10.37s/img]Validating & Caching [train]:  20%|██        | 98/482 [12:48<1:18:54, 12.33s/img]Validating & Caching [train]:  21%|██        | 99/482 [13:06<1:29:22, 14.00s/img]Validating & Caching [train]:  21%|██        | 100/482 [13:15<1:20:51, 12.70s/img]Validating & Caching [train]:  21%|██        | 101/482 [13:25<1:14:30, 11.73s/img]Validating & Caching [train]:  21%|██        | 102/482 [13:38<1:17:50, 12.29s/img]Validating & Caching [train]:  21%|██▏       | 103/482 [13:51<1:18:53, 12.49s/img]Validating & Caching [train]:  22%|██▏       | 104/482 [14:06<1:22:46, 13.14s/img]Validating & Caching [train]:  22%|██▏       | 105/482 [14:18<1:21:19, 12.94s/img]Validating & Caching [train]:  22%|██▏       | 106/482 [14:32<1:22:41, 13.20s/img]Validating & Caching [train]:  22%|██▏       | 107/482 [14:35<1:03:23, 10.14s/img]Validating & Caching [train]:  22%|██▏       | 108/482 [14:37<48:36,  7.80s/img]  Validating & Caching [train]:  23%|██▎       | 109/482 [14:40<37:58,  6.11s/img]Validating & Caching [train]:  23%|██▎       | 110/482 [14:43<33:10,  5.35s/img]Validating & Caching [train]:  23%|██▎       | 111/482 [14:46<27:36,  4.46s/img]Validating & Caching [train]:  23%|██▎       | 112/482 [14:48<24:07,  3.91s/img]Validating & Caching [train]:  23%|██▎       | 113/482 [14:51<21:19,  3.47s/img]Validating & Caching [train]:  24%|██▎       | 114/482 [14:58<27:53,  4.55s/img]Validating & Caching [train]:  24%|██▍       | 115/482 [15:12<45:05,  7.37s/img]Validating & Caching [train]:  24%|██▍       | 116/482 [15:21<48:38,  7.97s/img]Validating & Caching [train]:  24%|██▍       | 117/482 [15:32<54:11,  8.91s/img]Validating & Caching [train]:  24%|██▍       | 118/482 [15:49<1:07:43, 11.16s/img]Validating & Caching [train]:  25%|██▍       | 119/482 [15:50<50:42,  8.38s/img]  Validating & Caching [train]:  25%|██▍       | 120/482 [15:53<39:44,  6.59s/img]Validating & Caching [train]:  25%|██▌       | 121/482 [15:57<35:18,  5.87s/img]Validating & Caching [train]:  25%|██▌       | 122/482 [16:01<31:03,  5.18s/img]Validating & Caching [train]:  26%|██▌       | 123/482 [16:27<1:08:16, 11.41s/img]Validating & Caching [train]:  26%|██▌       | 124/482 [16:40<1:11:02, 11.91s/img]Validating & Caching [train]:  26%|██▌       | 125/482 [16:43<55:46,  9.37s/img]  Validating & Caching [train]:  26%|██▌       | 126/482 [16:46<43:31,  7.34s/img]Validating & Caching [train]:  26%|██▋       | 127/482 [16:50<37:13,  6.29s/img]Validating & Caching [train]:  27%|██▋       | 128/482 [16:52<29:36,  5.02s/img]Validating & Caching [train]:  27%|██▋       | 129/482 [17:06<45:26,  7.72s/img]Validating & Caching [train]:  27%|██▋       | 130/482 [17:20<57:33,  9.81s/img]Validating & Caching [train]:  27%|██▋       | 131/482 [17:23<45:19,  7.75s/img]Validating & Caching [train]:  27%|██▋       | 132/482 [17:27<37:57,  6.51s/img]Validating & Caching [train]:  28%|██▊       | 133/482 [17:30<31:28,  5.41s/img]Validating & Caching [train]:  28%|██▊       | 134/482 [17:32<26:44,  4.61s/img]Validating & Caching [train]:  28%|██▊       | 135/482 [17:46<41:23,  7.16s/img]Validating & Caching [train]:  28%|██▊       | 136/482 [17:59<52:44,  9.15s/img]Validating & Caching [train]:  28%|██▊       | 137/482 [18:13<1:01:00, 10.61s/img]Validating & Caching [train]:  29%|██▊       | 138/482 [18:26<1:03:33, 11.09s/img]Validating & Caching [train]:  29%|██▉       | 139/482 [18:42<1:13:11, 12.80s/img]Validating & Caching [train]:  29%|██▉       | 140/482 [18:58<1:17:02, 13.52s/img]Validating & Caching [train]:  29%|██▉       | 141/482 [19:00<57:16, 10.08s/img]  Validating & Caching [train]:  29%|██▉       | 142/482 [19:02<44:08,  7.79s/img]Validating & Caching [train]:  30%|██▉       | 143/482 [19:16<53:47,  9.52s/img]Validating & Caching [train]:  30%|██▉       | 144/482 [19:31<1:03:15, 11.23s/img]Validating & Caching [train]:  30%|███       | 145/482 [19:47<1:10:34, 12.56s/img]Validating & Caching [train]:  30%|███       | 146/482 [19:57<1:07:24, 12.04s/img]Validating & Caching [train]:  30%|███       | 147/482 [20:01<53:46,  9.63s/img]  Validating & Caching [train]:  31%|███       | 148/482 [20:03<39:55,  7.17s/img]Validating & Caching [train]:  31%|███       | 149/482 [20:06<32:45,  5.90s/img]Validating & Caching [train]:  31%|███       | 150/482 [20:09<27:30,  4.97s/img]Validating & Caching [train]:  31%|███▏      | 151/482 [20:12<25:36,  4.64s/img]Validating & Caching [train]:  32%|███▏      | 152/482 [20:17<24:59,  4.54s/img]Validating & Caching [train]:  32%|███▏      | 153/482 [20:20<23:38,  4.31s/img]Validating & Caching [train]:  32%|███▏      | 154/482 [20:34<39:09,  7.16s/img]Validating & Caching [train]:  32%|███▏      | 155/482 [20:37<31:45,  5.83s/img]Validating & Caching [train]:  32%|███▏      | 156/482 [20:40<27:25,  5.05s/img]Validating & Caching [train]:  33%|███▎      | 157/482 [20:44<25:41,  4.74s/img]Validating & Caching [train]:  33%|███▎      | 158/482 [20:46<21:25,  3.97s/img]Validating & Caching [train]:  33%|███▎      | 159/482 [20:51<21:48,  4.05s/img]Validating & Caching [train]:  33%|███▎      | 160/482 [20:58<26:27,  4.93s/img]Validating & Caching [train]:  33%|███▎      | 161/482 [21:10<37:31,  7.01s/img]Validating & Caching [train]:  34%|███▎      | 162/482 [21:21<43:50,  8.22s/img]Validating & Caching [train]:  34%|███▍      | 163/482 [21:24<35:37,  6.70s/img]Validating & Caching [train]:  34%|███▍      | 164/482 [21:26<28:45,  5.43s/img]Validating & Caching [train]:  34%|███▍      | 165/482 [21:30<26:25,  5.00s/img]Validating & Caching [train]:  34%|███▍      | 166/482 [21:40<33:12,  6.31s/img]Validating & Caching [train]:  35%|███▍      | 167/482 [21:42<27:01,  5.15s/img]Validating & Caching [train]:  35%|███▍      | 168/482 [21:46<24:58,  4.77s/img]Validating & Caching [train]:  35%|███▌      | 169/482 [21:49<23:02,  4.42s/img]Validating & Caching [train]:  35%|███▌      | 170/482 [21:53<20:50,  4.01s/img]Validating & Caching [train]:  35%|███▌      | 171/482 [22:04<32:45,  6.32s/img]Validating & Caching [train]:  36%|███▌      | 172/482 [22:15<40:17,  7.80s/img]Validating & Caching [train]:  36%|███▌      | 173/482 [22:19<33:07,  6.43s/img]Validating & Caching [train]:  36%|███▌      | 174/482 [22:22<27:37,  5.38s/img]Validating & Caching [train]:  36%|███▋      | 175/482 [22:26<25:29,  4.98s/img]Validating & Caching [train]:  37%|███▋      | 176/482 [22:28<21:40,  4.25s/img]Validating & Caching [train]:  37%|███▋      | 177/482 [22:30<18:12,  3.58s/img]Validating & Caching [train]:  37%|███▋      | 178/482 [22:32<15:22,  3.04s/img]Validating & Caching [train]:  37%|███▋      | 179/482 [22:37<17:46,  3.52s/img]Validating & Caching [train]:  37%|███▋      | 180/482 [22:38<14:12,  2.82s/img]Validating & Caching [train]:  38%|███▊      | 181/482 [22:40<12:22,  2.47s/img]Validating & Caching [train]:  38%|███▊      | 182/482 [22:41<10:59,  2.20s/img]Validating & Caching [train]:  38%|███▊      | 183/482 [22:49<19:06,  3.83s/img]Validating & Caching [train]:  38%|███▊      | 184/482 [23:03<33:58,  6.84s/img]Validating & Caching [train]:  38%|███▊      | 185/482 [23:05<27:56,  5.64s/img]Validating & Caching [train]:  39%|███▊      | 186/482 [23:08<22:34,  4.58s/img]Validating & Caching [train]:  39%|███▉      | 187/482 [23:11<20:42,  4.21s/img]Validating & Caching [train]:  39%|███▉      | 188/482 [23:14<18:45,  3.83s/img]Validating & Caching [train]:  39%|███▉      | 189/482 [23:18<18:45,  3.84s/img]Validating & Caching [train]:  39%|███▉      | 190/482 [23:31<33:03,  6.79s/img]Validating & Caching [train]:  40%|███▉      | 191/482 [23:46<44:05,  9.09s/img]Validating & Caching [train]:  40%|███▉      | 192/482 [23:48<34:30,  7.14s/img]Validating & Caching [train]:  40%|████      | 193/482 [23:52<28:51,  5.99s/img]Validating & Caching [train]:  40%|████      | 194/482 [23:55<24:35,  5.12s/img]Validating & Caching [train]:  40%|████      | 195/482 [23:57<20:52,  4.36s/img]Validating & Caching [train]:  41%|████      | 196/482 [24:05<24:43,  5.19s/img]Validating & Caching [train]:  41%|████      | 197/482 [24:17<34:57,  7.36s/img]Validating & Caching [train]:  41%|████      | 198/482 [24:28<40:26,  8.54s/img]Validating & Caching [train]:  41%|████▏     | 199/482 [24:39<43:00,  9.12s/img]Validating & Caching [train]:  41%|████▏     | 200/482 [24:40<32:27,  6.90s/img]Validating & Caching [train]:  42%|████▏     | 201/482 [24:42<24:13,  5.17s/img]Validating & Caching [train]:  42%|████▏     | 202/482 [24:45<21:36,  4.63s/img]Validating & Caching [train]:  42%|████▏     | 203/482 [24:47<18:29,  3.98s/img]Validating & Caching [train]:  42%|████▏     | 204/482 [25:00<29:45,  6.42s/img]Validating & Caching [train]:  43%|████▎     | 205/482 [25:02<23:37,  5.12s/img]Validating & Caching [train]:  43%|████▎     | 206/482 [25:04<19:44,  4.29s/img]Validating & Caching [train]:  43%|████▎     | 207/482 [25:06<16:50,  3.68s/img]Validating & Caching [train]:  43%|████▎     | 208/482 [25:09<15:35,  3.41s/img]Validating & Caching [train]:  43%|████▎     | 209/482 [25:12<14:37,  3.22s/img]Validating & Caching [train]:  44%|████▎     | 210/482 [25:13<12:26,  2.74s/img]Validating & Caching [train]:  44%|████▍     | 211/482 [25:35<37:54,  8.39s/img]Validating & Caching [train]:  44%|████▍     | 212/482 [25:45<39:31,  8.78s/img]Validating & Caching [train]:  44%|████▍     | 213/482 [25:51<36:03,  8.04s/img]Validating & Caching [train]:  44%|████▍     | 214/482 [26:10<49:59, 11.19s/img]Validating & Caching [train]:  45%|████▍     | 215/482 [26:20<49:18, 11.08s/img]Validating & Caching [train]:  45%|████▍     | 216/482 [26:31<49:02, 11.06s/img]Validating & Caching [train]:  45%|████▌     | 217/482 [26:34<37:01,  8.38s/img]Validating & Caching [train]:  45%|████▌     | 218/482 [26:36<28:56,  6.58s/img]Validating & Caching [train]:  45%|████▌     | 219/482 [26:50<38:27,  8.77s/img]Validating & Caching [train]:  46%|████▌     | 220/482 [27:14<58:32, 13.40s/img]Validating & Caching [train]:  46%|████▌     | 221/482 [27:28<59:23, 13.65s/img]Validating & Caching [train]:  46%|████▌     | 222/482 [27:42<59:48, 13.80s/img]Validating & Caching [train]:  46%|████▋     | 223/482 [27:53<56:03, 12.99s/img]Validating & Caching [train]:  46%|████▋     | 224/482 [28:06<55:19, 12.87s/img]Validating & Caching [train]:  47%|████▋     | 225/482 [28:08<40:54,  9.55s/img]Validating & Caching [train]:  47%|████▋     | 226/482 [28:13<34:41,  8.13s/img]Validating & Caching [train]:  47%|████▋     | 227/482 [28:15<27:24,  6.45s/img]Validating & Caching [train]:  47%|████▋     | 228/482 [28:19<23:46,  5.61s/img]Validating & Caching [train]:  48%|████▊     | 229/482 [28:22<20:20,  4.83s/img]Validating & Caching [train]:  48%|████▊     | 230/482 [28:24<16:59,  4.05s/img]Validating & Caching [train]:  48%|████▊     | 231/482 [28:26<14:15,  3.41s/img]Validating & Caching [train]:  48%|████▊     | 232/482 [28:28<12:18,  2.95s/img]Validating & Caching [train]:  48%|████▊     | 233/482 [28:30<11:34,  2.79s/img]Validating & Caching [train]:  49%|████▊     | 234/482 [28:34<12:06,  2.93s/img]Validating & Caching [train]:  49%|████▉     | 235/482 [28:35<10:20,  2.51s/img]Validating & Caching [train]:  49%|████▉     | 236/482 [28:37<10:02,  2.45s/img]Validating & Caching [train]:  49%|████▉     | 237/482 [28:47<18:45,  4.59s/img]Validating & Caching [train]:  49%|████▉     | 238/482 [28:54<21:22,  5.26s/img]Validating & Caching [train]:  50%|████▉     | 239/482 [29:01<23:27,  5.79s/img]Validating & Caching [train]:  50%|████▉     | 240/482 [29:08<24:49,  6.15s/img]Validating & Caching [train]:  50%|█████     | 241/482 [29:23<35:21,  8.80s/img]Validating & Caching [train]:  50%|█████     | 242/482 [29:35<39:46,  9.94s/img]Validating & Caching [train]:  50%|█████     | 243/482 [29:39<31:36,  7.94s/img]Validating & Caching [train]:  51%|█████     | 244/482 [29:41<25:03,  6.32s/img]Validating & Caching [train]:  51%|█████     | 245/482 [29:52<30:04,  7.62s/img]Validating & Caching [train]:  51%|█████     | 246/482 [30:05<36:53,  9.38s/img]Validating & Caching [train]:  51%|█████     | 247/482 [30:26<49:34, 12.66s/img]Validating & Caching [train]:  51%|█████▏    | 248/482 [30:42<53:25, 13.70s/img]Validating & Caching [train]:  52%|█████▏    | 249/482 [30:55<52:08, 13.43s/img]Validating & Caching [train]:  52%|█████▏    | 250/482 [31:03<45:53, 11.87s/img]Validating & Caching [train]:  52%|█████▏    | 251/482 [31:05<33:58,  8.82s/img]Validating & Caching [train]:  52%|█████▏    | 252/482 [31:07<26:07,  6.82s/img]Validating & Caching [train]:  52%|█████▏    | 253/482 [31:15<27:26,  7.19s/img]Validating & Caching [train]:  53%|█████▎    | 254/482 [31:29<35:17,  9.29s/img]Validating & Caching [train]:  53%|█████▎    | 255/482 [31:39<36:07,  9.55s/img]Validating & Caching [train]:  53%|█████▎    | 256/482 [31:43<29:37,  7.86s/img]Validating & Caching [train]:  53%|█████▎    | 257/482 [31:59<38:29, 10.26s/img]Validating & Caching [train]:  54%|█████▎    | 258/482 [32:08<37:19, 10.00s/img]Validating & Caching [train]:  54%|█████▎    | 259/482 [32:15<33:24,  8.99s/img]Validating & Caching [train]:  54%|█████▍    | 260/482 [32:26<35:38,  9.63s/img]Validating & Caching [train]:  54%|█████▍    | 261/482 [32:29<27:44,  7.53s/img]Validating & Caching [train]:  54%|█████▍    | 262/482 [32:31<22:05,  6.02s/img]Validating & Caching [train]:  55%|█████▍    | 263/482 [32:33<17:21,  4.76s/img]Validating & Caching [train]:  55%|█████▍    | 264/482 [32:35<14:33,  4.01s/img]Validating & Caching [train]:  55%|█████▍    | 265/482 [32:36<11:33,  3.20s/img]Validating & Caching [train]:  55%|█████▌    | 266/482 [32:39<11:14,  3.12s/img]Validating & Caching [train]:  55%|█████▌    | 267/482 [32:43<12:10,  3.40s/img]Validating & Caching [train]:  56%|█████▌    | 268/482 [32:46<10:55,  3.06s/img]Validating & Caching [train]:  56%|█████▌    | 269/482 [32:56<18:06,  5.10s/img]Validating & Caching [train]:  56%|█████▌    | 270/482 [32:58<15:38,  4.43s/img]Validating & Caching [train]:  56%|█████▌    | 271/482 [33:02<14:24,  4.09s/img]Validating & Caching [train]:  56%|█████▋    | 272/482 [33:04<12:05,  3.46s/img]Validating & Caching [train]:  57%|█████▋    | 273/482 [33:06<10:48,  3.10s/img]Validating & Caching [train]:  57%|█████▋    | 274/482 [33:08<09:13,  2.66s/img]Validating & Caching [train]:  57%|█████▋    | 275/482 [33:22<21:17,  6.17s/img]Validating & Caching [train]:  57%|█████▋    | 276/482 [33:29<21:30,  6.26s/img]Validating & Caching [train]:  57%|█████▋    | 277/482 [33:30<16:21,  4.79s/img]Validating & Caching [train]:  58%|█████▊    | 278/482 [33:33<15:01,  4.42s/img]Validating & Caching [train]:  58%|█████▊    | 279/482 [33:49<25:50,  7.64s/img]Validating & Caching [train]:  58%|█████▊    | 280/482 [34:09<38:56, 11.57s/img]Validating & Caching [train]:  58%|█████▊    | 281/482 [34:21<39:20, 11.74s/img]Validating & Caching [train]:  59%|█████▊    | 282/482 [34:33<38:45, 11.63s/img]Validating & Caching [train]:  59%|█████▊    | 283/482 [34:35<29:25,  8.87s/img]Validating & Caching [train]:  59%|█████▉    | 284/482 [34:39<23:42,  7.19s/img]Validating & Caching [train]:  59%|█████▉    | 285/482 [34:43<20:27,  6.23s/img]Validating & Caching [train]:  59%|█████▉    | 286/482 [34:45<17:06,  5.24s/img]Validating & Caching [train]:  60%|█████▉    | 287/482 [34:47<13:30,  4.16s/img]Validating & Caching [train]:  60%|█████▉    | 288/482 [34:50<12:10,  3.77s/img]Validating & Caching [train]:  60%|█████▉    | 289/482 [34:53<11:10,  3.47s/img]Validating & Caching [train]:  60%|██████    | 290/482 [34:55<09:56,  3.10s/img]Validating & Caching [train]:  60%|██████    | 291/482 [34:58<09:56,  3.12s/img]Validating & Caching [train]:  61%|██████    | 292/482 [35:02<10:49,  3.42s/img]Validating & Caching [train]:  61%|██████    | 293/482 [35:04<09:36,  3.05s/img]Validating & Caching [train]:  61%|██████    | 294/482 [35:06<08:17,  2.65s/img]Validating & Caching [train]:  61%|██████    | 295/482 [35:18<16:54,  5.43s/img]Validating & Caching [train]:  61%|██████▏   | 296/482 [35:23<16:42,  5.39s/img]Validating & Caching [train]:  62%|██████▏   | 297/482 [35:26<13:56,  4.52s/img]Validating & Caching [train]:  62%|██████▏   | 298/482 [35:28<11:31,  3.76s/img]Validating & Caching [train]:  62%|██████▏   | 299/482 [35:46<25:01,  8.21s/img]Validating & Caching [train]:  62%|██████▏   | 300/482 [35:57<27:05,  8.93s/img]Validating & Caching [train]:  62%|██████▏   | 301/482 [35:57<19:03,  6.32s/img]Validating & Caching [train]:  63%|██████▎   | 302/482 [35:58<14:11,  4.73s/img]Validating & Caching [train]:  63%|██████▎   | 303/482 [36:01<11:58,  4.01s/img]Validating & Caching [train]:  63%|██████▎   | 304/482 [36:04<11:44,  3.96s/img]Validating & Caching [train]:  63%|██████▎   | 305/482 [36:15<17:48,  6.03s/img]Validating & Caching [train]:  63%|██████▎   | 306/482 [36:29<24:19,  8.29s/img]Validating & Caching [train]:  64%|██████▎   | 307/482 [36:32<19:32,  6.70s/img]Validating & Caching [train]:  64%|██████▍   | 308/482 [36:34<15:41,  5.41s/img]Validating & Caching [train]:  64%|██████▍   | 309/482 [36:39<14:53,  5.17s/img]Validating & Caching [train]:  64%|██████▍   | 310/482 [36:43<13:38,  4.76s/img]Validating & Caching [train]:  65%|██████▍   | 311/482 [36:45<11:12,  3.93s/img]Validating & Caching [train]:  65%|██████▍   | 312/482 [36:47<10:09,  3.58s/img]Validating & Caching [train]:  65%|██████▍   | 313/482 [36:49<08:43,  3.10s/img]Validating & Caching [train]:  65%|██████▌   | 314/482 [36:51<07:38,  2.73s/img]Validating & Caching [train]:  65%|██████▌   | 315/482 [36:54<07:18,  2.63s/img]Validating & Caching [train]:  66%|██████▌   | 316/482 [36:56<07:19,  2.65s/img]Validating & Caching [train]:  66%|██████▌   | 317/482 [37:07<13:29,  4.91s/img]Validating & Caching [train]:  66%|██████▌   | 318/482 [37:18<18:40,  6.83s/img]Validating & Caching [train]:  66%|██████▌   | 319/482 [37:21<15:54,  5.85s/img]Validating & Caching [train]:  66%|██████▋   | 320/482 [37:24<13:22,  4.96s/img]Validating & Caching [train]:  67%|██████▋   | 321/482 [37:27<11:44,  4.38s/img]Validating & Caching [train]:  67%|██████▋   | 322/482 [37:30<09:59,  3.75s/img]Validating & Caching [train]:  67%|██████▋   | 323/482 [37:34<10:09,  3.84s/img]Validating & Caching [train]:  67%|██████▋   | 324/482 [37:36<09:18,  3.54s/img]Validating & Caching [train]:  67%|██████▋   | 325/482 [37:41<10:23,  3.97s/img]Validating & Caching [train]:  68%|██████▊   | 326/482 [37:53<15:54,  6.12s/img]Validating & Caching [train]:  68%|██████▊   | 327/482 [37:55<12:59,  5.03s/img]Validating & Caching [train]:  68%|██████▊   | 328/482 [37:58<10:59,  4.29s/img]Validating & Caching [train]:  68%|██████▊   | 329/482 [37:58<08:07,  3.19s/img]Validating & Caching [train]:  68%|██████▊   | 330/482 [38:00<07:03,  2.78s/img]Validating & Caching [train]:  69%|██████▊   | 331/482 [38:09<11:31,  4.58s/img]Validating & Caching [train]:  69%|██████▉   | 332/482 [38:22<17:39,  7.06s/img]Validating & Caching [train]:  69%|██████▉   | 333/482 [38:25<15:01,  6.05s/img]Validating & Caching [train]:  69%|██████▉   | 334/482 [38:30<13:35,  5.51s/img]Validating & Caching [train]:  70%|██████▉   | 335/482 [38:46<21:09,  8.64s/img]Validating & Caching [train]:  70%|██████▉   | 336/482 [39:03<27:19, 11.23s/img]Validating & Caching [train]:  70%|██████▉   | 337/482 [39:05<20:51,  8.63s/img]Validating & Caching [train]:  70%|███████   | 338/482 [39:09<17:12,  7.17s/img]Validating & Caching [train]:  70%|███████   | 339/482 [39:12<13:47,  5.79s/img]Validating & Caching [train]:  71%|███████   | 340/482 [39:23<17:13,  7.28s/img]Validating & Caching [train]:  71%|███████   | 341/482 [39:37<22:02,  9.38s/img]Validating & Caching [train]:  71%|███████   | 342/482 [39:39<16:42,  7.16s/img]Validating & Caching [train]:  71%|███████   | 343/482 [39:41<13:06,  5.66s/img]Validating & Caching [train]:  71%|███████▏  | 344/482 [39:56<19:30,  8.48s/img]Validating & Caching [train]:  72%|███████▏  | 345/482 [40:12<24:29, 10.73s/img]Validating & Caching [train]:  72%|███████▏  | 346/482 [40:14<18:40,  8.24s/img]Validating & Caching [train]:  72%|███████▏  | 347/482 [40:16<14:11,  6.31s/img]Validating & Caching [train]:  72%|███████▏  | 348/482 [40:19<11:51,  5.31s/img]Validating & Caching [train]:  72%|███████▏  | 349/482 [40:23<10:33,  4.76s/img]Validating & Caching [train]:  73%|███████▎  | 350/482 [40:36<15:52,  7.22s/img]Validating & Caching [train]:  73%|███████▎  | 351/482 [40:48<19:17,  8.84s/img]Validating & Caching [train]:  73%|███████▎  | 352/482 [40:49<14:07,  6.52s/img]Validating & Caching [train]:  73%|███████▎  | 353/482 [40:51<10:33,  4.91s/img]Validating & Caching [train]:  73%|███████▎  | 354/482 [40:52<08:22,  3.93s/img]Validating & Caching [train]:  74%|███████▎  | 355/482 [40:54<07:08,  3.37s/img]Validating & Caching [train]:  74%|███████▍  | 356/482 [40:57<06:56,  3.31s/img]Validating & Caching [train]:  74%|███████▍  | 357/482 [41:01<07:06,  3.41s/img]Validating & Caching [train]:  74%|███████▍  | 358/482 [41:05<07:10,  3.47s/img]Validating & Caching [train]:  74%|███████▍  | 359/482 [41:08<06:48,  3.32s/img]Validating & Caching [train]:  75%|███████▍  | 360/482 [41:10<06:27,  3.17s/img]Validating & Caching [train]:  75%|███████▍  | 361/482 [41:12<05:12,  2.58s/img]Validating & Caching [train]:  75%|███████▌  | 362/482 [41:12<03:54,  1.96s/img]Validating & Caching [train]:  75%|███████▌  | 363/482 [41:13<03:28,  1.75s/img]Validating & Caching [train]:  76%|███████▌  | 364/482 [41:28<10:49,  5.51s/img]Validating & Caching [train]:  76%|███████▌  | 365/482 [41:39<14:21,  7.36s/img]Validating & Caching [train]:  76%|███████▌  | 366/482 [41:42<11:26,  5.91s/img]Validating & Caching [train]:  76%|███████▌  | 367/482 [41:45<09:57,  5.19s/img]Validating & Caching [train]:  76%|███████▋  | 368/482 [41:58<13:51,  7.29s/img]Validating & Caching [train]:  77%|███████▋  | 369/482 [42:11<17:23,  9.24s/img]Validating & Caching [train]:  77%|███████▋  | 370/482 [42:13<13:09,  7.05s/img]Validating & Caching [train]:  77%|███████▋  | 371/482 [42:18<11:45,  6.36s/img]Validating & Caching [train]:  77%|███████▋  | 372/482 [42:20<09:24,  5.13s/img]Validating & Caching [train]:  77%|███████▋  | 373/482 [42:23<07:54,  4.35s/img]Validating & Caching [train]:  78%|███████▊  | 374/482 [42:25<06:52,  3.82s/img]Validating & Caching [train]:  78%|███████▊  | 375/482 [42:28<06:10,  3.46s/img]Validating & Caching [train]:  78%|███████▊  | 376/482 [42:41<10:54,  6.18s/img]Validating & Caching [train]:  78%|███████▊  | 377/482 [42:59<17:23,  9.94s/img]Validating & Caching [train]:  78%|███████▊  | 378/482 [43:17<21:00, 12.12s/img]Validating & Caching [train]:  79%|███████▊  | 379/482 [43:22<17:12, 10.03s/img]Validating & Caching [train]:  79%|███████▉  | 380/482 [43:34<18:01, 10.60s/img]Validating & Caching [train]:  79%|███████▉  | 381/482 [43:45<18:27, 10.96s/img]Validating & Caching [train]:  79%|███████▉  | 382/482 [43:58<19:11, 11.52s/img]Validating & Caching [train]:  79%|███████▉  | 383/482 [44:05<16:35, 10.05s/img]Validating & Caching [train]:  80%|███████▉  | 384/482 [44:15<16:29, 10.09s/img]Validating & Caching [train]:  80%|███████▉  | 385/482 [44:22<14:39,  9.07s/img]Validating & Caching [train]:  80%|████████  | 386/482 [44:25<11:44,  7.34s/img]Validating & Caching [train]:  80%|████████  | 387/482 [44:28<09:18,  5.88s/img]Validating & Caching [train]:  80%|████████  | 388/482 [44:31<07:59,  5.11s/img]Validating & Caching [train]:  81%|████████  | 389/482 [44:34<07:09,  4.62s/img]Validating & Caching [train]:  81%|████████  | 390/482 [44:41<08:02,  5.24s/img]Validating & Caching [train]:  81%|████████  | 391/482 [44:54<11:38,  7.68s/img]Validating & Caching [train]:  81%|████████▏ | 392/482 [44:57<09:16,  6.19s/img]Validating & Caching [train]:  82%|████████▏ | 393/482 [45:01<07:59,  5.39s/img]Validating & Caching [train]:  82%|████████▏ | 394/482 [45:09<09:22,  6.39s/img]Validating & Caching [train]:  82%|████████▏ | 395/482 [45:18<10:25,  7.19s/img]Validating & Caching [train]:  82%|████████▏ | 396/482 [45:21<08:15,  5.76s/img]Validating & Caching [train]:  82%|████████▏ | 397/482 [45:23<06:27,  4.56s/img]Validating & Caching [train]:  83%|████████▎ | 398/482 [45:36<10:13,  7.30s/img]Validating & Caching [train]:  83%|████████▎ | 399/482 [45:44<10:10,  7.35s/img]Validating & Caching [train]:  83%|████████▎ | 400/482 [45:46<08:07,  5.95s/img]Validating & Caching [train]:  83%|████████▎ | 401/482 [45:49<06:49,  5.06s/img]Validating & Caching [train]:  83%|████████▎ | 402/482 [45:52<05:36,  4.20s/img]Validating & Caching [train]:  84%|████████▎ | 403/482 [45:53<04:36,  3.50s/img]Validating & Caching [train]:  84%|████████▍ | 404/482 [45:56<04:17,  3.30s/img]Validating & Caching [train]:  84%|████████▍ | 405/482 [45:59<04:06,  3.20s/img]Validating & Caching [train]:  84%|████████▍ | 406/482 [46:05<05:01,  3.97s/img]Validating & Caching [train]:  84%|████████▍ | 407/482 [46:16<07:44,  6.19s/img]Validating & Caching [train]:  85%|████████▍ | 408/482 [46:18<06:02,  4.90s/img]Validating & Caching [train]:  85%|████████▍ | 409/482 [46:21<05:04,  4.17s/img]Validating & Caching [train]:  85%|████████▌ | 410/482 [46:33<07:54,  6.59s/img]Validating & Caching [train]:  85%|████████▌ | 411/482 [46:43<09:06,  7.70s/img]Validating & Caching [train]:  85%|████████▌ | 412/482 [46:45<06:52,  5.89s/img]Validating & Caching [train]:  86%|████████▌ | 413/482 [46:46<05:03,  4.39s/img]Validating & Caching [train]:  86%|████████▌ | 414/482 [46:48<04:21,  3.85s/img]Validating & Caching [train]:  86%|████████▌ | 415/482 [46:51<03:45,  3.36s/img]Validating & Caching [train]:  86%|████████▋ | 416/482 [47:07<07:49,  7.12s/img]Validating & Caching [train]:  87%|████████▋ | 417/482 [47:08<06:01,  5.57s/img]Validating & Caching [train]:  87%|████████▋ | 418/482 [47:11<04:59,  4.67s/img]Validating & Caching [train]:  87%|████████▋ | 419/482 [47:13<04:08,  3.95s/img]Validating & Caching [train]:  87%|████████▋ | 420/482 [47:15<03:30,  3.39s/img]Validating & Caching [train]:  87%|████████▋ | 421/482 [47:20<03:49,  3.76s/img]Validating & Caching [train]:  88%|████████▊ | 422/482 [47:24<03:51,  3.86s/img]Validating & Caching [train]:  88%|████████▊ | 423/482 [47:37<06:35,  6.70s/img]Validating & Caching [train]:  88%|████████▊ | 424/482 [47:55<09:41, 10.02s/img]Validating & Caching [train]:  88%|████████▊ | 425/482 [47:58<07:20,  7.73s/img]Validating & Caching [train]:  88%|████████▊ | 426/482 [48:00<05:38,  6.04s/img]Validating & Caching [train]:  89%|████████▊ | 427/482 [48:03<04:47,  5.23s/img]Validating & Caching [train]:  89%|████████▉ | 428/482 [48:05<03:55,  4.35s/img]Validating & Caching [train]:  89%|████████▉ | 429/482 [48:08<03:20,  3.78s/img]Validating & Caching [train]:  89%|████████▉ | 430/482 [48:10<02:55,  3.37s/img]Validating & Caching [train]:  89%|████████▉ | 431/482 [48:12<02:32,  2.99s/img]Validating & Caching [train]:  90%|████████▉ | 432/482 [48:14<02:04,  2.50s/img]Validating & Caching [train]:  90%|████████▉ | 433/482 [48:30<05:23,  6.59s/img]Validating & Caching [train]:  90%|█████████ | 434/482 [48:45<07:25,  9.28s/img]Validating & Caching [train]:  90%|█████████ | 435/482 [48:49<06:01,  7.70s/img]Validating & Caching [train]:  90%|█████████ | 436/482 [48:56<05:34,  7.28s/img]Validating & Caching [train]:  91%|█████████ | 437/482 [48:57<04:10,  5.57s/img]Validating & Caching [train]:  91%|█████████ | 438/482 [49:00<03:31,  4.82s/img]Validating & Caching [train]:  91%|█████████ | 439/482 [49:05<03:22,  4.70s/img]Validating & Caching [train]:  91%|█████████▏| 440/482 [49:06<02:39,  3.80s/img]Validating & Caching [train]:  91%|█████████▏| 441/482 [49:14<03:19,  4.88s/img]Validating & Caching [train]:  92%|█████████▏| 442/482 [49:22<03:58,  5.96s/img]Validating & Caching [train]:  92%|█████████▏| 443/482 [49:26<03:21,  5.18s/img]Validating & Caching [train]:  92%|█████████▏| 444/482 [49:28<02:42,  4.28s/img]Validating & Caching [train]:  92%|█████████▏| 445/482 [49:31<02:25,  3.93s/img]Validating & Caching [train]:  93%|█████████▎| 446/482 [49:33<01:57,  3.27s/img]Validating & Caching [train]:  93%|█████████▎| 447/482 [49:47<03:54,  6.70s/img]Validating & Caching [train]:  93%|█████████▎| 448/482 [49:59<04:38,  8.20s/img]Validating & Caching [train]:  93%|█████████▎| 449/482 [50:12<05:14,  9.54s/img]Validating & Caching [train]:  93%|█████████▎| 450/482 [50:26<05:46, 10.82s/img]Validating & Caching [train]:  94%|█████████▎| 451/482 [50:39<05:57, 11.55s/img]Validating & Caching [train]:  94%|█████████▍| 452/482 [50:49<05:31, 11.06s/img]Validating & Caching [train]:  94%|█████████▍| 453/482 [50:51<04:06,  8.50s/img]Validating & Caching [train]:  94%|█████████▍| 454/482 [50:54<03:09,  6.76s/img]Validating & Caching [train]:  94%|█████████▍| 455/482 [50:56<02:25,  5.38s/img]Validating & Caching [train]:  95%|█████████▍| 456/482 [50:58<01:51,  4.29s/img]Validating & Caching [train]:  95%|█████████▍| 457/482 [51:01<01:38,  3.92s/img]Validating & Caching [train]:  95%|█████████▌| 458/482 [51:03<01:17,  3.23s/img]Validating & Caching [train]:  95%|█████████▌| 459/482 [51:20<02:50,  7.41s/img]Validating & Caching [train]:  95%|█████████▌| 460/482 [51:33<03:23,  9.27s/img]Validating & Caching [train]:  96%|█████████▌| 461/482 [51:35<02:27,  7.04s/img]Validating & Caching [train]:  96%|█████████▌| 462/482 [51:37<01:50,  5.53s/img]Validating & Caching [train]:  96%|█████████▌| 463/482 [51:40<01:28,  4.64s/img]Validating & Caching [train]:  96%|█████████▋| 464/482 [51:43<01:14,  4.14s/img]Validating & Caching [train]:  96%|█████████▋| 465/482 [51:58<02:05,  7.39s/img]Validating & Caching [train]:  97%|█████████▋| 466/482 [52:01<01:38,  6.13s/img]Validating & Caching [train]:  97%|█████████▋| 467/482 [52:02<01:10,  4.68s/img]Validating & Caching [train]:  97%|█████████▋| 468/482 [52:04<00:53,  3.82s/img]Validating & Caching [train]:  97%|█████████▋| 469/482 [52:17<01:27,  6.71s/img]Validating & Caching [train]:  98%|█████████▊| 470/482 [52:31<01:43,  8.67s/img]Validating & Caching [train]:  98%|█████████▊| 471/482 [52:34<01:18,  7.13s/img]Validating & Caching [train]:  98%|█████████▊| 472/482 [52:36<00:56,  5.65s/img]Validating & Caching [train]:  98%|█████████▊| 473/482 [52:39<00:44,  4.89s/img]Validating & Caching [train]:  98%|█████████▊| 474/482 [52:42<00:33,  4.18s/img]Validating & Caching [train]:  99%|█████████▊| 475/482 [52:45<00:27,  3.87s/img]Validating & Caching [train]:  99%|█████████▉| 476/482 [52:47<00:19,  3.30s/img]Validating & Caching [train]:  99%|█████████▉| 477/482 [52:49<00:14,  2.82s/img]Validating & Caching [train]:  99%|█████████▉| 478/482 [52:52<00:11,  2.78s/img]Validating & Caching [train]:  99%|█████████▉| 479/482 [52:54<00:07,  2.54s/img]Validating & Caching [train]: 100%|█████████▉| 480/482 [52:57<00:05,  2.72s/img]Validating & Caching [train]: 100%|█████████▉| 481/482 [52:59<00:02,  2.70s/img]Validating & Caching [train]: 100%|██████████| 482/482 [53:02<00:00,  2.69s/img]Validating & Caching [train]: 100%|██████████| 482/482 [53:02<00:00,  6.60s/img]
-[train] Kept 482/482 valid samples.
-PersistentDataset cache_dir='/home/hansstem/.cache/monai_lung_pet_ct_clean/3d_img224_d128/val'
-Validating & Caching [val]:   0%|          | 0/102 [00:00<?, ?img/s]Validating & Caching [val]:   1%|          | 1/102 [00:12<20:25, 12.13s/img]Validating & Caching [val]:   2%|▏         | 2/102 [00:19<15:27,  9.27s/img]Validating & Caching [val]:   3%|▎         | 3/102 [00:29<16:05,  9.75s/img]Validating & Caching [val]:   4%|▍         | 4/102 [00:39<15:51,  9.71s/img]Validating & Caching [val]:   5%|▍         | 5/102 [00:45<13:42,  8.48s/img]Validating & Caching [val]:   6%|▌         | 6/102 [00:47<09:54,  6.19s/img]Validating & Caching [val]:   7%|▋         | 7/102 [00:48<07:21,  4.64s/img]Validating & Caching [val]:   8%|▊         | 8/102 [00:50<05:38,  3.60s/img]Validating & Caching [val]:   9%|▉         | 9/102 [00:52<05:07,  3.31s/img]Validating & Caching [val]:  10%|▉         | 10/102 [00:55<04:30,  2.94s/img]Validating & Caching [val]:  11%|█         | 11/102 [01:11<10:56,  7.22s/img]Validating & Caching [val]:  12%|█▏        | 12/102 [01:22<12:18,  8.20s/img]Validating & Caching [val]:  13%|█▎        | 13/102 [01:24<09:33,  6.44s/img]Validating & Caching [val]:  14%|█▎        | 14/102 [01:26<07:34,  5.16s/img]Validating & Caching [val]:  15%|█▍        | 15/102 [01:41<11:46,  8.12s/img]Validating & Caching [val]:  16%|█▌        | 16/102 [01:55<13:46,  9.61s/img]Validating & Caching [val]:  17%|█▋        | 17/102 [02:05<13:47,  9.73s/img]Validating & Caching [val]:  18%|█▊        | 18/102 [02:12<12:43,  9.09s/img]Validating & Caching [val]:  19%|█▊        | 19/102 [02:13<09:10,  6.63s/img]Validating & Caching [val]:  20%|█▉        | 20/102 [02:15<07:18,  5.34s/img]Validating & Caching [val]:  21%|██        | 21/102 [02:16<05:23,  4.00s/img]Validating & Caching [val]:  22%|██▏       | 22/102 [02:19<04:52,  3.66s/img]Validating & Caching [val]:  23%|██▎       | 23/102 [02:21<04:15,  3.23s/img]Validating & Caching [val]:  24%|██▎       | 24/102 [02:28<05:23,  4.14s/img]Validating & Caching [val]:  25%|██▍       | 25/102 [02:40<08:31,  6.64s/img]Validating & Caching [val]:  25%|██▌       | 26/102 [02:42<06:29,  5.13s/img]Validating & Caching [val]:  26%|██▋       | 27/102 [02:43<04:57,  3.96s/img]Validating & Caching [val]:  27%|██▋       | 28/102 [02:46<04:35,  3.73s/img]Validating & Caching [val]:  28%|██▊       | 29/102 [02:48<03:41,  3.04s/img]Validating & Caching [val]:  29%|██▉       | 30/102 [02:57<06:00,  5.01s/img]Validating & Caching [val]:  30%|███       | 31/102 [03:11<09:12,  7.78s/img]Validating & Caching [val]:  31%|███▏      | 32/102 [03:13<06:55,  5.93s/img]Validating & Caching [val]:  32%|███▏      | 33/102 [03:15<05:25,  4.71s/img]Validating & Caching [val]:  33%|███▎      | 34/102 [03:27<07:53,  6.96s/img]Validating & Caching [val]:  34%|███▍      | 35/102 [03:37<08:49,  7.90s/img]Validating & Caching [val]:  35%|███▌      | 36/102 [03:40<07:07,  6.47s/img]Validating & Caching [val]:  36%|███▋      | 37/102 [03:43<05:41,  5.25s/img]Validating & Caching [val]:  37%|███▋      | 38/102 [03:52<06:55,  6.50s/img]Validating & Caching [val]:  38%|███▊      | 39/102 [04:17<12:36, 12.00s/img]Validating & Caching [val]:  39%|███▉      | 40/102 [04:22<10:10,  9.85s/img]Validating & Caching [val]:  40%|████      | 41/102 [04:32<09:59,  9.83s/img]Validating & Caching [val]:  41%|████      | 42/102 [04:33<07:22,  7.37s/img]Validating & Caching [val]:  42%|████▏     | 43/102 [04:35<05:44,  5.84s/img]Validating & Caching [val]:  43%|████▎     | 44/102 [04:38<04:39,  4.82s/img]Validating & Caching [val]:  44%|████▍     | 45/102 [04:40<03:45,  3.95s/img]Validating & Caching [val]:  45%|████▌     | 46/102 [04:40<02:41,  2.88s/img]Validating & Caching [val]:  46%|████▌     | 47/102 [04:41<01:57,  2.13s/img]Validating & Caching [val]:  47%|████▋     | 48/102 [04:54<04:57,  5.52s/img]Validating & Caching [val]:  48%|████▊     | 49/102 [04:56<04:00,  4.53s/img]Validating & Caching [val]:  49%|████▉     | 50/102 [04:59<03:30,  4.04s/img]Validating & Caching [val]:  50%|█████     | 51/102 [05:08<04:36,  5.41s/img]Validating & Caching [val]:  51%|█████     | 52/102 [05:22<06:48,  8.17s/img]Validating & Caching [val]:  52%|█████▏    | 53/102 [05:30<06:25,  7.87s/img]Validating & Caching [val]:  53%|█████▎    | 54/102 [05:43<07:44,  9.67s/img]Validating & Caching [val]:  54%|█████▍    | 55/102 [05:45<05:39,  7.23s/img]Validating & Caching [val]:  55%|█████▍    | 56/102 [05:46<04:12,  5.48s/img]Validating & Caching [val]:  56%|█████▌    | 57/102 [05:48<03:20,  4.46s/img]Validating & Caching [val]:  57%|█████▋    | 58/102 [05:50<02:42,  3.69s/img]Validating & Caching [val]:  58%|█████▊    | 59/102 [05:53<02:23,  3.35s/img]Validating & Caching [val]:  59%|█████▉    | 60/102 [05:54<01:56,  2.76s/img]Validating & Caching [val]:  60%|█████▉    | 61/102 [05:57<01:50,  2.69s/img]Validating & Caching [val]:  61%|██████    | 62/102 [06:00<01:49,  2.73s/img]Validating & Caching [val]:  62%|██████▏   | 63/102 [06:01<01:31,  2.34s/img]Validating & Caching [val]:  63%|██████▎   | 64/102 [06:03<01:24,  2.22s/img]Validating & Caching [val]:  64%|██████▎   | 65/102 [06:14<03:01,  4.89s/img]Validating & Caching [val]:  65%|██████▍   | 66/102 [06:25<03:58,  6.62s/img]Validating & Caching [val]:  66%|██████▌   | 67/102 [06:32<03:58,  6.82s/img]Validating & Caching [val]:  67%|██████▋   | 68/102 [06:41<04:13,  7.45s/img]Validating & Caching [val]:  68%|██████▊   | 69/102 [06:45<03:34,  6.49s/img]Validating & Caching [val]:  69%|██████▊   | 70/102 [06:56<04:04,  7.65s/img]Validating & Caching [val]:  70%|██████▉   | 71/102 [07:09<04:50,  9.37s/img]Validating & Caching [val]:  71%|███████   | 72/102 [07:19<04:45,  9.53s/img]Validating & Caching [val]:  72%|███████▏  | 73/102 [07:22<03:40,  7.62s/img]Validating & Caching [val]:  73%|███████▎  | 74/102 [07:24<02:46,  5.93s/img]Validating & Caching [val]:  74%|███████▎  | 75/102 [07:25<01:59,  4.43s/img]Validating & Caching [val]:  75%|███████▍  | 76/102 [07:27<01:32,  3.57s/img]Validating & Caching [val]:  75%|███████▌  | 77/102 [07:27<01:06,  2.67s/img]Validating & Caching [val]:  76%|███████▋  | 78/102 [07:29<00:59,  2.49s/img]Validating & Caching [val]:  77%|███████▋  | 79/102 [07:31<00:51,  2.26s/img]Validating & Caching [val]:  78%|███████▊  | 80/102 [07:32<00:42,  1.92s/img]Validating & Caching [val]:  79%|███████▉  | 81/102 [07:34<00:42,  2.01s/img]Validating & Caching [val]:  80%|████████  | 82/102 [07:36<00:40,  2.03s/img]Validating & Caching [val]:  81%|████████▏ | 83/102 [07:46<01:22,  4.32s/img]Validating & Caching [val]:  82%|████████▏ | 84/102 [07:58<01:56,  6.49s/img]Validating & Caching [val]:  83%|████████▎ | 85/102 [07:59<01:24,  4.95s/img]Validating & Caching [val]:  84%|████████▍ | 86/102 [08:01<01:04,  4.05s/img]Validating & Caching [val]:  85%|████████▌ | 87/102 [08:03<00:51,  3.41s/img]Validating & Caching [val]:  86%|████████▋ | 88/102 [08:04<00:39,  2.83s/img]Validating & Caching [val]:  87%|████████▋ | 89/102 [08:05<00:27,  2.15s/img]Validating & Caching [val]:  88%|████████▊ | 90/102 [08:06<00:21,  1.76s/img]Validating & Caching [val]:  89%|████████▉ | 91/102 [08:14<00:40,  3.68s/img]Validating & Caching [val]:  90%|█████████ | 92/102 [08:24<00:55,  5.58s/img]Validating & Caching [val]:  91%|█████████ | 93/102 [08:30<00:51,  5.75s/img]Validating & Caching [val]:  92%|█████████▏| 94/102 [08:38<00:52,  6.57s/img]Validating & Caching [val]:  93%|█████████▎| 95/102 [08:40<00:36,  5.16s/img]Validating & Caching [val]:  94%|█████████▍| 96/102 [08:42<00:25,  4.27s/img]Validating & Caching [val]:  95%|█████████▌| 97/102 [08:53<00:30,  6.17s/img]Validating & Caching [val]:  96%|█████████▌| 98/102 [09:04<00:30,  7.68s/img]Validating & Caching [val]:  97%|█████████▋| 99/102 [09:12<00:22,  7.60s/img]Validating & Caching [val]:  98%|█████████▊| 100/102 [09:20<00:15,  7.87s/img]Validating & Caching [val]:  99%|█████████▉| 101/102 [09:30<00:08,  8.34s/img]Validating & Caching [val]: 100%|██████████| 102/102 [09:36<00:00,  7.68s/img]Validating & Caching [val]: 100%|██████████| 102/102 [09:36<00:00,  5.65s/img]
-[val] Kept 102/102 valid samples.
-PersistentDataset cache_dir='/home/hansstem/.cache/monai_lung_pet_ct_clean/3d_img224_d128/test'
-Validating & Caching [test]:   0%|          | 0/106 [00:00<?, ?img/s]Validating & Caching [test]:   1%|          | 1/106 [00:02<03:46,  2.16s/img]Validating & Caching [test]:   2%|▏         | 2/106 [00:03<03:19,  1.91s/img]Validating & Caching [test]:   3%|▎         | 3/106 [00:05<03:22,  1.97s/img]Validating & Caching [test]:   4%|▍         | 4/106 [00:07<03:00,  1.77s/img]Validating & Caching [test]:   5%|▍         | 5/106 [00:09<03:05,  1.84s/img]Validating & Caching [test]:   6%|▌         | 6/106 [00:11<03:21,  2.01s/img]Validating & Caching [test]:   7%|▋         | 7/106 [00:19<06:24,  3.88s/img]Validating & Caching [test]:   8%|▊         | 8/106 [00:22<05:54,  3.62s/img]Validating & Caching [test]:   8%|▊         | 9/106 [00:25<05:43,  3.54s/img]Validating & Caching [test]:   9%|▉         | 10/106 [00:29<05:49,  3.64s/img]Validating & Caching [test]:  10%|█         | 11/106 [00:40<09:03,  5.72s/img]Validating & Caching [test]:  11%|█▏        | 12/106 [00:52<12:13,  7.80s/img]Validating & Caching [test]:  12%|█▏        | 13/106 [00:58<10:59,  7.09s/img]Validating & Caching [test]:  13%|█▎        | 14/106 [01:04<10:32,  6.88s/img]Validating & Caching [test]:  14%|█▍        | 15/106 [01:06<08:12,  5.41s/img]Validating & Caching [test]:  15%|█▌        | 16/106 [01:08<06:42,  4.47s/img]Validating & Caching [test]:  16%|█▌        | 17/106 [01:12<06:08,  4.13s/img]Validating & Caching [test]:  17%|█▋        | 18/106 [01:14<05:10,  3.53s/img]Validating & Caching [test]:  18%|█▊        | 19/106 [01:17<04:44,  3.27s/img]Validating & Caching [test]:  19%|█▉        | 20/106 [01:19<04:26,  3.10s/img]Validating & Caching [test]:  20%|█▉        | 21/106 [01:21<04:01,  2.84s/img]Validating & Caching [test]:  21%|██        | 22/106 [01:23<03:30,  2.50s/img]Validating & Caching [test]:  22%|██▏       | 23/106 [01:25<03:20,  2.42s/img]Validating & Caching [test]:  23%|██▎       | 24/106 [01:27<02:49,  2.07s/img]Validating & Caching [test]:  24%|██▎       | 25/106 [01:33<04:20,  3.22s/img]Validating & Caching [test]:  25%|██▍       | 26/106 [01:41<06:19,  4.74s/img]Validating & Caching [test]:  25%|██▌       | 27/106 [01:50<08:04,  6.13s/img]Validating & Caching [test]:  26%|██▋       | 28/106 [02:01<09:56,  7.65s/img]Validating & Caching [test]:  27%|██▋       | 29/106 [02:16<12:32,  9.77s/img]Validating & Caching [test]:  28%|██▊       | 30/106 [02:28<13:00, 10.26s/img]Validating & Caching [test]:  29%|██▉       | 31/106 [02:31<10:12,  8.17s/img]Validating & Caching [test]:  30%|███       | 32/106 [02:32<07:38,  6.19s/img]Validating & Caching [test]:  31%|███       | 33/106 [02:45<09:45,  8.02s/img]Validating & Caching [test]:  32%|███▏      | 34/106 [02:56<10:43,  8.94s/img]Validating & Caching [test]:  33%|███▎      | 35/106 [03:06<10:57,  9.27s/img]Validating & Caching [test]:  34%|███▍      | 36/106 [03:15<10:46,  9.24s/img]Validating & Caching [test]:  35%|███▍      | 37/106 [03:19<08:46,  7.64s/img]Validating & Caching [test]:  36%|███▌      | 38/106 [03:27<08:48,  7.78s/img]Validating & Caching [test]:  37%|███▋      | 39/106 [03:39<10:09,  9.10s/img]Validating & Caching [test]:  38%|███▊      | 40/106 [03:44<08:37,  7.85s/img]Validating & Caching [test]:  39%|███▊      | 41/106 [03:56<09:57,  9.19s/img]Validating & Caching [test]:  40%|███▉      | 42/106 [04:11<11:39, 10.93s/img]Validating & Caching [test]:  41%|████      | 43/106 [04:13<08:36,  8.19s/img]Validating & Caching [test]:  42%|████▏     | 44/106 [04:16<06:44,  6.52s/img]Validating & Caching [test]:  42%|████▏     | 45/106 [04:25<07:22,  7.26s/img]Validating & Caching [test]:  43%|████▎     | 46/106 [04:36<08:23,  8.38s/img]Validating & Caching [test]:  44%|████▍     | 47/106 [04:38<06:19,  6.44s/img]Validating & Caching [test]:  45%|████▌     | 48/106 [04:39<04:50,  5.01s/img]Validating & Caching [test]:  46%|████▌     | 49/106 [04:47<05:25,  5.70s/img]Validating & Caching [test]:  47%|████▋     | 50/106 [04:58<07:00,  7.52s/img]Validating & Caching [test]:  48%|████▊     | 51/106 [05:01<05:28,  5.97s/img]Validating & Caching [test]:  49%|████▉     | 52/106 [05:03<04:25,  4.91s/img]Validating & Caching [test]:  50%|█████     | 53/106 [05:15<06:12,  7.03s/img]Validating & Caching [test]:  51%|█████     | 54/106 [05:26<07:04,  8.16s/img]Validating & Caching [test]:  52%|█████▏    | 55/106 [05:28<05:18,  6.25s/img]Validating & Caching [test]:  53%|█████▎    | 56/106 [05:31<04:20,  5.21s/img]Validating & Caching [test]:  54%|█████▍    | 57/106 [05:37<04:29,  5.50s/img]Validating & Caching [test]:  55%|█████▍    | 58/106 [05:48<05:48,  7.26s/img]Validating & Caching [test]:  56%|█████▌    | 59/106 [06:01<07:04,  9.04s/img]Validating & Caching [test]:  57%|█████▋    | 60/106 [06:15<07:55, 10.34s/img]Validating & Caching [test]:  58%|█████▊    | 61/106 [06:26<07:52, 10.50s/img]Validating & Caching [test]:  58%|█████▊    | 62/106 [06:27<05:47,  7.89s/img]Validating & Caching [test]:  59%|█████▉    | 63/106 [06:35<05:31,  7.71s/img]Validating & Caching [test]:  60%|██████    | 64/106 [06:47<06:25,  9.17s/img]Validating & Caching [test]:  61%|██████▏   | 65/106 [07:00<06:57, 10.18s/img]Validating & Caching [test]:  62%|██████▏   | 66/106 [07:08<06:27,  9.69s/img]Validating & Caching [test]:  63%|██████▎   | 67/106 [07:21<06:56, 10.69s/img]Validating & Caching [test]:  64%|██████▍   | 68/106 [07:31<06:34, 10.37s/img]Validating & Caching [test]:  65%|██████▌   | 69/106 [07:45<07:05, 11.50s/img]Validating & Caching [test]:  66%|██████▌   | 70/106 [07:57<06:54, 11.52s/img]Validating & Caching [test]:  67%|██████▋   | 71/106 [07:59<05:08,  8.82s/img]Validating & Caching [test]:  68%|██████▊   | 72/106 [08:01<03:47,  6.70s/img]Validating & Caching [test]:  69%|██████▉   | 73/106 [08:09<03:58,  7.23s/img]Validating & Caching [test]:  70%|██████▉   | 74/106 [08:22<04:40,  8.76s/img]Validating & Caching [test]:  71%|███████   | 75/106 [08:32<04:45,  9.20s/img]Validating & Caching [test]:  72%|███████▏  | 76/106 [08:37<04:01,  8.04s/img]Validating & Caching [test]:  73%|███████▎  | 77/106 [08:49<04:24,  9.11s/img]Validating & Caching [test]:  74%|███████▎  | 78/106 [09:04<05:04, 10.88s/img]Validating & Caching [test]:  75%|███████▍  | 79/106 [09:15<04:55, 10.94s/img]Validating & Caching [test]:  75%|███████▌  | 80/106 [09:29<05:10, 11.96s/img]Validating & Caching [test]:  76%|███████▋  | 81/106 [09:31<03:44,  8.98s/img]Validating & Caching [test]:  77%|███████▋  | 82/106 [09:33<02:42,  6.77s/img]Validating & Caching [test]:  78%|███████▊  | 83/106 [09:36<02:07,  5.54s/img]Validating & Caching [test]:  79%|███████▉  | 84/106 [09:39<01:45,  4.81s/img]Validating & Caching [test]:  80%|████████  | 85/106 [09:48<02:06,  6.03s/img]Validating & Caching [test]:  81%|████████  | 86/106 [09:59<02:29,  7.49s/img]Validating & Caching [test]:  82%|████████▏ | 87/106 [10:00<01:50,  5.82s/img]Validating & Caching [test]:  83%|████████▎ | 88/106 [10:02<01:23,  4.66s/img]Validating & Caching [test]:  84%|████████▍ | 89/106 [10:05<01:07,  3.96s/img]Validating & Caching [test]:  85%|████████▍ | 90/106 [10:13<01:24,  5.25s/img]Validating & Caching [test]:  86%|████████▌ | 91/106 [10:16<01:08,  4.55s/img]Validating & Caching [test]:  87%|████████▋ | 92/106 [10:19<00:56,  4.05s/img]Validating & Caching [test]:  88%|████████▊ | 93/106 [10:32<01:29,  6.91s/img]Validating & Caching [test]:  89%|████████▊ | 94/106 [10:45<01:42,  8.57s/img]Validating & Caching [test]:  90%|████████▉ | 95/106 [11:01<01:58, 10.73s/img]Validating & Caching [test]:  91%|█████████ | 96/106 [11:19<02:10, 13.07s/img]Validating & Caching [test]:  92%|█████████▏| 97/106 [11:31<01:54, 12.76s/img]Validating & Caching [test]:  92%|█████████▏| 98/106 [11:40<01:31, 11.46s/img]Validating & Caching [test]:  93%|█████████▎| 99/106 [11:50<01:18, 11.21s/img]Validating & Caching [test]:  94%|█████████▍| 100/106 [11:58<01:00, 10.11s/img]Validating & Caching [test]:  95%|█████████▌| 101/106 [11:58<00:36,  7.20s/img]Validating & Caching [test]:  96%|█████████▌| 102/106 [11:59<00:20,  5.15s/img]Validating & Caching [test]:  97%|█████████▋| 103/106 [12:01<00:13,  4.48s/img]Validating & Caching [test]:  98%|█████████▊| 104/106 [12:12<00:12,  6.16s/img]Validating & Caching [test]:  99%|█████████▉| 105/106 [12:14<00:04,  5.00s/img]Validating & Caching [test]: 100%|██████████| 106/106 [12:17<00:00,  4.47s/img]Validating & Caching [test]: 100%|██████████| 106/106 [12:17<00:00,  6.96s/img]
-[test] Kept 106/106 valid samples.
-[WRS lung_pet_ct_dx] counts {0=341, 1=56, 2=85} | oversample_factor=6.09 (max_weight/min_weight)
-[lung_pet_ct_dx] Train class distribution: {0: 341, 1: 56, 2: 85}
-
---- dapt Epoch 1/20 | lr=1.00e-06 ---
-Epoch 1 [20/241] Loss: 1.3416 (Cls: 1.2343 / Seg: 1.0730) Time: 56.69s
-Epoch 1 [40/241] Loss: 1.3369 (Cls: 1.2293 / Seg: 1.0756) Time: 29.72s
-Epoch 1 [60/241] Loss: 1.3410 (Cls: 1.2335 / Seg: 1.0754) Time: 29.80s
-Epoch 1 [80/241] Loss: 1.3429 (Cls: 1.2354 / Seg: 1.0750) Time: 29.84s
-Epoch 1 [100/241] Loss: 1.3333 (Cls: 1.2258 / Seg: 1.0750) Time: 29.90s
-Epoch 1 [120/241] Loss: 1.3245 (Cls: 1.2170 / Seg: 1.0749) Time: 29.89s
-Epoch 1 [140/241] Loss: 1.3331 (Cls: 1.2257 / Seg: 1.0738) Time: 29.93s
-Epoch 1 [160/241] Loss: 1.3261 (Cls: 1.2188 / Seg: 1.0731) Time: 29.95s
-Epoch 1 [180/241] Loss: 1.3388 (Cls: 1.2315 / Seg: 1.0723) Time: 29.93s
-Epoch 1 [200/241] Loss: 1.3450 (Cls: 1.2379 / Seg: 1.0718) Time: 30.01s
-Epoch 1 [220/241] Loss: 1.3333 (Cls: 1.2261 / Seg: 1.0715) Time: 29.96s
-Epoch 1 [240/241] Loss: 1.3334 (Cls: 1.2263 / Seg: 1.0709) Time: 29.99s
-Epoch 1 [241/241] Loss: 1.3321 (Cls: 1.2250 / Seg: 1.0708) Time: 1.51s
-Train Epoch 1 Summary => Loss: 1.3321, Accuracy: 0.3174, MacroF1: 0.1681
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.1537, Accuracy: 0.1176, BalancedAcc: 0.3333, MacroPrecision: 0.0392, MacroRecall: 0.3333, MacroF1: 0.0702
-Validation (patient-level, n=52) => Acc: 0.1154, BalancedAcc: 0.3333, MacroPrecision: 0.0385, MacroRecall: 0.3333, MacroF1: 0.0690
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  0               73              0               
-Y:Small Cell      0               12              0               
-Y:Squamous        0               17              0               
-
-
-[dapt] Epoch 1 Summary => TrainLoss: 1.3321, TrainMacroF1: 0.1681, ValMacroF1(patient): 0.0690/0.0690 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.1154/0.1154, balanced_accuracy 0.3333/0.3333, macro_precision 0.0385/0.0385, macro_recall 0.3333/0.3333, macro_f1 0.0690/0.0690
-
---- dapt Epoch 2/20 | lr=3.40e-05 ---
-Epoch 2 [20/241] Loss: 1.3426 (Cls: 1.2369 / Seg: 1.0568) Time: 34.16s
-Epoch 2 [40/241] Loss: 1.2978 (Cls: 1.1936 / Seg: 1.0420) Time: 29.85s
-Epoch 2 [60/241] Loss: 1.2653 (Cls: 1.1622 / Seg: 1.0305) Time: 29.89s
-Epoch 2 [80/241] Loss: 1.2482 (Cls: 1.1463 / Seg: 1.0190) Time: 29.92s
-Epoch 2 [100/241] Loss: 1.2459 (Cls: 1.1453 / Seg: 1.0066) Time: 29.91s
-Epoch 2 [120/241] Loss: 1.2337 (Cls: 1.1342 / Seg: 0.9951) Time: 29.91s
-Epoch 2 [140/241] Loss: 1.2292 (Cls: 1.1310 / Seg: 0.9817) Time: 29.91s
-Epoch 2 [160/241] Loss: 1.2231 (Cls: 1.1261 / Seg: 0.9692) Time: 29.92s
-Epoch 2 [180/241] Loss: 1.2196 (Cls: 1.1239 / Seg: 0.9570) Time: 29.92s
-Epoch 2 [200/241] Loss: 1.2160 (Cls: 1.1215 / Seg: 0.9452) Time: 29.93s
-Epoch 2 [220/241] Loss: 1.2130 (Cls: 1.1196 / Seg: 0.9341) Time: 29.94s
-Epoch 2 [240/241] Loss: 1.2110 (Cls: 1.1185 / Seg: 0.9244) Time: 29.92s
-Epoch 2 [241/241] Loss: 1.2104 (Cls: 1.1180 / Seg: 0.9238) Time: 1.51s
-Train Epoch 2 Summary => Loss: 1.2104, Accuracy: 0.3257, MacroF1: 0.3011
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.0712, Accuracy: 0.3824, BalancedAcc: 0.3844, MacroPrecision: 0.3550, MacroRecall: 0.3844, MacroF1: 0.3270
-Validation (patient-level, n=52) => Acc: 0.3269, BalancedAcc: 0.3303, MacroPrecision: 0.3170, MacroRecall: 0.3303, MacroF1: 0.2831
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  28              26              19              
-Y:Small Cell      5               5               2               
-Y:Squamous        7               4               6               
-
-
-[dapt] Epoch 2 Summary => TrainLoss: 1.2104, TrainMacroF1: 0.3011, ValMacroF1(patient): 0.2831/0.1761 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.3269/0.2212, balanced_accuracy 0.3303/0.3318, macro_precision 0.3170/0.1778, macro_recall 0.3303/0.3318, macro_f1 0.2831/0.1761
-
---- dapt Epoch 3/20 | lr=6.70e-05 ---
-Epoch 3 [20/241] Loss: 1.1966 (Cls: 1.1168 / Seg: 0.7981) Time: 33.12s
-Epoch 3 [40/241] Loss: 1.1871 (Cls: 1.1083 / Seg: 0.7884) Time: 29.97s
-Epoch 3 [60/241] Loss: 1.1802 (Cls: 1.1021 / Seg: 0.7811) Time: 29.90s
-Epoch 3 [80/241] Loss: 1.1824 (Cls: 1.1051 / Seg: 0.7727) Time: 29.87s
-Epoch 3 [100/241] Loss: 1.1787 (Cls: 1.1021 / Seg: 0.7661) Time: 29.91s
-Epoch 3 [120/241] Loss: 1.1794 (Cls: 1.1033 / Seg: 0.7610) Time: 29.92s
-Epoch 3 [140/241] Loss: 1.1765 (Cls: 1.1010 / Seg: 0.7550) Time: 29.93s
-Epoch 3 [160/241] Loss: 1.1822 (Cls: 1.1072 / Seg: 0.7505) Time: 29.88s
-Epoch 3 [180/241] Loss: 1.1802 (Cls: 1.1056 / Seg: 0.7461) Time: 29.91s
-Epoch 3 [200/241] Loss: 1.1797 (Cls: 1.1055 / Seg: 0.7418) Time: 29.93s
-Epoch 3 [220/241] Loss: 1.1792 (Cls: 1.1054 / Seg: 0.7378) Time: 29.99s
-Epoch 3 [240/241] Loss: 1.1780 (Cls: 1.1045 / Seg: 0.7342) Time: 29.90s
-Epoch 3 [241/241] Loss: 1.1785 (Cls: 1.1051 / Seg: 0.7340) Time: 1.50s
-Train Epoch 3 Summary => Loss: 1.1785, Accuracy: 0.3320, MacroF1: 0.3117
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 0.9866, Accuracy: 0.6667, BalancedAcc: 0.3255, MacroPrecision: 0.2878, MacroRecall: 0.3255, MacroF1: 0.2969
-Validation (patient-level, n=52) => Acc: 0.6538, BalancedAcc: 0.3063, MacroPrecision: 0.2361, MacroRecall: 0.3063, MacroF1: 0.2667
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  67              2               4               
-Y:Small Cell      10              0               2               
-Y:Squamous        16              0               1               
-
-
-[dapt] Epoch 3 Summary => TrainLoss: 1.1785, TrainMacroF1: 0.3117, ValMacroF1(patient): 0.2667/0.2063 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.6538/0.3654, balanced_accuracy 0.3063/0.3233, macro_precision 0.2361/0.1972, macro_recall 0.3063/0.3233, macro_f1 0.2667/0.2063
-
---- dapt Epoch 4/20 | lr=1.00e-04 ---
-Epoch 4 [20/241] Loss: 1.2066 (Cls: 1.1380 / Seg: 0.6863) Time: 32.33s
-Epoch 4 [40/241] Loss: 1.1935 (Cls: 1.1250 / Seg: 0.6853) Time: 29.88s
-Epoch 4 [60/241] Loss: 1.1889 (Cls: 1.1206 / Seg: 0.6828) Time: 29.90s
-Epoch 4 [80/241] Loss: 1.1736 (Cls: 1.1057 / Seg: 0.6790) Time: 29.85s
-Epoch 4 [100/241] Loss: 1.1802 (Cls: 1.1125 / Seg: 0.6768) Time: 29.95s
-Epoch 4 [120/241] Loss: 1.1961 (Cls: 1.1287 / Seg: 0.6748) Time: 29.99s
-Epoch 4 [140/241] Loss: 1.1954 (Cls: 1.1281 / Seg: 0.6722) Time: 30.00s
-Epoch 4 [160/241] Loss: 1.1970 (Cls: 1.1300 / Seg: 0.6707) Time: 30.01s
-Epoch 4 [180/241] Loss: 1.1912 (Cls: 1.1243 / Seg: 0.6687) Time: 30.03s
-Epoch 4 [200/241] Loss: 1.1894 (Cls: 1.1227 / Seg: 0.6668) Time: 30.01s
-Epoch 4 [220/241] Loss: 1.1871 (Cls: 1.1206 / Seg: 0.6653) Time: 29.90s
-Epoch 4 [240/241] Loss: 1.1867 (Cls: 1.1203 / Seg: 0.6636) Time: 29.98s
-Epoch 4 [241/241] Loss: 1.1871 (Cls: 1.1208 / Seg: 0.6635) Time: 1.50s
-Train Epoch 4 Summary => Loss: 1.1871, Accuracy: 0.3527, MacroF1: 0.3511
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.2318, Accuracy: 0.1176, BalancedAcc: 0.3333, MacroPrecision: 0.0392, MacroRecall: 0.3333, MacroF1: 0.0702
-Validation (patient-level, n=52) => Acc: 0.1154, BalancedAcc: 0.3333, MacroPrecision: 0.0385, MacroRecall: 0.3333, MacroF1: 0.0690
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  0               73              0               
-Y:Small Cell      0               12              0               
-Y:Squamous        0               17              0               
-
-
-[dapt] Epoch 4 Summary => TrainLoss: 1.1871, TrainMacroF1: 0.3511, ValMacroF1(patient): 0.0690/0.2063 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.1154/0.3654, balanced_accuracy 0.3333/0.3233, macro_precision 0.0385/0.1972, macro_recall 0.3333/0.3233, macro_f1 0.0690/0.2063
-
---- dapt Epoch 5/20 | lr=9.91e-05 ---
-Epoch 5 [20/241] Loss: 1.2246 (Cls: 1.1599 / Seg: 0.6476) Time: 34.36s
-Epoch 5 [40/241] Loss: 1.2129 (Cls: 1.1484 / Seg: 0.6453) Time: 29.94s
-Epoch 5 [60/241] Loss: 1.2063 (Cls: 1.1419 / Seg: 0.6438) Time: 29.90s
-Epoch 5 [80/241] Loss: 1.2011 (Cls: 1.1369 / Seg: 0.6420) Time: 30.03s
-Epoch 5 [100/241] Loss: 1.1875 (Cls: 1.1233 / Seg: 0.6421) Time: 29.92s
-Epoch 5 [120/241] Loss: 1.1836 (Cls: 1.1194 / Seg: 0.6416) Time: 30.04s
-Epoch 5 [140/241] Loss: 1.1911 (Cls: 1.1270 / Seg: 0.6408) Time: 30.00s
-Epoch 5 [160/241] Loss: 1.1866 (Cls: 1.1226 / Seg: 0.6401) Time: 29.93s
-Epoch 5 [180/241] Loss: 1.1832 (Cls: 1.1193 / Seg: 0.6395) Time: 29.89s
-Epoch 5 [200/241] Loss: 1.1807 (Cls: 1.1168 / Seg: 0.6387) Time: 29.90s
-Epoch 5 [220/241] Loss: 1.1790 (Cls: 1.1151 / Seg: 0.6388) Time: 29.94s
-Epoch 5 [240/241] Loss: 1.1780 (Cls: 1.1142 / Seg: 0.6381) Time: 29.94s
-Epoch 5 [241/241] Loss: 1.1779 (Cls: 1.1141 / Seg: 0.6380) Time: 1.49s
-Train Epoch 5 Summary => Loss: 1.1779, Accuracy: 0.3506, MacroF1: 0.3423
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.1736, Accuracy: 0.1471, BalancedAcc: 0.3470, MacroPrecision: 0.3737, MacroRecall: 0.3470, MacroF1: 0.0984
-Validation (patient-level, n=52) => Acc: 0.1346, BalancedAcc: 0.3423, MacroPrecision: 0.3725, MacroRecall: 0.3423, MacroF1: 0.0877
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  3               70              0               
-Y:Small Cell      0               12              0               
-Y:Squamous        0               17              0               
-
-
-[dapt] Epoch 5 Summary => TrainLoss: 1.1779, TrainMacroF1: 0.3423, ValMacroF1(patient): 0.0877/0.1411 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.1346/0.3013, balanced_accuracy 0.3423/0.3273, macro_precision 0.3725/0.2157, macro_recall 0.3423/0.3273, macro_f1 0.0877/0.1411
-
---- dapt Epoch 6/20 | lr=9.66e-05 ---
-Epoch 6 [20/241] Loss: 1.2109 (Cls: 1.1478 / Seg: 0.6313) Time: 34.48s
-Epoch 6 [40/241] Loss: 1.2281 (Cls: 1.1649 / Seg: 0.6313) Time: 29.71s
-Epoch 6 [60/241] Loss: 1.2079 (Cls: 1.1448 / Seg: 0.6306) Time: 29.81s
-Epoch 6 [80/241] Loss: 1.1895 (Cls: 1.1266 / Seg: 0.6294) Time: 29.88s
-Epoch 6 [100/241] Loss: 1.1868 (Cls: 1.1239 / Seg: 0.6287) Time: 29.93s
-Epoch 6 [120/241] Loss: 1.1709 (Cls: 1.1081 / Seg: 0.6277) Time: 29.92s
-Epoch 6 [140/241] Loss: 1.1757 (Cls: 1.1130 / Seg: 0.6270) Time: 29.89s
-Epoch 6 [160/241] Loss: 1.1872 (Cls: 1.1245 / Seg: 0.6268) Time: 29.95s
-Epoch 6 [180/241] Loss: 1.1841 (Cls: 1.1215 / Seg: 0.6260) Time: 29.97s
-Epoch 6 [200/241] Loss: 1.1850 (Cls: 1.1225 / Seg: 0.6254) Time: 29.89s
-Epoch 6 [220/241] Loss: 1.1817 (Cls: 1.1192 / Seg: 0.6248) Time: 30.26s
-Epoch 6 [240/241] Loss: 1.1773 (Cls: 1.1149 / Seg: 0.6242) Time: 30.07s
-Epoch 6 [241/241] Loss: 1.1776 (Cls: 1.1152 / Seg: 0.6241) Time: 1.50s
-Train Epoch 6 Summary => Loss: 1.1776, Accuracy: 0.3610, MacroF1: 0.3460
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.0699, Accuracy: 0.2647, BalancedAcc: 0.3120, MacroPrecision: 0.2820, MacroRecall: 0.3120, MacroF1: 0.2193
-Validation (patient-level, n=52) => Acc: 0.2885, BalancedAcc: 0.3498, MacroPrecision: 0.3213, MacroRecall: 0.3498, MacroF1: 0.2575
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  15              13              45              
-Y:Small Cell      4               1               7               
-Y:Squamous        6               0               11              
-
-
-[dapt] Epoch 6 Summary => TrainLoss: 1.1776, TrainMacroF1: 0.3460, ValMacroF1(patient): 0.2575/0.1380 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.2885/0.1795, balanced_accuracy 0.3498/0.3418, macro_precision 0.3213/0.2441, macro_recall 0.3498/0.3418, macro_f1 0.2575/0.1380
-
---- dapt Epoch 7/20 | lr=9.25e-05 ---
-Epoch 7 [20/241] Loss: 1.1317 (Cls: 1.0700 / Seg: 0.6166) Time: 35.68s
-Epoch 7 [40/241] Loss: 1.1386 (Cls: 1.0769 / Seg: 0.6170) Time: 29.84s
-Epoch 7 [60/241] Loss: 1.1491 (Cls: 1.0873 / Seg: 0.6183) Time: 29.89s
-Epoch 7 [80/241] Loss: 1.1517 (Cls: 1.0900 / Seg: 0.6170) Time: 30.59s
-Epoch 7 [100/241] Loss: 1.1474 (Cls: 1.0857 / Seg: 0.6169) Time: 29.93s
-Epoch 7 [120/241] Loss: 1.1588 (Cls: 1.0971 / Seg: 0.6162) Time: 29.98s
-Epoch 7 [140/241] Loss: 1.1457 (Cls: 1.0841 / Seg: 0.6155) Time: 29.95s
-Epoch 7 [160/241] Loss: 1.1502 (Cls: 1.0887 / Seg: 0.6154) Time: 29.94s
-Epoch 7 [180/241] Loss: 1.1570 (Cls: 1.0955 / Seg: 0.6149) Time: 29.94s
-Epoch 7 [200/241] Loss: 1.1602 (Cls: 1.0987 / Seg: 0.6146) Time: 30.35s
-Epoch 7 [220/241] Loss: 1.1636 (Cls: 1.1022 / Seg: 0.6141) Time: 29.96s
-Epoch 7 [240/241] Loss: 1.1641 (Cls: 1.1027 / Seg: 0.6135) Time: 29.97s
-Epoch 7 [241/241] Loss: 1.1642 (Cls: 1.1029 / Seg: 0.6134) Time: 1.50s
-Train Epoch 7 Summary => Loss: 1.1642, Accuracy: 0.3444, MacroF1: 0.3438
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.0851, Accuracy: 0.2059, BalancedAcc: 0.2927, MacroPrecision: 0.2498, MacroRecall: 0.2927, MacroF1: 0.1899
-Validation (patient-level, n=52) => Acc: 0.2500, BalancedAcc: 0.3318, MacroPrecision: 0.2944, MacroRecall: 0.3318, MacroF1: 0.2247
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  9               23              41              
-Y:Small Cell      3               2               7               
-Y:Squamous        6               1               10              
-
-
-[dapt] Epoch 7 Summary => TrainLoss: 1.1642, TrainMacroF1: 0.3438, ValMacroF1(patient): 0.2247/0.1900 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.2500/0.2244, balanced_accuracy 0.3318/0.3413, macro_precision 0.2944/0.3294, macro_recall 0.3318/0.3413, macro_f1 0.2247/0.1900
-
---- dapt Epoch 8/20 | lr=8.70e-05 ---
-Epoch 8 [20/241] Loss: 1.1182 (Cls: 1.0574 / Seg: 0.6088) Time: 38.75s
-Epoch 8 [40/241] Loss: 1.1378 (Cls: 1.0771 / Seg: 0.6064) Time: 29.83s
-Epoch 8 [60/241] Loss: 1.1566 (Cls: 1.0960 / Seg: 0.6062) Time: 29.87s
-Epoch 8 [80/241] Loss: 1.1642 (Cls: 1.1036 / Seg: 0.6063) Time: 30.04s
-Epoch 8 [100/241] Loss: 1.1551 (Cls: 1.0944 / Seg: 0.6065) Time: 29.93s
-Epoch 8 [120/241] Loss: 1.1669 (Cls: 1.1063 / Seg: 0.6064) Time: 30.00s
-Epoch 8 [140/241] Loss: 1.1694 (Cls: 1.1088 / Seg: 0.6057) Time: 29.95s
-Epoch 8 [160/241] Loss: 1.1662 (Cls: 1.1057 / Seg: 0.6049) Time: 29.99s
-Epoch 8 [180/241] Loss: 1.1644 (Cls: 1.1039 / Seg: 0.6045) Time: 29.92s
-Epoch 8 [200/241] Loss: 1.1691 (Cls: 1.1087 / Seg: 0.6040) Time: 29.98s
-Epoch 8 [220/241] Loss: 1.1631 (Cls: 1.1028 / Seg: 0.6034) Time: 29.92s
-Epoch 8 [240/241] Loss: 1.1623 (Cls: 1.1020 / Seg: 0.6030) Time: 33.65s
-Epoch 8 [241/241] Loss: 1.1624 (Cls: 1.1022 / Seg: 0.6029) Time: 1.50s
-Train Epoch 8 Summary => Loss: 1.1624, Accuracy: 0.3485, MacroF1: 0.3471
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.0398, Accuracy: 0.4314, BalancedAcc: 0.3376, MacroPrecision: 0.3287, MacroRecall: 0.3376, MacroF1: 0.3181
-Validation (patient-level, n=52) => Acc: 0.4038, BalancedAcc: 0.2918, MacroPrecision: 0.2976, MacroRecall: 0.2918, MacroF1: 0.2856
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  36              14              23              
-Y:Small Cell      6               2               4               
-Y:Squamous        11              0               6               
-
-
-[dapt] Epoch 8 Summary => TrainLoss: 1.1624, TrainMacroF1: 0.3471, ValMacroF1(patient): 0.2856/0.2559 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.4038/0.3141, balanced_accuracy 0.2918/0.3245, macro_precision 0.2976/0.3045, macro_recall 0.2918/0.3245, macro_f1 0.2856/0.2559
-
---- dapt Epoch 9/20 | lr=8.01e-05 ---
-Epoch 9 [20/241] Loss: 1.1652 (Cls: 1.1053 / Seg: 0.5985) Time: 38.42s
-Epoch 9 [40/241] Loss: 1.1391 (Cls: 1.0794 / Seg: 0.5974) Time: 30.92s
-Epoch 9 [60/241] Loss: 1.1442 (Cls: 1.0844 / Seg: 0.5985) Time: 31.03s
-Epoch 9 [80/241] Loss: 1.1474 (Cls: 1.0877 / Seg: 0.5974) Time: 29.77s
-Epoch 9 [100/241] Loss: 1.1454 (Cls: 1.0857 / Seg: 0.5973) Time: 29.91s
-Epoch 9 [120/241] Loss: 1.1566 (Cls: 1.0968 / Seg: 0.5977) Time: 30.02s
-Epoch 9 [140/241] Loss: 1.1578 (Cls: 1.0981 / Seg: 0.5968) Time: 29.87s
-Epoch 9 [160/241] Loss: 1.1618 (Cls: 1.1022 / Seg: 0.5963) Time: 29.96s
-Epoch 9 [180/241] Loss: 1.1579 (Cls: 1.0983 / Seg: 0.5958) Time: 30.01s
-Epoch 9 [200/241] Loss: 1.1615 (Cls: 1.1019 / Seg: 0.5958) Time: 29.97s
-Epoch 9 [220/241] Loss: 1.1585 (Cls: 1.0989 / Seg: 0.5952) Time: 29.94s
-Epoch 9 [240/241] Loss: 1.1643 (Cls: 1.1048 / Seg: 0.5947) Time: 30.00s
-Epoch 9 [241/241] Loss: 1.1654 (Cls: 1.1059 / Seg: 0.5946) Time: 1.50s
-Train Epoch 9 Summary => Loss: 1.1654, Accuracy: 0.3548, MacroF1: 0.3496
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.0018, Accuracy: 0.6078, BalancedAcc: 0.3063, MacroPrecision: 0.2541, MacroRecall: 0.3063, MacroF1: 0.2777
-Validation (patient-level, n=52) => Acc: 0.5962, BalancedAcc: 0.3258, MacroPrecision: 0.2689, MacroRecall: 0.3258, MacroF1: 0.2945
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  61              12              0               
-Y:Small Cell      11              1               0               
-Y:Squamous        17              0               0               
-
-
-[dapt] Epoch 9 Summary => TrainLoss: 1.1654, TrainMacroF1: 0.3496, ValMacroF1(patient): 0.2945/0.2683 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.5962/0.4167, balanced_accuracy 0.3258/0.3165, macro_precision 0.2689/0.2870, macro_recall 0.3258/0.3165, macro_f1 0.2945/0.2683
-
---- dapt Epoch 10/20 | lr=7.23e-05 ---
-Epoch 10 [20/241] Loss: 1.1723 (Cls: 1.1130 / Seg: 0.5935) Time: 33.28s
-Epoch 10 [40/241] Loss: 1.1800 (Cls: 1.1208 / Seg: 0.5925) Time: 29.72s
-Epoch 10 [60/241] Loss: 1.1863 (Cls: 1.1270 / Seg: 0.5926) Time: 29.78s
-Epoch 10 [80/241] Loss: 1.1760 (Cls: 1.1168 / Seg: 0.5916) Time: 29.99s
-Epoch 10 [100/241] Loss: 1.1625 (Cls: 1.1034 / Seg: 0.5908) Time: 29.84s
-Epoch 10 [120/241] Loss: 1.1565 (Cls: 1.0974 / Seg: 0.5908) Time: 29.94s
-Epoch 10 [140/241] Loss: 1.1616 (Cls: 1.1026 / Seg: 0.5904) Time: 29.94s
-Epoch 10 [160/241] Loss: 1.1598 (Cls: 1.1008 / Seg: 0.5898) Time: 30.04s
-Epoch 10 [180/241] Loss: 1.1591 (Cls: 1.1002 / Seg: 0.5893) Time: 30.05s
-Epoch 10 [200/241] Loss: 1.1567 (Cls: 1.0978 / Seg: 0.5891) Time: 30.07s
-Epoch 10 [220/241] Loss: 1.1564 (Cls: 1.0975 / Seg: 0.5888) Time: 30.09s
-Epoch 10 [240/241] Loss: 1.1535 (Cls: 1.0946 / Seg: 0.5883) Time: 29.92s
-Epoch 10 [241/241] Loss: 1.1536 (Cls: 1.0948 / Seg: 0.5883) Time: 1.49s
-Train Epoch 10 Summary => Loss: 1.1536, Accuracy: 0.3776, MacroF1: 0.3764
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.0348, Accuracy: 0.5196, BalancedAcc: 0.3349, MacroPrecision: 0.2683, MacroRecall: 0.3349, MacroF1: 0.2889
-Validation (patient-level, n=52) => Acc: 0.5385, BalancedAcc: 0.3453, MacroPrecision: 0.2735, MacroRecall: 0.3453, MacroF1: 0.2982
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  49              24              0               
-Y:Small Cell      8               4               0               
-Y:Squamous        17              0               0               
-
-
-[dapt] Epoch 10 Summary => TrainLoss: 1.1536, TrainMacroF1: 0.3764, ValMacroF1(patient): 0.2982/0.2928 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.5385/0.5128, balanced_accuracy 0.3453/0.3210, macro_precision 0.2735/0.2800, macro_recall 0.3453/0.3210, macro_f1 0.2982/0.2928
-
---- dapt Epoch 11/20 | lr=6.37e-05 ---
-Epoch 11 [20/241] Loss: 1.1709 (Cls: 1.1125 / Seg: 0.5838) Time: 35.85s
-Epoch 11 [40/241] Loss: 1.1667 (Cls: 1.1081 / Seg: 0.5865) Time: 29.85s
-Epoch 11 [60/241] Loss: 1.1694 (Cls: 1.1107 / Seg: 0.5873) Time: 29.91s
-Epoch 11 [80/241] Loss: 1.1736 (Cls: 1.1151 / Seg: 0.5856) Time: 29.92s
-Epoch 11 [100/241] Loss: 1.1726 (Cls: 1.1141 / Seg: 0.5852) Time: 29.87s
-Epoch 11 [120/241] Loss: 1.1711 (Cls: 1.1126 / Seg: 0.5848) Time: 29.89s
-Epoch 11 [140/241] Loss: 1.1665 (Cls: 1.1081 / Seg: 0.5842) Time: 29.94s
-Epoch 11 [160/241] Loss: 1.1671 (Cls: 1.1088 / Seg: 0.5839) Time: 29.85s
-Epoch 11 [180/241] Loss: 1.1591 (Cls: 1.1007 / Seg: 0.5840) Time: 30.01s
-Epoch 11 [200/241] Loss: 1.1562 (Cls: 1.0979 / Seg: 0.5834) Time: 29.91s
-Epoch 11 [220/241] Loss: 1.1534 (Cls: 1.0951 / Seg: 0.5830) Time: 29.88s
-Epoch 11 [240/241] Loss: 1.1511 (Cls: 1.0928 / Seg: 0.5827) Time: 29.89s
-Epoch 11 [241/241] Loss: 1.1511 (Cls: 1.0929 / Seg: 0.5826) Time: 1.51s
-Train Epoch 11 Summary => Loss: 1.1511, Accuracy: 0.3838, MacroF1: 0.3665
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.2598, Accuracy: 0.1961, BalancedAcc: 0.4330, MacroPrecision: 0.1230, MacroRecall: 0.4330, MacroF1: 0.1904
-Validation (patient-level, n=52) => Acc: 0.2115, BalancedAcc: 0.4630, MacroPrecision: 0.1334, MacroRecall: 0.4630, MacroF1: 0.2070
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  0               26              47              
-Y:Small Cell      0               5               7               
-Y:Squamous        0               2               15              
-
-
-[dapt] Epoch 11 Summary => TrainLoss: 1.1511, TrainMacroF1: 0.3665, ValMacroF1(patient): 0.2070/0.2666 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.2115/0.4487, balanced_accuracy 0.4630/0.3780, macro_precision 0.1334/0.2253, macro_recall 0.4630/0.3780, macro_f1 0.2070/0.2666
-
---- dapt Epoch 12/20 | lr=5.46e-05 ---
-Epoch 12 [20/241] Loss: 1.2184 (Cls: 1.1604 / Seg: 0.5808) Time: 34.93s
-Epoch 12 [40/241] Loss: 1.1659 (Cls: 1.1080 / Seg: 0.5796) Time: 29.91s
-Epoch 12 [60/241] Loss: 1.1614 (Cls: 1.1034 / Seg: 0.5801) Time: 29.83s
-Epoch 12 [80/241] Loss: 1.1591 (Cls: 1.1011 / Seg: 0.5798) Time: 29.89s
-Epoch 12 [100/241] Loss: 1.1467 (Cls: 1.0888 / Seg: 0.5792) Time: 29.88s
-Epoch 12 [120/241] Loss: 1.1557 (Cls: 1.0978 / Seg: 0.5797) Time: 29.91s
-Epoch 12 [140/241] Loss: 1.1556 (Cls: 1.0977 / Seg: 0.5792) Time: 29.98s
-Epoch 12 [160/241] Loss: 1.1490 (Cls: 1.0911 / Seg: 0.5788) Time: 29.91s
-Epoch 12 [180/241] Loss: 1.1469 (Cls: 1.0891 / Seg: 0.5786) Time: 29.90s
-Epoch 12 [200/241] Loss: 1.1505 (Cls: 1.0927 / Seg: 0.5784) Time: 29.86s
-Epoch 12 [220/241] Loss: 1.1508 (Cls: 1.0929 / Seg: 0.5784) Time: 29.83s
-Epoch 12 [240/241] Loss: 1.1500 (Cls: 1.0922 / Seg: 0.5780) Time: 29.94s
-Epoch 12 [241/241] Loss: 1.1492 (Cls: 1.0914 / Seg: 0.5779) Time: 1.50s
-Train Epoch 12 Summary => Loss: 1.1492, Accuracy: 0.3734, MacroF1: 0.3375
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.2496, Accuracy: 0.1961, BalancedAcc: 0.4739, MacroPrecision: 0.1340, MacroRecall: 0.4739, MacroF1: 0.2050
-Validation (patient-level, n=52) => Acc: 0.1923, BalancedAcc: 0.4630, MacroPrecision: 0.1331, MacroRecall: 0.4630, MacroF1: 0.2012
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  0               42              31              
-Y:Small Cell      0               10              2               
-Y:Squamous        0               7               10              
-
-
-[dapt] Epoch 12 Summary => TrainLoss: 1.1492, TrainMacroF1: 0.3375, ValMacroF1(patient): 0.2012/0.2355 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.1923/0.3141, balanced_accuracy 0.4630/0.4238, macro_precision 0.1331/0.1800, macro_recall 0.4630/0.4238, macro_f1 0.2012/0.2355
-
---- dapt Epoch 13/20 | lr=4.54e-05 ---
-Epoch 13 [20/241] Loss: 1.1956 (Cls: 1.1381 / Seg: 0.5752) Time: 32.48s
-Epoch 13 [40/241] Loss: 1.1571 (Cls: 1.0996 / Seg: 0.5751) Time: 29.96s
-Epoch 13 [60/241] Loss: 1.1503 (Cls: 1.0928 / Seg: 0.5753) Time: 29.95s
-Epoch 13 [80/241] Loss: 1.1312 (Cls: 1.0737 / Seg: 0.5749) Time: 29.92s
-Epoch 13 [100/241] Loss: 1.1338 (Cls: 1.0764 / Seg: 0.5745) Time: 29.91s
-Epoch 13 [120/241] Loss: 1.1340 (Cls: 1.0765 / Seg: 0.5748) Time: 29.91s
-Epoch 13 [140/241] Loss: 1.1418 (Cls: 1.0843 / Seg: 0.5745) Time: 29.92s
-Epoch 13 [160/241] Loss: 1.1441 (Cls: 1.0866 / Seg: 0.5746) Time: 29.88s
-Epoch 13 [180/241] Loss: 1.1491 (Cls: 1.0917 / Seg: 0.5742) Time: 29.89s
-Epoch 13 [200/241] Loss: 1.1525 (Cls: 1.0951 / Seg: 0.5733) Time: 29.82s
-Epoch 13 [220/241] Loss: 1.1539 (Cls: 1.0966 / Seg: 0.5729) Time: 29.87s
-Epoch 13 [240/241] Loss: 1.1536 (Cls: 1.0963 / Seg: 0.5729) Time: 29.89s
-Epoch 13 [241/241] Loss: 1.1532 (Cls: 1.0959 / Seg: 0.5729) Time: 1.49s
-Train Epoch 13 Summary => Loss: 1.1532, Accuracy: 0.3755, MacroF1: 0.3490
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.0341, Accuracy: 0.5490, BalancedAcc: 0.3937, MacroPrecision: 0.4150, MacroRecall: 0.3937, MacroF1: 0.3821
-Validation (patient-level, n=52) => Acc: 0.5577, BalancedAcc: 0.3824, MacroPrecision: 0.4009, MacroRecall: 0.3824, MacroF1: 0.3639
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  49              21              3               
-Y:Small Cell      6               4               2               
-Y:Squamous        14              0               3               
-
-
-[dapt] Epoch 13 Summary => TrainLoss: 1.1532, TrainMacroF1: 0.3490, ValMacroF1(patient): 0.3639/0.2573 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.5577/0.3205, balanced_accuracy 0.3824/0.4361, macro_precision 0.4009/0.2225, macro_recall 0.3824/0.4361, macro_f1 0.3639/0.2573
-
---- dapt Epoch 14/20 | lr=3.63e-05 ---
-Epoch 14 [20/241] Loss: 1.1339 (Cls: 1.0772 / Seg: 0.5671) Time: 32.57s
-Epoch 14 [40/241] Loss: 1.1291 (Cls: 1.0722 / Seg: 0.5685) Time: 29.90s
-Epoch 14 [60/241] Loss: 1.1259 (Cls: 1.0689 / Seg: 0.5697) Time: 29.89s
-Epoch 14 [80/241] Loss: 1.1238 (Cls: 1.0667 / Seg: 0.5703) Time: 29.88s
-Epoch 14 [100/241] Loss: 1.1212 (Cls: 1.0641 / Seg: 0.5712) Time: 29.91s
-Epoch 14 [120/241] Loss: 1.1236 (Cls: 1.0665 / Seg: 0.5710) Time: 29.93s
-Epoch 14 [140/241] Loss: 1.1287 (Cls: 1.0717 / Seg: 0.5705) Time: 29.93s
-Epoch 14 [160/241] Loss: 1.1215 (Cls: 1.0644 / Seg: 0.5706) Time: 29.95s
-Epoch 14 [180/241] Loss: 1.1186 (Cls: 1.0615 / Seg: 0.5705) Time: 30.21s
-Epoch 14 [200/241] Loss: 1.1302 (Cls: 1.0732 / Seg: 0.5704) Time: 30.66s
-Epoch 14 [220/241] Loss: 1.1352 (Cls: 1.0783 / Seg: 0.5697) Time: 30.50s
-Epoch 14 [240/241] Loss: 1.1345 (Cls: 1.0776 / Seg: 0.5694) Time: 29.92s
-Epoch 14 [241/241] Loss: 1.1348 (Cls: 1.0779 / Seg: 0.5694) Time: 1.49s
-Train Epoch 14 Summary => Loss: 1.1348, Accuracy: 0.4232, MacroF1: 0.3983
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.1226, Accuracy: 0.3235, BalancedAcc: 0.4443, MacroPrecision: 0.4136, MacroRecall: 0.4443, MacroF1: 0.2619
-Validation (patient-level, n=52) => Acc: 0.2885, BalancedAcc: 0.4144, MacroPrecision: 0.2834, MacroRecall: 0.4144, MacroF1: 0.2109
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  20              51              2               
-Y:Small Cell      0               12              0               
-Y:Squamous        7               9               1               
-
-
-[dapt] Epoch 14 Summary => TrainLoss: 1.1348, TrainMacroF1: 0.3983, ValMacroF1(patient): 0.2109/0.2587 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.2885/0.3462, balanced_accuracy 0.4144/0.4199, macro_precision 0.2834/0.2725, macro_recall 0.4144/0.4199, macro_f1 0.2109/0.2587
-
---- dapt Epoch 15/20 | lr=2.77e-05 ---
-Epoch 15 [20/241] Loss: 1.1354 (Cls: 1.0787 / Seg: 0.5677) Time: 32.48s
-Epoch 15 [40/241] Loss: 1.1429 (Cls: 1.0860 / Seg: 0.5691) Time: 29.92s
-Epoch 15 [60/241] Loss: 1.1371 (Cls: 1.0803 / Seg: 0.5678) Time: 29.95s
-Epoch 15 [80/241] Loss: 1.1334 (Cls: 1.0766 / Seg: 0.5683) Time: 30.00s
-Epoch 15 [100/241] Loss: 1.1325 (Cls: 1.0756 / Seg: 0.5683) Time: 30.05s
-Epoch 15 [120/241] Loss: 1.1369 (Cls: 1.0800 / Seg: 0.5689) Time: 29.95s
-Epoch 15 [140/241] Loss: 1.1364 (Cls: 1.0795 / Seg: 0.5692) Time: 29.91s
-Epoch 15 [160/241] Loss: 1.1318 (Cls: 1.0749 / Seg: 0.5691) Time: 29.94s
-Epoch 15 [180/241] Loss: 1.1281 (Cls: 1.0711 / Seg: 0.5695) Time: 29.90s
-Epoch 15 [200/241] Loss: 1.1289 (Cls: 1.0720 / Seg: 0.5688) Time: 29.85s
-Epoch 15 [220/241] Loss: 1.1268 (Cls: 1.0699 / Seg: 0.5690) Time: 30.00s
-Epoch 15 [240/241] Loss: 1.1278 (Cls: 1.0710 / Seg: 0.5686) Time: 30.00s
-Epoch 15 [241/241] Loss: 1.1277 (Cls: 1.0708 / Seg: 0.5685) Time: 1.49s
-Train Epoch 15 Summary => Loss: 1.1277, Accuracy: 0.3942, MacroF1: 0.3822
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 0.9931, Accuracy: 0.5588, BalancedAcc: 0.3531, MacroPrecision: 0.2821, MacroRecall: 0.3531, MacroF1: 0.3081
-Validation (patient-level, n=52) => Acc: 0.5769, BalancedAcc: 0.3634, MacroPrecision: 0.2882, MacroRecall: 0.3634, MacroF1: 0.3177
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  53              20              0               
-Y:Small Cell      8               4               0               
-Y:Squamous        17              0               0               
-
-
-[dapt] Epoch 15 Summary => TrainLoss: 1.1277, TrainMacroF1: 0.3822, ValMacroF1(patient): 0.3177/0.2975 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.5769/0.4744, balanced_accuracy 0.3634/0.3867, macro_precision 0.2882/0.3242, macro_recall 0.3634/0.3867, macro_f1 0.3177/0.2975
-
---- dapt Epoch 16/20 | lr=1.99e-05 ---
-Epoch 16 [20/241] Loss: 1.1305 (Cls: 1.0740 / Seg: 0.5643) Time: 32.30s
-Epoch 16 [40/241] Loss: 1.1337 (Cls: 1.0771 / Seg: 0.5662) Time: 29.87s
-Epoch 16 [60/241] Loss: 1.1272 (Cls: 1.0705 / Seg: 0.5665) Time: 29.86s
-Epoch 16 [80/241] Loss: 1.1176 (Cls: 1.0611 / Seg: 0.5658) Time: 30.00s
-Epoch 16 [100/241] Loss: 1.1221 (Cls: 1.0655 / Seg: 0.5654) Time: 29.94s
-Epoch 16 [120/241] Loss: 1.1264 (Cls: 1.0699 / Seg: 0.5652) Time: 29.90s
-Epoch 16 [140/241] Loss: 1.1348 (Cls: 1.0783 / Seg: 0.5648) Time: 29.89s
-Epoch 16 [160/241] Loss: 1.1282 (Cls: 1.0717 / Seg: 0.5654) Time: 29.93s
-Epoch 16 [180/241] Loss: 1.1262 (Cls: 1.0696 / Seg: 0.5657) Time: 29.93s
-Epoch 16 [200/241] Loss: 1.1215 (Cls: 1.0649 / Seg: 0.5657) Time: 29.91s
-Epoch 16 [220/241] Loss: 1.1249 (Cls: 1.0683 / Seg: 0.5660) Time: 29.86s
-Epoch 16 [240/241] Loss: 1.1243 (Cls: 1.0677 / Seg: 0.5657) Time: 29.88s
-Epoch 16 [241/241] Loss: 1.1240 (Cls: 1.0674 / Seg: 0.5656) Time: 1.50s
-Train Epoch 16 Summary => Loss: 1.1240, Accuracy: 0.4149, MacroF1: 0.4145
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.1523, Accuracy: 0.2059, BalancedAcc: 0.4647, MacroPrecision: 0.3381, MacroRecall: 0.4647, MacroF1: 0.2173
-Validation (patient-level, n=52) => Acc: 0.1731, BalancedAcc: 0.4164, MacroPrecision: 0.2786, MacroRecall: 0.4164, MacroF1: 0.1726
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  3               52              18              
-Y:Small Cell      0               12              0               
-Y:Squamous        2               9               6               
-
-
-[dapt] Epoch 16 Summary => TrainLoss: 1.1240, TrainMacroF1: 0.4145, ValMacroF1(patient): 0.1726/0.2338 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.1731/0.3462, balanced_accuracy 0.4164/0.3981, macro_precision 0.2786/0.2834, macro_recall 0.4164/0.3981, macro_f1 0.1726/0.2338
-
---- dapt Epoch 17/20 | lr=1.30e-05 ---
-Epoch 17 [20/241] Loss: 1.1055 (Cls: 1.0493 / Seg: 0.5617) Time: 32.48s
-Epoch 17 [40/241] Loss: 1.0869 (Cls: 1.0302 / Seg: 0.5670) Time: 29.87s
-Epoch 17 [60/241] Loss: 1.0996 (Cls: 1.0430 / Seg: 0.5666) Time: 29.93s
-Epoch 17 [80/241] Loss: 1.1096 (Cls: 1.0529 / Seg: 0.5668) Time: 29.87s
-Epoch 17 [100/241] Loss: 1.1100 (Cls: 1.0533 / Seg: 0.5672) Time: 29.83s
-Epoch 17 [120/241] Loss: 1.1056 (Cls: 1.0489 / Seg: 0.5673) Time: 29.85s
-Epoch 17 [140/241] Loss: 1.1123 (Cls: 1.0556 / Seg: 0.5670) Time: 29.97s
-Epoch 17 [160/241] Loss: 1.1113 (Cls: 1.0547 / Seg: 0.5666) Time: 29.83s
-Epoch 17 [180/241] Loss: 1.1171 (Cls: 1.0605 / Seg: 0.5664) Time: 29.84s
-Epoch 17 [200/241] Loss: 1.1241 (Cls: 1.0674 / Seg: 0.5668) Time: 29.84s
-Epoch 17 [220/241] Loss: 1.1255 (Cls: 1.0689 / Seg: 0.5663) Time: 29.87s
-Epoch 17 [240/241] Loss: 1.1250 (Cls: 1.0684 / Seg: 0.5659) Time: 29.84s
-Epoch 17 [241/241] Loss: 1.1261 (Cls: 1.0695 / Seg: 0.5660) Time: 1.50s
-Train Epoch 17 Summary => Loss: 1.1261, Accuracy: 0.4149, MacroF1: 0.3755
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.1096, Accuracy: 0.3333, BalancedAcc: 0.4531, MacroPrecision: 0.3913, MacroRecall: 0.4531, MacroF1: 0.3247
-Validation (patient-level, n=52) => Acc: 0.3269, BalancedAcc: 0.4515, MacroPrecision: 0.3721, MacroRecall: 0.4515, MacroF1: 0.3186
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  18              31              24              
-Y:Small Cell      4               7               1               
-Y:Squamous        2               6               9               
-
-
-[dapt] Epoch 17 Summary => TrainLoss: 1.1261, TrainMacroF1: 0.3755, ValMacroF1(patient): 0.3186/0.2697 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.3269/0.3590, balanced_accuracy 0.4515/0.4104, macro_precision 0.3721/0.3130, macro_recall 0.4515/0.4104, macro_f1 0.3186/0.2697
-
---- dapt Epoch 18/20 | lr=7.49e-06 ---
-Epoch 18 [20/241] Loss: 1.1477 (Cls: 1.0916 / Seg: 0.5607) Time: 32.49s
-Epoch 18 [40/241] Loss: 1.1229 (Cls: 1.0666 / Seg: 0.5633) Time: 29.98s
-Epoch 18 [60/241] Loss: 1.1159 (Cls: 1.0596 / Seg: 0.5630) Time: 29.94s
-Epoch 18 [80/241] Loss: 1.1189 (Cls: 1.0626 / Seg: 0.5627) Time: 29.93s
-Epoch 18 [100/241] Loss: 1.1211 (Cls: 1.0647 / Seg: 0.5640) Time: 29.94s
-Epoch 18 [120/241] Loss: 1.1077 (Cls: 1.0513 / Seg: 0.5641) Time: 29.92s
-Epoch 18 [140/241] Loss: 1.1129 (Cls: 1.0565 / Seg: 0.5643) Time: 30.00s
-Epoch 18 [160/241] Loss: 1.1087 (Cls: 1.0523 / Seg: 0.5646) Time: 29.94s
-Epoch 18 [180/241] Loss: 1.1114 (Cls: 1.0549 / Seg: 0.5650) Time: 29.92s
-Epoch 18 [200/241] Loss: 1.1160 (Cls: 1.0595 / Seg: 0.5649) Time: 29.95s
-Epoch 18 [220/241] Loss: 1.1169 (Cls: 1.0604 / Seg: 0.5648) Time: 30.01s
-Epoch 18 [240/241] Loss: 1.1189 (Cls: 1.0624 / Seg: 0.5649) Time: 29.96s
-Epoch 18 [241/241] Loss: 1.1189 (Cls: 1.0624 / Seg: 0.5650) Time: 1.50s
-Train Epoch 18 Summary => Loss: 1.1189, Accuracy: 0.4295, MacroF1: 0.4109
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.0969, Accuracy: 0.4412, BalancedAcc: 0.5197, MacroPrecision: 0.4525, MacroRecall: 0.5197, MacroF1: 0.4053
-Validation (patient-level, n=52) => Acc: 0.3846, BalancedAcc: 0.4224, MacroPrecision: 0.3654, MacroRecall: 0.4224, MacroF1: 0.3298
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  29              30              14              
-Y:Small Cell      3               9               0               
-Y:Squamous        3               7               7               
-
-
-[dapt] Epoch 18 Summary => TrainLoss: 1.1189, TrainMacroF1: 0.4109, ValMacroF1(patient): 0.3298/0.2737 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.3846/0.2949, balanced_accuracy 0.4224/0.4301, macro_precision 0.3654/0.3387, macro_recall 0.4224/0.4301, macro_f1 0.3298/0.2737
-
---- dapt Epoch 19/20 | lr=3.38e-06 ---
-Epoch 19 [20/241] Loss: 1.1110 (Cls: 1.0543 / Seg: 0.5677) Time: 46.37s
-Epoch 19 [40/241] Loss: 1.1139 (Cls: 1.0572 / Seg: 0.5673) Time: 44.64s
-Epoch 19 [60/241] Loss: 1.1249 (Cls: 1.0682 / Seg: 0.5670) Time: 29.83s
-Epoch 19 [80/241] Loss: 1.1284 (Cls: 1.0718 / Seg: 0.5652) Time: 34.50s
-Epoch 19 [100/241] Loss: 1.1304 (Cls: 1.0739 / Seg: 0.5656) Time: 43.28s
-Epoch 19 [120/241] Loss: 1.1289 (Cls: 1.0724 / Seg: 0.5652) Time: 39.13s
-Epoch 19 [140/241] Loss: 1.1256 (Cls: 1.0690 / Seg: 0.5658) Time: 43.68s
-Epoch 19 [160/241] Loss: 1.1318 (Cls: 1.0752 / Seg: 0.5657) Time: 42.35s
-Epoch 19 [180/241] Loss: 1.1289 (Cls: 1.0723 / Seg: 0.5658) Time: 41.41s
-Epoch 19 [200/241] Loss: 1.1297 (Cls: 1.0732 / Seg: 0.5653) Time: 42.65s
-Epoch 19 [220/241] Loss: 1.1311 (Cls: 1.0746 / Seg: 0.5653) Time: 43.67s
-Epoch 19 [240/241] Loss: 1.1298 (Cls: 1.0733 / Seg: 0.5649) Time: 30.78s
-Epoch 19 [241/241] Loss: 1.1300 (Cls: 1.0735 / Seg: 0.5649) Time: 1.56s
-Train Epoch 19 Summary => Loss: 1.1300, Accuracy: 0.4274, MacroF1: 0.4217
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.0873, Accuracy: 0.3824, BalancedAcc: 0.4295, MacroPrecision: 0.3851, MacroRecall: 0.4295, MacroF1: 0.3477
-Validation (patient-level, n=52) => Acc: 0.3269, BalancedAcc: 0.3584, MacroPrecision: 0.3214, MacroRecall: 0.3584, MacroF1: 0.2939
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  25              26              22              
-Y:Small Cell      6               5               1               
-Y:Squamous        3               5               9               
-
-
-[dapt] Epoch 19 Summary => TrainLoss: 1.1300, TrainMacroF1: 0.4217, ValMacroF1(patient): 0.2939/0.3141 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.3269/0.3462, balanced_accuracy 0.3584/0.4107, macro_precision 0.3214/0.3529, macro_recall 0.3584/0.4107, macro_f1 0.2939/0.3141
-
---- dapt Epoch 20/20 | lr=8.51e-07 ---
-Epoch 20 [20/241] Loss: 1.1492 (Cls: 1.0928 / Seg: 0.5643) Time: 36.09s
-Epoch 20 [40/241] Loss: 1.1260 (Cls: 1.0694 / Seg: 0.5656) Time: 38.17s
-Epoch 20 [60/241] Loss: 1.1168 (Cls: 1.0604 / Seg: 0.5639) Time: 34.81s
-Epoch 20 [80/241] Loss: 1.1083 (Cls: 1.0521 / Seg: 0.5627) Time: 33.23s
-Epoch 20 [100/241] Loss: 1.1167 (Cls: 1.0604 / Seg: 0.5633) Time: 33.17s
-Epoch 20 [120/241] Loss: 1.1144 (Cls: 1.0580 / Seg: 0.5638) Time: 36.40s
-Epoch 20 [140/241] Loss: 1.1130 (Cls: 1.0566 / Seg: 0.5640) Time: 42.25s
-Epoch 20 [160/241] Loss: 1.1146 (Cls: 1.0582 / Seg: 0.5642) Time: 44.95s
-Epoch 20 [180/241] Loss: 1.1105 (Cls: 1.0541 / Seg: 0.5642) Time: 44.31s
-Epoch 20 [200/241] Loss: 1.1197 (Cls: 1.0633 / Seg: 0.5644) Time: 46.19s
-Epoch 20 [220/241] Loss: 1.1205 (Cls: 1.0641 / Seg: 0.5640) Time: 46.36s
-Epoch 20 [240/241] Loss: 1.1203 (Cls: 1.0639 / Seg: 0.5640) Time: 43.48s
-Epoch 20 [241/241] Loss: 1.1201 (Cls: 1.0637 / Seg: 0.5640) Time: 1.50s
-Train Epoch 20 Summary => Loss: 1.1201, Accuracy: 0.4336, MacroF1: 0.4074
-
-Starting validation...
-Validation (volume-level, n=102) => Loss: 1.0915, Accuracy: 0.3333, BalancedAcc: 0.4286, MacroPrecision: 0.3642, MacroRecall: 0.4286, MacroF1: 0.3138
-Validation (patient-level, n=52) => Acc: 0.3269, BalancedAcc: 0.4424, MacroPrecision: 0.3468, MacroRecall: 0.4424, MacroF1: 0.3116
-VRAM Usage - Allocated: 0.82 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  18              26              29              
-Y:Small Cell      6               4               2               
-Y:Squamous        2               3               12              
-
-
-[dapt] Epoch 20 Summary => TrainLoss: 1.1201, TrainMacroF1: 0.4074, ValMacroF1(patient): 0.3116/0.3117 (cur/roll3)
-[dapt] Patient current vs rolling-3: accuracy 0.3269/0.3462, balanced_accuracy 0.4424/0.4077, macro_precision 0.3468/0.3445, macro_recall 0.4424/0.4077, macro_f1 0.3116/0.3117
-
-Starting validation...
-Validation (volume-level, n=106) => Loss: 1.0242, Accuracy: 0.5849, BalancedAcc: 0.3752, MacroPrecision: 0.3801, MacroRecall: 0.3752, MacroF1: 0.3771
-Validation (patient-level, n=53) => Acc: 0.5849, BalancedAcc: 0.3752, MacroPrecision: 0.3801, MacroRecall: 0.3752, MacroF1: 0.3771
-VRAM Usage - Allocated: 0.35 GB, Reserved: 53.48 GB
-
-Confusion Matrix (Rows: Actual Class, Columns: Predicted Class):
-True \ Pred       Adenocarcinoma  Small Cell      Squamous        
-Y:Adenocarcinoma  56              6               14              
-Y:Small Cell      10              2               0               
-Y:Squamous        12              2               4               
-
-
-Traceback (most recent call last):
-  File "/home/hansstem/SCLC-Classification/main.py", line 1333, in <module>
-    main()
-  File "/home/hansstem/SCLC-Classification/main.py", line 1129, in main
-    _run_test_inference(
-  File "/home/hansstem/SCLC-Classification/main.py", line 238, in _run_test_inference
-    _save_inference_probabilities(output_dir, model_type, prob_payload, logger, suffix=prob_file_suffix)
-  File "/home/hansstem/SCLC-Classification/main.py", line 89, in _save_inference_probabilities
-    json.dump(payload, f, indent=2)
-  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/json/__init__.py", line 179, in dump
-    for chunk in iterable:
-                 ^^^^^^^^
-  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/json/encoder.py", line 432, in _iterencode
-    yield from _iterencode_dict(o, _current_indent_level)
-  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/json/encoder.py", line 406, in _iterencode_dict
-    yield from chunks
-  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/json/encoder.py", line 326, in _iterencode_list
-    yield from chunks
-  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/json/encoder.py", line 406, in _iterencode_dict
-    yield from chunks
-  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/json/encoder.py", line 439, in _iterencode
-    o = _default(o)
-        ^^^^^^^^^^^
-  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/json/encoder.py", line 180, in default
-    raise TypeError(f'Object of type {o.__class__.__name__} '
-TypeError: Object of type Tensor is not JSON serializable

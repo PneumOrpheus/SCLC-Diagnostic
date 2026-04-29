@@ -537,7 +537,7 @@ def make_class_distribution(
         try:
             import pandas as pd  # local import — pandas isn't required elsewhere
             df = pd.read_csv(biglunge_csv)
-            from data.data_loader import BIGLUNGE_CLASS_MAP
+            from sclc.data.loaders import BIGLUNGE_CLASS_MAP
             for _, row in df.iterrows():
                 grp = str(row.get("MorphologicalGroup", "")).strip()
                 if grp in BIGLUNGE_CLASS_MAP:
@@ -547,7 +547,7 @@ def make_class_distribution(
 
     # Lung-PET-CT-Dx: count folders by -A / -B / -G letter.
     if os.path.isdir(lung_pet_dir):
-        from data.data_loader import CLASS_MAP
+        from sclc.data.loaders import CLASS_MAP
         for entry in os.listdir(lung_pet_dir):
             if not os.path.isdir(os.path.join(lung_pet_dir, entry)):
                 continue
@@ -676,9 +676,9 @@ def make_mil_attention(
     try:
         import torch  # local import — heavy
         from torch.utils.data import DataLoader
-        from data.dataset_mil import create_dataset_mil_bag
-        from training.train_mil import simple_collate_fn_mil
-        from model_selection import MILResNet50Classifier
+        from sclc.data.dataset_mil import create_dataset_mil_bag
+        from sclc.training.train_mil import simple_collate_fn_mil
+        from sclc.models import MILResNet50Classifier
     except ImportError as e:
         print(f"[mil_attention] missing dependency: {e}")
         return None

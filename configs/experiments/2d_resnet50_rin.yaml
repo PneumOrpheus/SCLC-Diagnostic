@@ -21,7 +21,7 @@ checkpoints:
   initial_checkpoint: ""
   model_checkpoint: ""
   checkpoint_dir: /home/data/trained_models
-  output_dir: output
+  output_dir: results/output
 
 training:
   dapt_epochs: 30

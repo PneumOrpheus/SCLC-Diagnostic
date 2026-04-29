@@ -48,19 +48,6 @@ def _load_labels(csv_path: str) -> Dict[str, str]:
     return out
 
 
-def _normalize_class(group: str) -> str:
-    """Return one of {'Adenocarcinoma','Small Cell','Squamous','Other'}."""
-    g = group.strip().lower()
-    if "adeno" in g:
-        return "Adenocarcinoma"
-    if "small" in g and "cell" in g:
-        return "Small Cell"
-    if "squamous" in g or "plateepit" in g:
-        return "Squamous"
-    if "småcellet" in g:
-        return "Small Cell"
-    return "Other"
-
 
 def _connected_components(mask: np.ndarray, min_voxels: int) -> Tuple[int, List[int], int]:
     """Return (n_large_cc, sorted_sizes, total_nonzero_voxels)."""
@@ -100,12 +87,11 @@ def audit(
         if pid not in labels:
             continue
         mask_path = d / f"{pid}{tumor_mask_suffix}"
-        cls_str = _normalize_class(labels[pid])
+        cls_str = labels[pid]
         if not mask_path.exists():
             rows.append({
                 "patient_id": pid,
-                "class": cls_str,
-                "raw_label": labels[pid],
+                "class": labels[pid],
                 "mask_present": False,
                 "n_components_large": 0,
                 "component_sizes": "",
@@ -121,8 +107,7 @@ def audit(
         n, sizes, total = _connected_components(arr, min_component_voxels)
         rows.append({
             "patient_id": pid,
-            "class": cls_str,
-            "raw_label": labels[pid],
+            "class": labels[pid],
             "mask_present": True,
             "n_components_large": n,
             "component_sizes": ";".join(str(s) for s in sizes),
