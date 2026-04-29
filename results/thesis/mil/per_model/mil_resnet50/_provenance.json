@@ -1,0 +1,40 @@
+{
+  "model_type": "mil_resnet50",
+  "pipeline": "mil",
+  "generated_at": "2026-04-29T12:04:27",
+  "metrics_jsonl_source": "output/mil/mil_resnet50/metrics.jsonl",
+  "canonical_dapt_run": {
+    "n_epochs": 12,
+    "first_timestamp": "2026-04-28T22:56:36",
+    "last_timestamp": "2026-04-28T23:14:40",
+    "first_epoch": 1,
+    "last_epoch": 12,
+    "peak_val_macro_f1_raw": 0.548611111111111,
+    "peak_val_macro_f1_raw_epoch": 5,
+    "peak_val_macro_f1_rolling": 0.4641124893428225,
+    "peak_val_macro_f1_rolling_epoch": 12
+  },
+  "canonical_finetune_run": {
+    "n_epochs": 16,
+    "first_timestamp": "2026-04-29T10:49:35",
+    "last_timestamp": "2026-04-29T11:58:33",
+    "first_epoch": 1,
+    "last_epoch": 16,
+    "peak_val_macro_f1_raw": 0.4584023777584892,
+    "peak_val_macro_f1_raw_epoch": 8,
+    "peak_val_macro_f1_rolling": 0.43173598045945155,
+    "peak_val_macro_f1_rolling_epoch": 6
+  },
+  "dapt_test_timestamp": "2026-04-28T23:14:48",
+  "biglunge_test_timestamp": "2026-04-29T12:03:21",
+  "inference_probs_sources": {
+    "dapt_test": "/home/hansstem/SCLC-Classification/output/mil/mil_resnet50/mil_resnet50_2026-04-28_23-14-48_dapt_inference_probabilities.json",
+    "biglunge_test": "/home/hansstem/SCLC-Classification/output/mil/mil_resnet50/mil_resnet50_2026-04-29_12-03-21_inference_probabilities.json"
+  },
+  "checkpoints": {
+    "dapt_pbest_raw": "/home/data/trained_models/mil/mil_resnet50/Apr_28_04_dapt_pbest_raw.pth",
+    "dapt_pbest_roll": "/home/data/trained_models/mil/mil_resnet50/Apr_28_04_dapt_pbest_roll.pth",
+    "finetune_pbest_raw": "/home/data/trained_models/mil/mil_resnet50/Apr_29_04_finetune_pbest_raw.pth",
+    "finetune_pbest_roll": "/home/data/trained_models/mil/mil_resnet50/Apr_29_04_finetune_pbest_roll.pth"
+  }
+}

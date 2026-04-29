@@ -1,9 +1,23 @@
-venv/*
-NIFTI_data/*
-anaconda3/*
-output/*
-models/__pycache__/*
-training/__pycache__/*
+# Python
+__pycache__/
 *.pyc
+*.egg-info/
+.pytest_cache/
+
+# Environments
+venv/
+.venv/
+anaconda3/
+
+# Model weights and large local data
 *.pth
+NIFTI_data/
+
+# Training artifacts (raw outputs, run logs, archived results)
+results/output/
+results/runs/
+results/thesis/_archive/
+
+# Internal-only docs
 CLAUDE.md
+.claude/

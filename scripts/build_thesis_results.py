@@ -83,7 +83,7 @@ PIPELINES: Dict[str, List[str]] = {
         "densenet121_2d", "densenet121_2d_rin",
         "swin_tiny_2d",
     ],
-    "mil": ["mil_resnet50"],
+    "mil": ["mil_resnet50", "mil_swin_tiny"],
     "3d":  ["swin_unetr"],
 }
 
@@ -96,6 +96,7 @@ MODEL_LABEL: Dict[str, str] = {
     "resnet50_2d_rin":     "ResNet-50 (2D, RadImageNet)",
     "swin_tiny_2d":        "Swin-Tiny (2D, RadImageNet)",
     "mil_resnet50":        "MIL ResNet-50",
+    "mil_swin_tiny":       "MIL Swin-Tiny (RadImageNet)",
     "swin_unetr":          "SwinUNETR (3D)",
 }
 
@@ -114,12 +115,13 @@ MODEL_COLORS: Dict[str, str] = {
     "densenet121_2d_rin":  "#86C77B",
     "swin_tiny_2d":        "#E15759",
     "mil_resnet50":        "#76B7B2",
+    "mil_swin_tiny":       "#9C755F",
     "swin_unetr":          "#B07AA1",
 }
 
 REPO_ROOT = Path(_REPO)
-OUTPUT_ROOT = REPO_ROOT / "output"
-RESULTS_ROOT = REPO_ROOT / "thesis_results"
+OUTPUT_ROOT = REPO_ROOT / "results" / "output"
+RESULTS_ROOT = REPO_ROOT / "results" / "thesis"
 CHECKPOINT_ROOT = Path("/home/data/trained_models")
 
 

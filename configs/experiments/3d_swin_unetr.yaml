@@ -16,7 +16,7 @@ checkpoints:
   initial_checkpoint: /home/data/pre_trained_models/model_swin_unetr_btcv_segmentation_v1.pt
   model_checkpoint: ""
   checkpoint_dir: /home/data/trained_models
-  output_dir: output
+  output_dir: results/output
 
 training:
   # Match the 2D recipe (was 30 — flaws.md 3.5: DAPT memorizes past ep 8-10

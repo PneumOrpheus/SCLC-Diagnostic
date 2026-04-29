@@ -1,0 +1,27 @@
+{
+  "num_samples": 106,
+  "class_names": [
+    "Adenocarcinoma",
+    "Small Cell",
+    "Squamous"
+  ],
+  "mean_probability_per_class": {
+    "Adenocarcinoma": 0.3837397528706856,
+    "Small Cell": 0.3011904566917779,
+    "Squamous": 0.3150697907186904
+  },
+  "predicted_class_counts": {
+    "Adenocarcinoma": 78,
+    "Small Cell": 10,
+    "Squamous": 18
+  },
+  "predicted_class_fractions": {
+    "Adenocarcinoma": 0.7358490566037735,
+    "Small Cell": 0.09433962264150944,
+    "Squamous": 0.16981132075471697
+  },
+  "samples": [
+    {
+      "sample_index": 0,
+      "patient_id": "Lung_Dx-A0049",
+      "volume_id": 

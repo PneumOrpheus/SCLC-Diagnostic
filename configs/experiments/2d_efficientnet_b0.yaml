@@ -16,7 +16,7 @@ checkpoints:
   initial_checkpoint: ""
   model_checkpoint: ""
   checkpoint_dir: /home/data/trained_models
-  output_dir: output
+  output_dir: results/output
 
 training:
   # 20 epochs gives the cosine schedule room to find the val peak. Old
