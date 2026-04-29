@@ -1,0 +1,33 @@
+<frozen importlib._bootstrap_external>:1301: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+/home/hansstem/anaconda3/envs/sclc/lib/python3.12/site-packages/monai/utils/deprecate_utils.py:321: FutureWarning: monai.transforms.spatial.dictionary Orientationd.__init__:labels: Current default value of argument `labels=(('L', 'R'), ('P', 'A'), ('I', 'S'))` was changed in version None from `labels=(('L', 'R'), ('P', 'A'), ('I', 'S'))` to `labels=None`. Default value changed to None meaning that the transform now uses the 'space' of a meta-tensor, if applicable, to determine appropriate axis labels.
+  warn_deprecated(argname, msg, warning_category)
+Initialized mil_resnet50 Classifier. Total Params: 27,706,308
+Warning: Unknown morphological group 'Non-small cell carcinoma' for patient patient_020843 — skipping
+[3D big_lunge] Excluding 3 truncated-lung-mask patients: ['patient_022269', 'patient_057069', 'patient_091821']
+Found 302 patients with labels.
+Split 'train': 211 patients.
+  211 images, class distribution: {2: 71, 0: 73, 1: 67}
+Split 'val': 45 patients.
+  45 images, class distribution: {0: 16, 2: 15, 1: 14}
+Split 'test': 46 patients.
+  46 images, class distribution: {1: 14, 2: 16, 0: 16}
+[MIL bag big_lunge train] 211 patients (dropped no-lung-mask=0, dupe-patient=0, truncated-lung=0), classes={2: 71, 0: 73, 1: 67}
+[MIL bag big_lunge val] 45 patients (dropped no-lung-mask=0, dupe-patient=0, truncated-lung=0), classes={0: 16, 2: 15, 1: 14}
+[MIL bag big_lunge test] 46 patients (dropped no-lung-mask=0, dupe-patient=0, truncated-lung=0), classes={1: 14, 2: 16, 0: 16}
+[MIL bag] PersistentDataset cache_dir='/home/hansstem/.cache/monai_biglunge_mil/img384_bag32/train'
+[MIL bag] PersistentDataset cache_dir='/home/hansstem/.cache/monai_biglunge_mil/img384_bag32/val'
+[MIL bag] PersistentDataset cache_dir='/home/hansstem/.cache/monai_biglunge_mil/img384_bag32/test'
+[WRS big_lunge] counts {0=73, 1=67, 2=71} | oversample_factor=1.09 (max_weight/min_weight)
+[big_lunge] Train class distribution: {2: 71, 0: 73, 1: 67}
+
+[MIL] Starting validation...
+[MIL] Val (bag-level, n=46) => Loss: 1.1079, Acc: 0.3478, BalancedAcc: 0.3542, MacroPrecision: 0.3504, MacroRecall: 0.3542, MacroF1: 0.3435
+
+[MIL] Bag-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  4               6               6               
+Y:Small Cell      5               7               2               
+Y:Squamous        3               8               5               
+
+[MIL] Attention (n_bags=46): entropy=0.985 (1.0=uniform, 0.0=one-hot), top1_mass=0.050, top3_mass=0.142
+[MIL] VRAM - Allocated: 0.28 GB, Reserved: 3.08 GB

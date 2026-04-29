@@ -6,3 +6,4 @@ models/__pycache__/*
 training/__pycache__/*
 *.pyc
 *.pth
+CLAUDE.md

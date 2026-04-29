@@ -1,0 +1,11 @@
+=== Serial MIL-inference + SwinUNETR-full at Wed Apr 29 03:54:33 UTC 2026 ===
+[03:54:33] === START: mil_resnet50_inference ===
+[03:54:33]   cmd: /home/hansstem/anaconda3/envs/sclc/bin/python main.py --mode inference --config configs/experiments/mil_resnet50.yaml --model-checkpoint /home/data/trained_models/mil/mil_resnet50/Apr_28_04_finetune_pbest_raw.pth
+[04:06:21] === DONE:  mil_resnet50_inference ===
+[04:06:21] === START: swin_unetr_full ===
+[04:06:21]   cmd: /home/hansstem/anaconda3/envs/sclc/bin/python main.py --config configs/experiments/3d_swin_unetr.yaml
+[07:43:15] === FAIL swin_unetr_full rc=1 (continuing) ===
+=== ALL DONE at Wed Apr 29 07:43:15 UTC 2026 ===
+=== Rebuilding results table ===
+[report] wrote CSV -> runs/2026-04-28_finetune/results_table.csv  (13 rows)
+[report] wrote MD  -> runs/2026-04-28_finetune/results_table.md

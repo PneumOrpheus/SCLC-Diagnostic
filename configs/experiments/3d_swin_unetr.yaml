@@ -1,0 +1,60 @@
+experiment:
+  name: 3d_swin_unetr
+  notes: >-
+    3D Swin-UNETR (BTCV-pretrained) with auxiliary segmentation loss. DAPT on
+    Lung-PET-CT-Dx, fine-tune on BigLunge.
+
+model_type: swin_unetr
+mode: full
+
+data:
+  dapt_dataset: /home/data/Lung-PET-CT-Dx-Clean
+  finetune_dataset: /home/data/TrainingData
+  finetune_csv: /home/data/TrainingData/patients_parameters.csv
+
+checkpoints:
+  initial_checkpoint: /home/data/pre_trained_models/model_swin_unetr_btcv_segmentation_v1.pt
+  model_checkpoint: ""
+  checkpoint_dir: /home/data/trained_models
+  output_dir: output
+
+training:
+  # Match the 2D recipe (was 30 — flaws.md 3.5: DAPT memorizes past ep 8-10
+  # on the historical no-augs schedule). 20 leaves cosine-decay headroom past
+  # the expected peak.
+  dapt_epochs: 20
+  dapt_lr: 1.0e-4
+  dapt_warmup_epochs: 3
+  dapt_weight_decay: 3.0e-3
+  finetune_epochs: 40
+  finetune_lr: 3.0e-5
+  finetune_warmup_epochs: 2
+  warmup_start_lr: 1.0e-6
+  finetune_backbone_lr_scale: 0.1
+  # Native LP-FT (matches 2D/MIL): freeze SwinUNETR encoder for 5 epochs so
+  # the fresh classifier head learns first, then unfreeze with diff-LR.
+  finetune_freeze_backbone_epochs: 5
+  weight_decay: 1.0e-3
+  batch_size: 2
+  accumulation_steps: 4
+  monitor_rolling_window: 3
+  seg_loss_weight: 0.1
+  # Symmetry with the 2D / MIL pipelines: stronger augs + bag-level mixup
+  # to counter overfitting on the ~26 SCLC train patients. Mixup is
+  # auto-suppressed when seg-aux loss is active (DAPT) so image/mask
+  # desync doesn't corrupt the decoder gradient — see _mixup_3d in
+  # training/train.py. So in practice mixup applies during BigLunge
+  # fine-tune (no seg loss there after the gating fix).
+  strong_augs: true
+  mixup_alpha: 0.2
+
+system:
+  num_workers: 4
+  cache_workers: 4
+  seed: 42
+  disable_amp: false
+  testing: false
+  clear_cache: false
+
+pipeline_3d:
+  depth_size: 128

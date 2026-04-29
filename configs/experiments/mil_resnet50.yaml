@@ -1,0 +1,91 @@
+experiment:
+  name: mil_resnet50
+  notes: >-
+    MIL ResNet50 (torchvision ImageNet-pretrained, 1-channel stem adapted). DAPT
+    on Lung-PET-CT-Dx as whole-slice per-slice classification (tumor-containing
+    slices only, no tumor-centered crop). Fine-tune on BigLunge as attention-MIL
+    over bags of N whole-slice images evenly spaced across the lung mask's
+    axial extent (tumor mask is NOT used at MIL time). See the training +
+    validation pipelines in training/train_mil.py and data/dataset_mil.py.
+
+model_type: mil_resnet50
+mode: full
+
+data:
+  dapt_dataset: /home/data/Lung-PET-CT-Dx-Clean
+  finetune_dataset: /home/data/TrainingData
+  finetune_csv: /home/data/TrainingData/patients_parameters.csv
+
+checkpoints:
+  initial_checkpoint: ""
+  model_checkpoint: ""
+  checkpoint_dir: /home/data/trained_models
+  output_dir: output
+
+training:
+  # DAPT: per-slice whole-slice classification. Previous 30-epoch run hit
+  # train F1=0.99 / val peak 0.61 at ep10 then degraded — classic overfit.
+  # Cut epochs and rely on mixup (+ --strong-augs on CLI) to slow memorization.
+  dapt_epochs: 12
+  dapt_lr: 1.0e-4
+  dapt_warmup_epochs: 3
+  dapt_weight_decay: 3.0e-3
+  # Fine-tune: bag-level MIL on BigLunge. The random-init attention head on top
+  # of a strong backbone caused AMP fp16 overflow in the softmax (NaN loss from
+  # batch 50 of ep1). We now: (a) lower the head LR so early attention logits
+  # stay in range, (b) extend warmup, (c) recommend --disable-amp for the first
+  # run so the fp16 instability is fully ruled out before re-enabling.
+  finetune_epochs: 40
+  finetune_lr: 1.0e-5
+  finetune_warmup_epochs: 3
+  warmup_start_lr: 1.0e-6
+  finetune_backbone_lr_scale: 0.1
+  # Native LP-FT (flaws.md 1.6 fix): replaces the prior two-run hack
+  # (LP phase A + FT phase B). Head trains on a frozen ResNet50 backbone for
+  # 5 epochs, then differential-LR fine-tune resumes for 35 epochs.
+  finetune_freeze_backbone_epochs: 5
+  weight_decay: 1.0e-3
+  # Bag size * B is what sits on the GPU per step; keep batch_size small and
+  # use accumulation_steps to hit a larger effective batch.
+  batch_size: 2
+  accumulation_steps: 4
+  monitor_rolling_window: 3
+  seg_loss_weight: 0.0
+  # MixUp at the bag level: keep on by default as part of the
+  # strong-augs + mixup regularization bundle. The MIL bs=2 derangement fix
+  # (flaws.md 1.4) makes this actually apply on every step.
+  mixup_alpha: 0.2
+  strong_augs: true
+  # Bag-instance dropout: zero a Bernoulli(p) subset of slices per bag at
+  # train time. Forces attention to spread across multiple slices instead
+  # of latching onto one — directly tested via attention entropy / top-k
+  # mass logged each val epoch. 0.15 is a conservative starting point.
+  bag_dropout: 0.15
+
+system:
+  num_workers: 4
+  cache_workers: 4
+  seed: 42
+  disable_amp: false
+  testing: false
+  clear_cache: false
+
+pipeline_mil:
+  # Whole-slice FOV at 1 mm in-plane spacing. 384 preserves ~10 mm tumor
+  # features (~10 px) better than the 224 used by the tumor-crop 2D pipeline.
+  img_size_mil: 384
+  # Bag size. Memory scales linearly with this. 16 had ~16 mm gap between
+  # adjacent bag slices at 2 mm Z-spacing on a 200-slice lung extent — a
+  # 15-20 mm SCLC primary could fall between two bag instances entirely.
+  # 32 halves the gap to ~8 mm, captures essentially all clinically
+  # meaningful tumor sizes, and still fits comfortably on the H100 with
+  # batch_size=2 + AMP.
+  bag_size: 32
+  mil_mode: att
+  mil_trans_blocks: 4
+  mil_trans_dropout: 0.0
+  lung_mask_suffix: _label_lungs.nii.gz
+  # DAPT-side knobs (from the 2D pipeline; applied to whole-slice DAPT).
+  min_tumor_pixels: 100
+  max_slices_per_volume: 8
+  tumor_mask_suffix: _label_tc.nii.gz

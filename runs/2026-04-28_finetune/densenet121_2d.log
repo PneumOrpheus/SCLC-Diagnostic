@@ -1,0 +1,70 @@
+<frozen importlib._bootstrap_external>:1301: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+/home/hansstem/anaconda3/envs/sclc/lib/python3.12/site-packages/monai/utils/deprecate_utils.py:321: FutureWarning: monai.transforms.spatial.dictionary Orientationd.__init__:labels: Current default value of argument `labels=(('L', 'R'), ('P', 'A'), ('I', 'S'))` was changed in version None from `labels=(('L', 'R'), ('P', 'A'), ('I', 'S'))` to `labels=None`. Default value changed to None meaning that the transform now uses the 'space' of a meta-tensor, if applicable, to determine appropriate axis labels.
+  warn_deprecated(argname, msg, warning_category)
+Initialized densenet121_2d Classifier. Total Params: 6,950,659
+Warning: Unknown morphological group 'Non-small cell carcinoma' for patient patient_020843 — skipping
+[3D big_lunge] Excluding 3 truncated-lung-mask patients: ['patient_022269', 'patient_057069', 'patient_091821']
+Found 302 patients with labels.
+Split 'train': 211 patients.
+  211 images, class distribution: {2: 71, 0: 73, 1: 67}
+Split 'val': 45 patients.
+  45 images, class distribution: {0: 16, 2: 15, 1: 14}
+Split 'test': 46 patients.
+  46 images, class distribution: {1: 14, 2: 16, 0: 16}
+[2D big_lunge train] 1510 slices from 196 volumes / 196 patients (dropped: no_mask=3, no_tumor_slices=12), classes={2: 529, 0: 500, 1: 481}
+[2D big_lunge val] 322 slices from 41 volumes / 41 patients (dropped: no_mask=1, no_tumor_slices=3), classes={0: 120, 2: 98, 1: 104}
+[2D big_lunge test] 332 slices from 43 volumes / 43 patients (dropped: no_mask=0, no_tumor_slices=3), classes={1: 99, 2: 118, 0: 115}
+[2D big_lunge] dropped-patient inventory -> /home/hansstem/.cache/monai_biglunge_2d/img224_crop96_mp1/dropped_patients.json
+[2D] PersistentDataset cache_dir='/home/hansstem/.cache/monai_biglunge_2d/img224_crop96_mp1/train'
+[2D] PersistentDataset cache_dir='/home/hansstem/.cache/monai_biglunge_2d/img224_crop96_mp1/val'
+[2D] PersistentDataset cache_dir='/home/hansstem/.cache/monai_biglunge_2d/img224_crop96_mp1/test'
+[WRS big_lunge] counts {0=500, 1=481, 2=529} | oversample_factor=1.10 (max_weight/min_weight)
+[big_lunge] Train class distribution: {2: 529, 0: 500, 1: 481}
+
+--- finetune Epoch 1/40 | lr(backbone/head)=3.00e-06/3.00e-05 ---
+Traceback (most recent call last):
+  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1310, in _try_get_data
+    data = self._data_queue.get(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/multiprocessing/queues.py", line 113, in get
+    if not self._poll(timeout):
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/multiprocessing/connection.py", line 257, in poll
+    return self._poll(timeout)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/multiprocessing/connection.py", line 440, in _poll
+    r = wait([self], timeout)
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/multiprocessing/connection.py", line 1141, in wait
+    timeout = deadline - time.monotonic()
+                         ^^^^^^^^^^^^^^^^
+  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/site-packages/torch/utils/data/_utils/signal_handling.py", line 73, in handler
+    _error_if_any_worker_fails()
+RuntimeError: DataLoader worker (pid 3620064) is killed by signal: Killed. 
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/hansstem/SCLC-Classification/main.py", line 1333, in <module>
+    main()
+  File "/home/hansstem/SCLC-Classification/main.py", line 1241, in main
+    best_finetune_ckpt = run_training_phase(
+                         ^^^^^^^^^^^^^^^^^^^
+  File "/home/hansstem/SCLC-Classification/main.py", line 813, in run_training_phase
+    train_loss, train_macro_f1 = train_fn(
+                                 ^^^^^^^^^
+  File "/home/hansstem/SCLC-Classification/training/train_2d.py", line 157, in train_epoch_2d
+    for idx, batch_data in enumerate(loader):
+                           ^^^^^^^^^^^^^^^^^
+  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 741, in __next__
+    data = self._next_data()
+           ^^^^^^^^^^^^^^^^^
+  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1524, in _next_data
+    idx, data = self._get_data()
+                ^^^^^^^^^^^^^^^^
+  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1483, in _get_data
+    success, data = self._try_get_data()
+                    ^^^^^^^^^^^^^^^^^^^^
+  File "/home/hansstem/anaconda3/envs/sclc/lib/python3.12/site-packages/torch/utils/data/dataloader.py", line 1323, in _try_get_data
+    raise RuntimeError(
+RuntimeError: DataLoader worker (pid(s) 3620064) exited unexpectedly

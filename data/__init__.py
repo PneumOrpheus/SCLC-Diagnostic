@@ -1,23 +1,8 @@
 """
 SCLC Data Module
 ----------------
-Provides data loading and preprocessing utilities for CT scan data.
+Provides data loading helpers for the active 2D / MIL / 3D pipelines.
 """
-
-from .data_preprocessing import (
-    load_nifti_volume,
-    load_numpy_volume,
-    load_volume,
-    clip_hounsfield_units,
-    resample_volume_isotropic,
-    apply_windowing,
-    create_multichannel_ct,
-    normalize_intensity,
-    extract_2d_slice,
-    prepare_tensor_for_model,
-    preprocess_nifti_to_numpy,
-    batch_preprocess_directory,
-)
 
 from .data_loader import (
     create_dataset,
@@ -32,20 +17,6 @@ from .data_loader import (
 )
 
 __all__ = [
-    # Data preprocessing
-    "load_nifti_volume",
-    "load_numpy_volume",
-    "load_volume",
-    "clip_hounsfield_units",
-    "resample_volume_isotropic",
-    "apply_windowing",
-    "create_multichannel_ct",
-    "normalize_intensity",
-    "extract_2d_slice",
-    "prepare_tensor_for_model",
-    "preprocess_nifti_to_numpy",
-    "batch_preprocess_directory",
-    # Dataset helpers
     "create_dataset",
     "get_biglunge_data_list",
     "get_lung_pet_ct_dx_data_list",

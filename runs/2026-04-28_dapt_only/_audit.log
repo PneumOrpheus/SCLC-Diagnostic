@@ -1,0 +1,11 @@
+[audit] wrote CSV -> output/multifocal_audit.csv (306 rows)
+
+=== Multifocal audit summary ===
+Class               N  NoMask  Empty  Mono  Multi  %Multi  MedComp  P95Comp   MedSize   P95Size
+Adenocarcinoma    107       2      7    29     65   69.1%      2.0      9.0     69784    571469
+Small Cell         96       1      6    20     67   77.0%      3.0      8.0     49750    455785
+Squamous          103       1      4    30     65   68.4%      2.0      8.0    107365    681475
+
+Columns: NoMask=missing _label_tc.nii.gz; Empty=mask exists but all-zero;
+         Mono=1 large component; Multi>=2; sizes are voxel counts.
+[audit] wrote figure -> figures/fig_multifocal_distribution.pdf

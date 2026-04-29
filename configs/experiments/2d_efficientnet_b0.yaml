@@ -1,0 +1,63 @@
+experiment:
+  name: 2d_efficientnet_b0
+  notes: >-
+    2D EfficientNet-B0 (ImageNet-pretrained, 1-channel adapted) per tumor slice.
+    DAPT on Lung-PET-CT-Dx, fine-tune on BigLunge.
+
+model_type: efficientnet_b0_2d
+mode: full
+
+data:
+  dapt_dataset: /home/data/Lung-PET-CT-Dx-Clean
+  finetune_dataset: /home/data/TrainingData
+  finetune_csv: /home/data/TrainingData/patients_parameters.csv
+
+checkpoints:
+  initial_checkpoint: ""
+  model_checkpoint: ""
+  checkpoint_dir: /home/data/trained_models
+  output_dir: output
+
+training:
+  # 20 epochs gives the cosine schedule room to find the val peak. Old
+  # 30-ep run peaked ~ep 26 (val 0.77); cutting to 20 sacrifices ~3pp at
+  # peak for ~33% less wall time. flaws.md 3.5 noted ep 8-10 peak with the
+  # earlier (no-augs) recipe; the strong-augs+mixup recipe peaks later.
+  dapt_epochs: 30
+  dapt_lr: 1.0e-4
+  dapt_warmup_epochs: 3
+  dapt_weight_decay: 3.0e-3
+  finetune_epochs: 40
+  finetune_lr: 3.0e-5
+  finetune_warmup_epochs: 2
+  warmup_start_lr: 1.0e-6
+  finetune_backbone_lr_scale: 0.1
+  # Native LP-FT (flaws.md 1.6 fix): head trains alone on a frozen backbone
+  # for the first 5 epochs, then differential-LR fine-tune for the remaining 35.
+  finetune_freeze_backbone_epochs: 5
+  weight_decay: 1.0e-3
+  batch_size: 64
+  accumulation_steps: 1
+  monitor_rolling_window: 3
+  seg_loss_weight: 0.0
+  # Strong-augs + MixUp regularization bundle. Kept on by default — see
+  # docs/2d_augmentations.md and flaws.md.
+  strong_augs: true
+  mixup_alpha: 0.2
+
+system:
+  num_workers: 4
+  cache_workers: 4
+  seed: 42
+  disable_amp: false
+  testing: false
+  clear_cache: false
+
+pipeline_2d:
+  img_size_2d: 224
+  max_slices_per_volume: 8
+  tumor_mask_suffix: _label_tc.nii.gz
+  # min_tumor_pixels=1 keeps every patient that has *any* tumor-mask voxels
+  # (algorithmic BigLunge masks can be tiny). Higher values silently drop
+  # patients. flaws.md 1.3.
+  min_tumor_pixels: 1

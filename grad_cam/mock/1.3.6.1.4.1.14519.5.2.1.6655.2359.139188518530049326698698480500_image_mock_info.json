@@ -1,0 +1,25 @@
+{
+  "patient_dir": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0217",
+  "image_path": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0217/1.3.6.1.4.1.14519.5.2.1.6655.2359.139188518530049326698698480500_image.nii.gz",
+  "mask_path": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0217/1.3.6.1.4.1.14519.5.2.1.6655.2359.139188518530049326698698480500_mask.nii.gz",
+  "seed": 42,
+  "alpha": 0.4,
+  "shape": [
+    512,
+    512,
+    270
+  ],
+  "stats": {
+    "cam_mean": 0.011304949410259724,
+    "cam_max": 1.0,
+    "cam_q95": 0.03251906856894493,
+    "mask_voxels": 94081.0,
+    "blobs": 1
+  },
+  "outputs": {
+    "mock_gradcam": "/home/hansstem/SCLC-Classification/grad_cam/mock/1.3.6.1.4.1.14519.5.2.1.6655.2359.139188518530049326698698480500_image_mock_gradcam.nii.gz",
+    "mock_gradcam_rgb": "/home/hansstem/SCLC-Classification/grad_cam/mock/1.3.6.1.4.1.14519.5.2.1.6655.2359.139188518530049326698698480500_image_mock_gradcam_rgb.nii.gz",
+    "mock_overlay_rgb": "/home/hansstem/SCLC-Classification/grad_cam/mock/1.3.6.1.4.1.14519.5.2.1.6655.2359.139188518530049326698698480500_image_mock_overlay_rgb.nii.gz",
+    "ct_norm": "/home/hansstem/SCLC-Classification/grad_cam/mock/1.3.6.1.4.1.14519.5.2.1.6655.2359.139188518530049326698698480500_image_ct_norm.nii.gz"
+  }
+}

@@ -1,0 +1,558 @@
+<frozen importlib._bootstrap_external>:1301: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+/home/hansstem/anaconda3/envs/sclc/lib/python3.12/site-packages/monai/utils/deprecate_utils.py:321: FutureWarning: monai.transforms.spatial.dictionary Orientationd.__init__:labels: Current default value of argument `labels=(('L', 'R'), ('P', 'A'), ('I', 'S'))` was changed in version None from `labels=(('L', 'R'), ('P', 'A'), ('I', 'S'))` to `labels=None`. Default value changed to None meaning that the transform now uses the 'space' of a meta-tensor, if applicable, to determine appropriate axis labels.
+  warn_deprecated(argname, msg, warning_category)
+Initialized densenet121_2d Classifier. Total Params: 6,950,659
+Split 'train': 242 patients.
+  482 images (482 w/ masks), class distribution: {0: 341, 2: 85, 1: 56}
+Split 'val': 52 patients.
+  102 images (102 w/ masks), class distribution: {0: 73, 1: 12, 2: 17}
+Split 'test': 53 patients.
+  106 images (106 w/ masks), class distribution: {0: 76, 1: 12, 2: 18}
+[2D lung_pet_ct_dx train] 3730 slices from 482 volumes / 242 patients (dropped: no_mask=0, no_tumor_slices=0), classes={0: 2608, 2: 680, 1: 442}
+[2D lung_pet_ct_dx val] 786 slices from 101 volumes / 52 patients (dropped: no_mask=0, no_tumor_slices=1), classes={0: 554, 1: 96, 2: 136}
+[2D lung_pet_ct_dx test] 834 slices from 106 volumes / 53 patients (dropped: no_mask=0, no_tumor_slices=0), classes={0: 594, 1: 96, 2: 144}
+[2D lung_pet_ct_dx] dropped-patient inventory -> /home/hansstem/.cache/monai_lung_pet_ct_clean_2d/img224_crop96_mp1/dropped_patients.json
+[2D] PersistentDataset cache_dir='/home/hansstem/.cache/monai_lung_pet_ct_clean_2d/img224_crop96_mp1/train'
+[2D] PersistentDataset cache_dir='/home/hansstem/.cache/monai_lung_pet_ct_clean_2d/img224_crop96_mp1/val'
+[2D] PersistentDataset cache_dir='/home/hansstem/.cache/monai_lung_pet_ct_clean_2d/img224_crop96_mp1/test'
+Applying WeightedRandomSampler for lung_pet_ct_dx
+[lung_pet_ct_dx] Train class distribution: {0: 2608, 2: 680, 1: 442}
+
+--- dapt Epoch 1/20 | lr=1.00e-06 ---
+[2D] Epoch 1 [50/59] Loss: 1.1566 Time: 65.22s
+[2D] Epoch 1 [59/59] Loss: 1.1580 Time: 5.05s
+[2D] Train Epoch 1 (slice-level) => Loss: 1.1580, Acc: 0.3161, MacroF1: 0.2654
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.4046, MacroF1: 0.2828
+[2D] Val (volume-level, n=101) => Loss: 1.0523, Acc: 0.4158, BalancedAcc: 0.2639, MacroPrecision: 0.2508, MacroRecall: 0.2639, MacroF1: 0.2373
+[2D] Val (patient-level, n=52) => Acc: 0.4038, BalancedAcc: 0.2357, MacroPrecision: 0.2309, MacroRecall: 0.2357, MacroF1: 0.2208
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  39              33              0               
+Y:Small Cell      9               3               0               
+Y:Squamous        9               8               0               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  20              17              0               
+Y:Small Cell      5               1               0               
+Y:Squamous        6               3               0               
+
+[dapt] Epoch 1 Summary => TrainLoss: 1.1580, TrainMacroF1: 0.2654, ValMacroF1(patient): 0.2208/0.2208 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.4038/0.4038, balanced_accuracy 0.2357/0.2357, macro_precision 0.2309/0.2309, macro_recall 0.2357/0.2357, macro_f1 0.2208/0.2208
+
+--- dapt Epoch 2/20 | lr=1.73e-05 ---
+[2D] Epoch 2 [50/59] Loss: 1.0870 Time: 23.95s
+[2D] Epoch 2 [59/59] Loss: 1.0807 Time: 2.76s
+[2D] Train Epoch 2 (slice-level) => Loss: 1.0807, Acc: 0.4303, MacroF1: 0.4138
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.5636, MacroF1: 0.4522
+[2D] Val (volume-level, n=101) => Loss: 0.9639, Acc: 0.5941, BalancedAcc: 0.4820, MacroPrecision: 0.4563, MacroRecall: 0.4820, MacroF1: 0.4587
+[2D] Val (patient-level, n=52) => Acc: 0.6731, BalancedAcc: 0.5951, MacroPrecision: 0.5937, MacroRecall: 0.5951, MacroF1: 0.5795
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  48              14              10              
+Y:Small Cell      5               3               4               
+Y:Squamous        5               3               9               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  27              8               2               
+Y:Small Cell      3               3               0               
+Y:Squamous        4               0               5               
+
+[dapt] Epoch 2 Summary => TrainLoss: 1.0807, TrainMacroF1: 0.4138, ValMacroF1(patient): 0.5795/0.4001 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.6731/0.5385, balanced_accuracy 0.5951/0.4154, macro_precision 0.5937/0.4123, macro_recall 0.5951/0.4154, macro_f1 0.5795/0.4001
+
+--- dapt Epoch 3/20 | lr=3.37e-05 ---
+[2D] Epoch 3 [50/59] Loss: 1.0099 Time: 16.76s
+[2D] Epoch 3 [59/59] Loss: 1.0017 Time: 2.17s
+[2D] Train Epoch 3 (slice-level) => Loss: 1.0017, Acc: 0.5300, MacroF1: 0.5298
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6005, MacroF1: 0.4870
+[2D] Val (volume-level, n=101) => Loss: 0.9147, Acc: 0.6139, BalancedAcc: 0.5730, MacroPrecision: 0.5542, MacroRecall: 0.5730, MacroF1: 0.4865
+[2D] Val (patient-level, n=52) => Acc: 0.6538, BalancedAcc: 0.5771, MacroPrecision: 0.5983, MacroRecall: 0.5771, MacroF1: 0.5095
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  44              2               26              
+Y:Small Cell      3               2               7               
+Y:Squamous        0               1               16              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  25              0               12              
+Y:Small Cell      1               1               4               
+Y:Squamous        0               1               8               
+
+[dapt] Epoch 3 Summary => TrainLoss: 1.0017, TrainMacroF1: 0.5298, ValMacroF1(patient): 0.5095/0.4366 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.6538/0.5769, balanced_accuracy 0.5771/0.4693, macro_precision 0.5983/0.4743, macro_recall 0.5771/0.4693, macro_f1 0.5095/0.4366
+
+--- dapt Epoch 4/20 | lr=5.00e-05 ---
+[2D] Epoch 4 [50/59] Loss: 0.9474 Time: 11.65s
+[2D] Epoch 4 [59/59] Loss: 0.9463 Time: 1.52s
+[2D] Train Epoch 4 (slice-level) => Loss: 0.9463, Acc: 0.5877, MacroF1: 0.5859
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6323, MacroF1: 0.5216
+[2D] Val (volume-level, n=101) => Loss: 0.8744, Acc: 0.6733, BalancedAcc: 0.6103, MacroPrecision: 0.5574, MacroRecall: 0.6103, MacroF1: 0.5571
+[2D] Val (patient-level, n=52) => Acc: 0.7500, BalancedAcc: 0.6967, MacroPrecision: 0.6218, MacroRecall: 0.6967, MacroF1: 0.6263
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  51              5               16              
+Y:Small Cell      1               5               6               
+Y:Squamous        1               4               12              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  28              3               6               
+Y:Small Cell      1               2               3               
+Y:Squamous        0               0               9               
+
+[dapt] Epoch 4 Summary => TrainLoss: 0.9463, TrainMacroF1: 0.5859, ValMacroF1(patient): 0.6263/0.5718 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7500/0.6923, balanced_accuracy 0.6967/0.6230, macro_precision 0.6218/0.6046, macro_recall 0.6967/0.6230, macro_f1 0.6263/0.5718
+
+--- dapt Epoch 5/20 | lr=4.96e-05 ---
+[2D] Epoch 5 [50/59] Loss: 0.8764 Time: 9.76s
+[2D] Epoch 5 [59/59] Loss: 0.8767 Time: 1.46s
+[2D] Train Epoch 5 (slice-level) => Loss: 0.8767, Acc: 0.6700, MacroF1: 0.6696
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6018, MacroF1: 0.4646
+[2D] Val (volume-level, n=101) => Loss: 0.9140, Acc: 0.6535, BalancedAcc: 0.5452, MacroPrecision: 0.4304, MacroRecall: 0.5452, MacroF1: 0.4360
+[2D] Val (patient-level, n=52) => Acc: 0.6731, BalancedAcc: 0.5676, MacroPrecision: 0.4410, MacroRecall: 0.5676, MacroF1: 0.4473
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  50              2               20              
+Y:Small Cell      2               0               10              
+Y:Squamous        1               0               16              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  26              0               11              
+Y:Small Cell      1               0               5               
+Y:Squamous        0               0               9               
+
+[dapt] Epoch 5 Summary => TrainLoss: 0.8767, TrainMacroF1: 0.6696, ValMacroF1(patient): 0.4473/0.5277 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.6731/0.6923, balanced_accuracy 0.5676/0.6138, macro_precision 0.4410/0.5537, macro_recall 0.5676/0.6138, macro_f1 0.4473/0.5277
+
+--- dapt Epoch 6/20 | lr=4.83e-05 ---
+[2D] Epoch 6 [50/59] Loss: 0.8339 Time: 9.38s
+[2D] Epoch 6 [59/59] Loss: 0.8321 Time: 1.95s
+[2D] Train Epoch 6 (slice-level) => Loss: 0.8321, Acc: 0.7064, MacroF1: 0.7061
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.5852, MacroF1: 0.4617
+[2D] Val (volume-level, n=101) => Loss: 0.9243, Acc: 0.6139, BalancedAcc: 0.5131, MacroPrecision: 0.4711, MacroRecall: 0.5131, MacroF1: 0.4627
+[2D] Val (patient-level, n=52) => Acc: 0.6154, BalancedAcc: 0.5776, MacroPrecision: 0.5129, MacroRecall: 0.5776, MacroF1: 0.5126
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  48              6               18              
+Y:Small Cell      3               2               7               
+Y:Squamous        3               2               12              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  23              4               10              
+Y:Small Cell      2               2               2               
+Y:Squamous        1               1               7               
+
+[dapt] Epoch 6 Summary => TrainLoss: 0.8321, TrainMacroF1: 0.7061, ValMacroF1(patient): 0.5126/0.5287 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.6154/0.6795, balanced_accuracy 0.5776/0.6139, macro_precision 0.5129/0.5252, macro_recall 0.5776/0.6139, macro_f1 0.5126/0.5287
+
+--- dapt Epoch 7/20 | lr=4.63e-05 ---
+[2D] Epoch 7 [50/59] Loss: 0.8103 Time: 8.72s
+[2D] Epoch 7 [59/59] Loss: 0.8087 Time: 1.21s
+[2D] Train Epoch 7 (slice-level) => Loss: 0.8087, Acc: 0.7247, MacroF1: 0.7247
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6247, MacroF1: 0.5010
+[2D] Val (volume-level, n=101) => Loss: 0.8515, Acc: 0.6931, BalancedAcc: 0.6264, MacroPrecision: 0.5919, MacroRecall: 0.6264, MacroF1: 0.5718
+[2D] Val (patient-level, n=52) => Acc: 0.7308, BalancedAcc: 0.6411, MacroPrecision: 0.6364, MacroRecall: 0.6411, MacroF1: 0.5641
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  52              3               17              
+Y:Small Cell      1               4               7               
+Y:Squamous        1               2               14              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  28              1               8               
+Y:Small Cell      0               1               5               
+Y:Squamous        0               0               9               
+
+[dapt] Epoch 7 Summary => TrainLoss: 0.8087, TrainMacroF1: 0.7247, ValMacroF1(patient): 0.5641/0.5080 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7308/0.6731, balanced_accuracy 0.6411/0.5954, macro_precision 0.6364/0.5301, macro_recall 0.6411/0.5954, macro_f1 0.5641/0.5080
+
+--- dapt Epoch 8/20 | lr=4.35e-05 ---
+[2D] Epoch 8 [50/59] Loss: 0.7422 Time: 7.80s
+[2D] Epoch 8 [59/59] Loss: 0.7440 Time: 1.25s
+[2D] Train Epoch 8 (slice-level) => Loss: 0.7440, Acc: 0.7611, MacroF1: 0.7602
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6527, MacroF1: 0.5139
+[2D] Val (volume-level, n=101) => Loss: 0.8712, Acc: 0.7030, BalancedAcc: 0.6078, MacroPrecision: 0.6053, MacroRecall: 0.6078, MacroF1: 0.5599
+[2D] Val (patient-level, n=52) => Acc: 0.7115, BalancedAcc: 0.6041, MacroPrecision: 0.6111, MacroRecall: 0.6041, MacroF1: 0.5458
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  54              2               16              
+Y:Small Cell      1               3               8               
+Y:Squamous        2               1               14              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  28              1               8               
+Y:Small Cell      1               1               4               
+Y:Squamous        1               0               8               
+
+[dapt] Epoch 8 Summary => TrainLoss: 0.7440, TrainMacroF1: 0.7602, ValMacroF1(patient): 0.5458/0.5408 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7115/0.6859, balanced_accuracy 0.6041/0.6076, macro_precision 0.6111/0.5868, macro_recall 0.6041/0.6076, macro_f1 0.5458/0.5408
+
+--- dapt Epoch 9/20 | lr=4.01e-05 ---
+[2D] Epoch 9 [50/59] Loss: 0.7074 Time: 7.61s
+[2D] Epoch 9 [59/59] Loss: 0.7167 Time: 1.17s
+[2D] Train Epoch 9 (slice-level) => Loss: 0.7167, Acc: 0.8008, MacroF1: 0.8007
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6616, MacroF1: 0.4988
+[2D] Val (volume-level, n=101) => Loss: 0.8389, Acc: 0.7327, BalancedAcc: 0.5605, MacroPrecision: 0.5155, MacroRecall: 0.5605, MacroF1: 0.5175
+[2D] Val (patient-level, n=52) => Acc: 0.7308, BalancedAcc: 0.5385, MacroPrecision: 0.4595, MacroRecall: 0.5385, MacroF1: 0.4855
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  60              3               9               
+Y:Small Cell      5               1               6               
+Y:Squamous        3               1               13              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  31              2               4               
+Y:Small Cell      2               0               4               
+Y:Squamous        1               1               7               
+
+[dapt] Epoch 9 Summary => TrainLoss: 0.7167, TrainMacroF1: 0.8007, ValMacroF1(patient): 0.4855/0.5318 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7308/0.7244, balanced_accuracy 0.5385/0.5946, macro_precision 0.4595/0.5690, macro_recall 0.5385/0.5946, macro_f1 0.4855/0.5318
+
+--- dapt Epoch 10/20 | lr=3.61e-05 ---
+[2D] Epoch 10 [50/59] Loss: 0.7010 Time: 7.47s
+[2D] Epoch 10 [59/59] Loss: 0.7123 Time: 1.11s
+[2D] Train Epoch 10 (slice-level) => Loss: 0.7123, Acc: 0.8040, MacroF1: 0.8033
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6667, MacroF1: 0.4933
+[2D] Val (volume-level, n=101) => Loss: 0.8440, Acc: 0.7030, BalancedAcc: 0.4935, MacroPrecision: 0.4486, MacroRecall: 0.4935, MacroF1: 0.4688
+[2D] Val (patient-level, n=52) => Acc: 0.7692, BalancedAcc: 0.5566, MacroPrecision: 0.4942, MacroRecall: 0.5566, MacroF1: 0.5228
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  60              6               6               
+Y:Small Cell      8               0               4               
+Y:Squamous        5               1               11              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  33              2               2               
+Y:Small Cell      4               0               2               
+Y:Squamous        2               0               7               
+
+[dapt] Epoch 10 Summary => TrainLoss: 0.7123, TrainMacroF1: 0.8033, ValMacroF1(patient): 0.5228/0.5181 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7692/0.7372, balanced_accuracy 0.5566/0.5664, macro_precision 0.4942/0.5216, macro_recall 0.5566/0.5664, macro_f1 0.5228/0.5181
+
+--- dapt Epoch 11/20 | lr=3.18e-05 ---
+[2D] Epoch 11 [50/59] Loss: 0.7019 Time: 7.09s
+[2D] Epoch 11 [59/59] Loss: 0.7038 Time: 1.13s
+[2D] Train Epoch 11 (slice-level) => Loss: 0.7038, Acc: 0.8198, MacroF1: 0.8199
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6539, MacroF1: 0.4589
+[2D] Val (volume-level, n=101) => Loss: 0.8537, Acc: 0.7030, BalancedAcc: 0.4785, MacroPrecision: 0.4081, MacroRecall: 0.4785, MacroF1: 0.4373
+[2D] Val (patient-level, n=52) => Acc: 0.7692, BalancedAcc: 0.5285, MacroPrecision: 0.4652, MacroRecall: 0.5285, MacroF1: 0.4944
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  61              1               10              
+Y:Small Cell      7               0               5               
+Y:Squamous        6               1               10              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  34              0               3               
+Y:Small Cell      4               0               2               
+Y:Squamous        2               1               6               
+
+[dapt] Epoch 11 Summary => TrainLoss: 0.7038, TrainMacroF1: 0.8199, ValMacroF1(patient): 0.4944/0.5009 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7692/0.7564, balanced_accuracy 0.5285/0.5412, macro_precision 0.4652/0.4729, macro_recall 0.5285/0.5412, macro_f1 0.4944/0.5009
+
+--- dapt Epoch 12/20 | lr=2.73e-05 ---
+[2D] Epoch 12 [50/59] Loss: 0.6639 Time: 7.26s
+[2D] Epoch 12 [59/59] Loss: 0.6669 Time: 1.12s
+[2D] Train Epoch 12 (slice-level) => Loss: 0.6669, Acc: 0.8322, MacroF1: 0.8312
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6539, MacroF1: 0.5023
+[2D] Val (volume-level, n=101) => Loss: 0.8585, Acc: 0.7228, BalancedAcc: 0.5654, MacroPrecision: 0.5502, MacroRecall: 0.5654, MacroF1: 0.5537
+[2D] Val (patient-level, n=52) => Acc: 0.7692, BalancedAcc: 0.5751, MacroPrecision: 0.5751, MacroRecall: 0.5751, MacroF1: 0.5618
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  60              3               9               
+Y:Small Cell      3               4               5               
+Y:Squamous        4               4               9               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  33              1               3               
+Y:Small Cell      2               1               3               
+Y:Squamous        2               1               6               
+
+[dapt] Epoch 12 Summary => TrainLoss: 0.6669, TrainMacroF1: 0.8312, ValMacroF1(patient): 0.5618/0.5263 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7692/0.7692, balanced_accuracy 0.5751/0.5534, macro_precision 0.5751/0.5115, macro_recall 0.5751/0.5534, macro_f1 0.5618/0.5263
+
+--- dapt Epoch 13/20 | lr=2.27e-05 ---
+[2D] Epoch 13 [50/59] Loss: 0.6836 Time: 7.25s
+[2D] Epoch 13 [59/59] Loss: 0.6704 Time: 1.14s
+[2D] Train Epoch 13 (slice-level) => Loss: 0.6704, Acc: 0.8402, MacroF1: 0.8398
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6883, MacroF1: 0.5268
+[2D] Val (volume-level, n=101) => Loss: 0.8302, Acc: 0.7624, BalancedAcc: 0.5907, MacroPrecision: 0.5815, MacroRecall: 0.5907, MacroF1: 0.5819
+[2D] Val (patient-level, n=52) => Acc: 0.8077, BalancedAcc: 0.6677, MacroPrecision: 0.6761, MacroRecall: 0.6677, MacroF1: 0.6640
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  63              2               7               
+Y:Small Cell      6               3               3               
+Y:Squamous        2               4               11              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  33              1               3               
+Y:Small Cell      3               2               1               
+Y:Squamous        1               1               7               
+
+[dapt] Epoch 13 Summary => TrainLoss: 0.6704, TrainMacroF1: 0.8398, ValMacroF1(patient): 0.6640/0.5734 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.8077/0.7821, balanced_accuracy 0.6677/0.5904, macro_precision 0.6761/0.5721, macro_recall 0.6677/0.5904, macro_f1 0.6640/0.5734
+
+--- dapt Epoch 14/20 | lr=1.82e-05 ---
+[2D] Epoch 14 [50/59] Loss: 0.6270 Time: 7.62s
+[2D] Epoch 14 [59/59] Loss: 0.6317 Time: 1.16s
+[2D] Train Epoch 14 (slice-level) => Loss: 0.6317, Acc: 0.8614, MacroF1: 0.8608
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6781, MacroF1: 0.5080
+[2D] Val (volume-level, n=101) => Loss: 0.8543, Acc: 0.7228, BalancedAcc: 0.5123, MacroPrecision: 0.5265, MacroRecall: 0.5123, MacroF1: 0.5185
+[2D] Val (patient-level, n=52) => Acc: 0.7885, BalancedAcc: 0.5841, MacroPrecision: 0.6500, MacroRecall: 0.5841, MacroF1: 0.5882
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  63              3               6               
+Y:Small Cell      7               3               2               
+Y:Squamous        5               5               7               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  34              0               3               
+Y:Small Cell      4               1               1               
+Y:Squamous        2               1               6               
+
+[dapt] Epoch 14 Summary => TrainLoss: 0.6317, TrainMacroF1: 0.8608, ValMacroF1(patient): 0.5882/0.6047 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7885/0.7885, balanced_accuracy 0.5841/0.6089, macro_precision 0.6500/0.6337, macro_recall 0.5841/0.6089, macro_f1 0.5882/0.6047
+
+--- dapt Epoch 15/20 | lr=1.39e-05 ---
+[2D] Epoch 15 [50/59] Loss: 0.6551 Time: 7.26s
+[2D] Epoch 15 [59/59] Loss: 0.6595 Time: 1.14s
+[2D] Train Epoch 15 (slice-level) => Loss: 0.6595, Acc: 0.8515, MacroF1: 0.8509
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6590, MacroF1: 0.4946
+[2D] Val (volume-level, n=101) => Loss: 0.8817, Acc: 0.7129, BalancedAcc: 0.5376, MacroPrecision: 0.5357, MacroRecall: 0.5376, MacroF1: 0.5329
+[2D] Val (patient-level, n=52) => Acc: 0.7692, BalancedAcc: 0.5751, MacroPrecision: 0.5824, MacroRecall: 0.5751, MacroF1: 0.5674
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  60              4               8               
+Y:Small Cell      5               3               4               
+Y:Squamous        6               2               9               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  33              1               3               
+Y:Small Cell      3               1               2               
+Y:Squamous        2               1               6               
+
+[dapt] Epoch 15 Summary => TrainLoss: 0.6595, TrainMacroF1: 0.8509, ValMacroF1(patient): 0.5674/0.6065 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.7692/0.7885, balanced_accuracy 0.5751/0.6089, macro_precision 0.5824/0.6362, macro_recall 0.5751/0.6089, macro_f1 0.5674/0.6065
+
+--- dapt Epoch 16/20 | lr=9.93e-06 ---
+[2D] Epoch 16 [50/59] Loss: 0.6476 Time: 7.39s
+[2D] Epoch 16 [59/59] Loss: 0.6494 Time: 1.18s
+[2D] Train Epoch 16 (slice-level) => Loss: 0.6494, Acc: 0.8627, MacroF1: 0.8626
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6832, MacroF1: 0.5121
+[2D] Val (volume-level, n=101) => Loss: 0.8277, Acc: 0.7525, BalancedAcc: 0.5180, MacroPrecision: 0.5515, MacroRecall: 0.5180, MacroF1: 0.5282
+[2D] Val (patient-level, n=52) => Acc: 0.8269, BalancedAcc: 0.6021, MacroPrecision: 0.6816, MacroRecall: 0.6021, MacroF1: 0.6132
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  66              2               4               
+Y:Small Cell      7               2               3               
+Y:Squamous        6               3               8               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  36              0               1               
+Y:Small Cell      3               1               2               
+Y:Squamous        2               1               6               
+
+[dapt] Epoch 16 Summary => TrainLoss: 0.6494, TrainMacroF1: 0.8626, ValMacroF1(patient): 0.6132/0.5896 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.8269/0.7949, balanced_accuracy 0.6021/0.5871, macro_precision 0.6816/0.6380, macro_recall 0.6021/0.5871, macro_f1 0.6132/0.5896
+
+--- dapt Epoch 17/20 | lr=6.52e-06 ---
+[2D] Epoch 17 [50/59] Loss: 0.6278 Time: 7.56s
+[2D] Epoch 17 [59/59] Loss: 0.6217 Time: 1.21s
+[2D] Train Epoch 17 (slice-level) => Loss: 0.6217, Acc: 0.8748, MacroF1: 0.8747
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.7125, MacroF1: 0.5521
+[2D] Val (volume-level, n=101) => Loss: 0.8130, Acc: 0.7921, BalancedAcc: 0.5978, MacroPrecision: 0.6570, MacroRecall: 0.5978, MacroF1: 0.6166
+[2D] Val (patient-level, n=52) => Acc: 0.8654, BalancedAcc: 0.7132, MacroPrecision: 0.7799, MacroRecall: 0.7132, MacroF1: 0.7380
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  67              1               4               
+Y:Small Cell      4               4               4               
+Y:Squamous        6               2               9               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  36              0               1               
+Y:Small Cell      1               3               2               
+Y:Squamous        2               1               6               
+
+[dapt] Epoch 17 Summary => TrainLoss: 0.6217, TrainMacroF1: 0.8747, ValMacroF1(patient): 0.7380/0.6396 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.8654/0.8205, balanced_accuracy 0.7132/0.6301, macro_precision 0.7799/0.6813, macro_recall 0.7132/0.6301, macro_f1 0.7380/0.6396
+
+--- dapt Epoch 18/20 | lr=3.74e-06 ---
+[2D] Epoch 18 [50/59] Loss: 0.6133 Time: 7.51s
+[2D] Epoch 18 [59/59] Loss: 0.6131 Time: 1.20s
+[2D] Train Epoch 18 (slice-level) => Loss: 0.6131, Acc: 0.8802, MacroF1: 0.8799
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.7087, MacroF1: 0.5598
+[2D] Val (volume-level, n=101) => Loss: 0.8109, Acc: 0.8020, BalancedAcc: 0.6174, MacroPrecision: 0.6766, MacroRecall: 0.6174, MacroF1: 0.6362
+[2D] Val (patient-level, n=52) => Acc: 0.8462, BalancedAcc: 0.7042, MacroPrecision: 0.7570, MacroRecall: 0.7042, MacroF1: 0.7216
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  67              1               4               
+Y:Small Cell      5               4               3               
+Y:Squamous        5               2               10              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  35              0               2               
+Y:Small Cell      1               3               2               
+Y:Squamous        2               1               6               
+
+[dapt] Epoch 18 Summary => TrainLoss: 0.6131, TrainMacroF1: 0.8799, ValMacroF1(patient): 0.7216/0.6910 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.8462/0.8462, balanced_accuracy 0.7042/0.6732, macro_precision 0.7570/0.7395, macro_recall 0.7042/0.6732, macro_f1 0.7216/0.6910
+
+--- dapt Epoch 19/20 | lr=1.69e-06 ---
+[2D] Epoch 19 [50/59] Loss: 0.6225 Time: 7.38s
+[2D] Epoch 19 [59/59] Loss: 0.6156 Time: 1.18s
+[2D] Train Epoch 19 (slice-level) => Loss: 0.6156, Acc: 0.8847, MacroF1: 0.8842
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.7074, MacroF1: 0.5565
+[2D] Val (volume-level, n=101) => Loss: 0.8205, Acc: 0.7921, BalancedAcc: 0.5978, MacroPrecision: 0.6570, MacroRecall: 0.5978, MacroF1: 0.6166
+[2D] Val (patient-level, n=52) => Acc: 0.8654, BalancedAcc: 0.7132, MacroPrecision: 0.7799, MacroRecall: 0.7132, MacroF1: 0.7380
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  67              1               4               
+Y:Small Cell      4               4               4               
+Y:Squamous        6               2               9               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  36              0               1               
+Y:Small Cell      1               3               2               
+Y:Squamous        2               1               6               
+
+[dapt] Epoch 19 Summary => TrainLoss: 0.6156, TrainMacroF1: 0.8842, ValMacroF1(patient): 0.7380/0.7326 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.8654/0.8590, balanced_accuracy 0.7132/0.7102, macro_precision 0.7799/0.7723, macro_recall 0.7132/0.7102, macro_f1 0.7380/0.7326
+
+--- dapt Epoch 20/20 | lr=4.26e-07 ---
+[2D] Epoch 20 [50/59] Loss: 0.5899 Time: 7.49s
+[2D] Epoch 20 [59/59] Loss: 0.6080 Time: 1.17s
+[2D] Train Epoch 20 (slice-level) => Loss: 0.6080, Acc: 0.8802, MacroF1: 0.8797
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=786) => Acc: 0.6972, MacroF1: 0.5469
+[2D] Val (volume-level, n=101) => Loss: 0.8193, Acc: 0.7921, BalancedAcc: 0.6127, MacroPrecision: 0.6592, MacroRecall: 0.6127, MacroF1: 0.6249
+[2D] Val (patient-level, n=52) => Acc: 0.8462, BalancedAcc: 0.7042, MacroPrecision: 0.7570, MacroRecall: 0.7042, MacroF1: 0.7216
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  66              1               5               
+Y:Small Cell      4               4               4               
+Y:Squamous        5               2               10              
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  35              0               2               
+Y:Small Cell      1               3               2               
+Y:Squamous        2               1               6               
+
+[dapt] Epoch 20 Summary => TrainLoss: 0.6080, TrainMacroF1: 0.8797, ValMacroF1(patient): 0.7216/0.7271 (cur/roll3)
+[dapt] Patient current vs rolling-3: accuracy 0.8462/0.8526, balanced_accuracy 0.7042/0.7072, macro_precision 0.7570/0.7646, macro_recall 0.7042/0.7072, macro_f1 0.7216/0.7271
+
+[2D] Starting validation...
+[2D] Val (slice-level, n=834) => Acc: 0.6655, MacroF1: 0.4931
+[2D] Val (volume-level, n=106) => Loss: 0.8914, Acc: 0.7358, BalancedAcc: 0.5721, MacroPrecision: 0.5652, MacroRecall: 0.5721, MacroF1: 0.5685
+[2D] Val (patient-level, n=53) => Acc: 0.7736, BalancedAcc: 0.6228, MacroPrecision: 0.6084, MacroRecall: 0.6228, MacroF1: 0.6150
+
+[2D] Volume-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  65              4               7               
+Y:Small Cell      4               5               3               
+Y:Squamous        6               4               8               
+
+
+[2D] Patient-level Confusion Matrix:
+True \ Pred       Adenocarcinoma  Small Cell      Squamous        
+Y:Adenocarcinoma  33              3               2               
+Y:Small Cell      2               2               2               
+Y:Squamous        2               1               6               
+

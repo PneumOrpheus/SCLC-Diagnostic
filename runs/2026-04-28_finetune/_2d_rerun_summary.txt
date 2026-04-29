@@ -1,0 +1,14 @@
+=== 2D FT re-run starting at Tue Apr 28 20:06:55 UTC 2026 ===
+[20:06:55] === START: efficientnet_b0_2d (mode finetune) ===
+[20:06:55]   cmd: python main.py --mode finetune --config configs/experiments/2d_efficientnet_b0.yaml --model-checkpoint /home/data/trained_models/dapt_thesis/efficientnet_b0_2d/dapt_pbest_raw.pth
+[21:20:49] === DONE:  efficientnet_b0_2d ===
+[21:20:49] === START: densenet121_2d (mode finetune) ===
+[21:20:49]   cmd: python main.py --mode finetune --config configs/experiments/2d_densenet121.yaml --model-checkpoint /home/data/trained_models/dapt_thesis/densenet121_2d/dapt_pbest_raw.pth
+[21:26:18] === DONE:  densenet121_2d ===
+[21:26:18] === START: swin_tiny_2d (mode finetune) ===
+[21:26:18]   cmd: python main.py --mode finetune --config configs/experiments/2d_swin_tiny.yaml --model-checkpoint /home/data/trained_models/dapt_thesis/swin_tiny_2d/dapt_pbest_raw.pth
+[21:30:40] === DONE:  swin_tiny_2d ===
+=== Building results table ===
+[report] wrote CSV -> runs/2026-04-28_finetune/results_table.csv  (6 rows)
+[report] wrote MD  -> runs/2026-04-28_finetune/results_table.md
+=== ALL DONE at Tue Apr 28 21:30:43 UTC 2026 ===

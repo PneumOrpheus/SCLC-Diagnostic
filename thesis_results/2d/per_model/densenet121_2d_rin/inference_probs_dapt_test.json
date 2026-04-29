@@ -1,0 +1,2801 @@
+{
+  "num_samples": 106,
+  "class_names": [
+    "Adenocarcinoma",
+    "Small Cell",
+    "Squamous"
+  ],
+  "mean_probability_per_class": {
+    "Adenocarcinoma": 0.41492228998960756,
+    "Small Cell": 0.2845235802181967,
+    "Squamous": 0.30055413029634837
+  },
+  "predicted_class_counts": {
+    "Adenocarcinoma": 51,
+    "Small Cell": 21,
+    "Squamous": 34
+  },
+  "predicted_class_fractions": {
+    "Adenocarcinoma": 0.4811320754716981,
+    "Small Cell": 0.19811320754716982,
+    "Squamous": 0.32075471698113206
+  },
+  "samples": [
+    {
+      "sample_index": 0,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0062/1.3.6.1.4.1.14519.5.2.1.6655.2359.175757871322358372209202025490_image.nii.gz",
+      "patient_id": "Lung_Dx-G0062",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.4396334160119295,
+      "probabilities": {
+        "Adenocarcinoma": 0.34401385858654976,
+        "Small Cell": 0.4396334160119295,
+        "Squamous": 0.21635271236300468
+      }
+    },
+    {
+      "sample_index": 1,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0062/1.3.6.1.4.1.14519.5.2.1.6655.2359.333321236537063355599236377825_image.nii.gz",
+      "patient_id": "Lung_Dx-G0062",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.4322933740913868,
+      "probabilities": {
+        "Adenocarcinoma": 0.285875691100955,
+        "Small Cell": 0.4322933740913868,
+        "Squamous": 0.2818309236317873
+      }
+    },
+    {
+      "sample_index": 2,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0201/1.3.6.1.4.1.14519.5.2.1.6655.2359.278413521309429954235467985013_image.nii.gz",
+      "patient_id": "Lung_Dx-A0201",
+      "num_slices": 7,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.6774750139032092,
+      "probabilities": {
+        "Adenocarcinoma": 0.6774750139032092,
+        "Small Cell": 0.1327467550124441,
+        "Squamous": 0.18977822682687215
+      }
+    },
+    {
+      "sample_index": 3,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0201/1.3.6.1.4.1.14519.5.2.1.6655.2359.295155415349218847868434589027_image.nii.gz",
+      "patient_id": "Lung_Dx-A0201",
+      "num_slices": 7,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.6267912302698407,
+      "probabilities": {
+        "Adenocarcinoma": 0.6267912302698407,
+        "Small Cell": 0.17746523554836,
+        "Squamous": 0.1957435490829604
+      }
+    },
+    {
+      "sample_index": 4,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0203/1.3.6.1.4.1.14519.5.2.1.6655.2359.224133559419001557541781592286_image.nii.gz",
+      "patient_id": "Lung_Dx-A0203",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.64521124958992,
+      "probabilities": {
+        "Adenocarcinoma": 0.64521124958992,
+        "Small Cell": 0.12666549161076546,
+        "Squamous": 0.22812324482947588
+      }
+    },
+    {
+      "sample_index": 5,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0203/1.3.6.1.4.1.14519.5.2.1.6655.2359.817255521805911719905903246901_image.nii.gz",
+      "patient_id": "Lung_Dx-A0203",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.5691293589770794,
+      "probabilities": {
+        "Adenocarcinoma": 0.5691293589770794,
+        "Small Cell": 0.14150795247405767,
+        "Squamous": 0.2893626857548952
+      }
+    },
+    {
+      "sample_index": 6,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0087/1.3.6.1.4.1.14519.5.2.1.6655.2359.152344144036304784027071976298_image.nii.gz",
+      "patient_id": "Lung_Dx-A0087",
+      "num_slices": 7,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.8439998967306954,
+      "probabilities": {
+        "Adenocarcinoma": 0.8439998967306954,
+        "Small Cell": 0.08843648699777466,
+        "Squamous": 0.06756359764507838
+      }
+    },
+    {
+      "sample_index": 7,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0087/1.3.6.1.4.1.14519.5.2.1.6655.2359.229829119308840404027078176410_image.nii.gz",
+      "patient_id": "Lung_Dx-A0087",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.8563506826758385,
+      "probabilities": {
+        "Adenocarcinoma": 0.8563506826758385,
+        "Small Cell": 0.06584825529716909,
+        "Squamous": 0.07780105201527476
+      }
+    },
+    {
+      "sample_index": 8,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0090/1.3.6.1.4.1.14519.5.2.1.6655.2359.106345707873123991031734518401_image.nii.gz",
+      "patient_id": "Lung_Dx-A0090",
+      "num_slices": 7,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3752830241407667,
+      "probabilities": {
+        "Adenocarcinoma": 0.3752830241407667,
+        "Small Cell": 0.3222501448222569,
+        "Squamous": 0.30246682252202717
+      }
+    },
+    {
+      "sample_index": 9,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0090/1.3.6.1.4.1.14519.5.2.1.6655.2359.246595946283544761341253893344_image.nii.gz",
+      "patient_id": "Lung_Dx-A0090",
+      "num_slices": 7,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.39982662882123676,
+      "probabilities": {
+        "Adenocarcinoma": 0.3642498850822449,
+        "Small Cell": 0.2359234711953572,
+        "Squamous": 0.39982662882123676
+      }
+    },
+    {
+      "sample_index": 10,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0040/1.3.6.1.4.1.14519.5.2.1.6655.2359.281353530179599159227079419769_image.nii.gz",
+      "patient_id": "Lung_Dx-G0040",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.5193861536681652,
+      "probabilities": {
+        "Adenocarcinoma": 0.23002318292856216,
+        "Small Cell": 0.25059064477682114,
+        "Squamous": 0.5193861536681652
+      }
+    },
+    {
+      "sample_index": 11,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0040/1.3.6.1.4.1.14519.5.2.1.6655.2359.286929266369981518672204158323_image.nii.gz",
+      "patient_id": "Lung_Dx-G0040",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.5905008092522621,
+      "probabilities": {
+        "Adenocarcinoma": 0.5905008092522621,
+        "Small Cell": 0.17284341854974627,
+        "Squamous": 0.23665576404891908
+      }
+    },
+    {
+      "sample_index": 12,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0019/1.3.6.1.4.1.14519.5.2.1.6655.2359.328119545492186765373504219604_image.nii.gz",
+      "patient_id": "Lung_Dx-B0019",
+      "num_slices": 8,
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.4984740875661373,
+      "probabilities": {
+        "Adenocarcinoma": 0.26540190912783146,
+        "Small Cell": 0.23612400144338608,
+        "Squamous": 0.4984740875661373
+      }
+    },
+    {
+      "sample_index": 13,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0019/1.3.6.1.4.1.14519.5.2.1.6655.2359.554985317763093443697721816348_image.nii.gz",
+      "patient_id": "Lung_Dx-B0019",
+      "num_slices": 8,
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.5266055651009083,
+      "probabilities": {
+        "Adenocarcinoma": 0.1870455127209425,
+        "Small Cell": 0.2863489221781492,
+        "Squamous": 0.5266055651009083
+      }
+    },
+    {
+      "sample_index": 14,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0099/1.3.6.1.4.1.14519.5.2.1.6655.2359.222986498792670955826010591858_image.nii.gz",
+      "patient_id": "Lung_Dx-A0099",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.700596496462822,
+      "probabilities": {
+        "Adenocarcinoma": 0.700596496462822,
+        "Small Cell": 0.16982114221900702,
+        "Squamous": 0.12958236783742905
+      }
+    },
+    {
+      "sample_index": 15,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0099/1.3.6.1.4.1.14519.5.2.1.6655.2359.498667720428236792368278408421_image.nii.gz",
+      "patient_id": "Lung_Dx-A0099",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.6538838297128677,
+      "probabilities": {
+        "Adenocarcinoma": 0.6538838297128677,
+        "Small Cell": 0.1735796332359314,
+        "Squamous": 0.17253652960062027
+      }
+    },
+    {
+      "sample_index": 16,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0237/1.3.6.1.4.1.14519.5.2.1.6655.2359.173885623940580643999984988552_image.nii.gz",
+      "patient_id": "Lung_Dx-A0237",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.40306293964385986,
+      "probabilities": {
+        "Adenocarcinoma": 0.40306293964385986,
+        "Small Cell": 0.3397095315158367,
+        "Squamous": 0.2572275325655937
+      }
+    },
+    {
+      "sample_index": 17,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0237/1.3.6.1.4.1.14519.5.2.1.6655.2359.379788844094348609714355815637_image.nii.gz",
+      "patient_id": "Lung_Dx-A0237",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.34942663088440895,
+      "probabilities": {
+        "Adenocarcinoma": 0.34942663088440895,
+        "Small Cell": 0.33456695079803467,
+        "Squamous": 0.3160064294934273
+      }
+    },
+    {
+      "sample_index": 18,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0049/1.3.6.1.4.1.14519.5.2.1.6655.2359.874773035744838337584349904328_image.nii.gz",
+      "patient_id": "Lung_Dx-A0049",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3533274717628956,
+      "probabilities": {
+        "Adenocarcinoma": 0.3533274717628956,
+        "Small Cell": 0.3135933242738247,
+        "Squamous": 0.33307917416095734
+      }
+    },
+    {
+      "sample_index": 19,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0049/1.3.6.1.4.1.14519.5.2.1.6655.2359.906988784415400947583455067526_image.nii.gz",
+      "patient_id": "Lung_Dx-A0049",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.42118628323078156,
+      "probabilities": {
+        "Adenocarcinoma": 0.42118628323078156,
+        "Small Cell": 0.34741850197315216,
+        "Squamous": 0.23139521107077599
+      }
+    },
+    {
+      "sample_index": 20,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0098/1.3.6.1.4.1.14519.5.2.1.6655.2359.120850088656741346172551846366_image.nii.gz",
+      "patient_id": "Lung_Dx-A0098",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.4400397874414921,
+      "probabilities": {
+        "Adenocarcinoma": 0.3098529130220413,
+        "Small Cell": 0.4400397874414921,
+        "Squamous": 0.25010729394853115
+      }
+    },
+    {
+      "sample_index": 21,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0098/1.3.6.1.4.1.14519.5.2.1.6655.2359.220228282617615068804083765741_image.nii.gz",
+      "patient_id": "Lung_Dx-A0098",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.4491143599152565,
+      "probabilities": {
+        "Adenocarcinoma": 0.3328559622168541,
+        "Small Cell": 0.4491143599152565,
+        "Squamous": 0.21802968718111515
+      }
+    },
+    {
+      "sample_index": 22,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0170/1.3.6.1.4.1.14519.5.2.1.6655.2359.278727158206966673583609748719_image.nii.gz",
+      "patient_id": "Lung_Dx-A0170",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.4886438809335232,
+      "probabilities": {
+        "Adenocarcinoma": 0.227548373863101,
+        "Small Cell": 0.28380774706602097,
+        "Squamous": 0.4886438809335232
+      }
+    },
+    {
+      "sample_index": 23,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0170/1.3.6.1.4.1.14519.5.2.1.6655.2359.312238367022457521717464246132_image.nii.gz",
+      "patient_id": "Lung_Dx-A0170",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.5727435201406479,
+      "probabilities": {
+        "Adenocarcinoma": 0.14079349022358656,
+        "Small Cell": 0.2864629812538624,
+        "Squamous": 0.5727435201406479
+      }
+    },
+    {
+      "sample_index": 24,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0026/1.3.6.1.4.1.14519.5.2.1.6655.2359.293506179812608718480537254745_image.nii.gz",
+      "patient_id": "Lung_Dx-B0026",
+      "num_slices": 8,
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.40283775329589844,
+      "probabilities": {
+        "Adenocarcinoma": 0.3034173250198364,
+        "Small Cell": 0.40283775329589844,
+        "Squamous": 0.29374492540955544
+      }
+    },
+    {
+      "sample_index": 25,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0026/1.3.6.1.4.1.14519.5.2.1.6655.2359.368954869250280601065139599435_image.nii.gz",
+      "patient_id": "Lung_Dx-B0026",
+      "num_slices": 8,
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.45607201755046844,
+      "probabilities": {
+        "Adenocarcinoma": 0.2804899364709854,
+        "Small Cell": 0.45607201755046844,
+        "Squamous": 0.2634380627423525
+      }
+    },
+    {
+      "sample_index": 26,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0185/1.3.6.1.4.1.14519.5.2.1.6655.2359.162746788641134093183880666111_image.nii.gz",
+      "patient_id": "Lung_Dx-A0185",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.5934419669210911,
+      "probabilities": {
+        "Adenocarcinoma": 0.5934419669210911,
+        "Small Cell": 0.19331672508269548,
+        "Squamous": 0.21324130706489086
+      }
+    },
+    {
+      "sample_index": 27,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0185/1.3.6.1.4.1.14519.5.2.1.6655.2359.271786297407096950324795091663_image.nii.gz",
+      "patient_id": "Lung_Dx-A0185",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.6136684417724609,
+      "probabilities": {
+        "Adenocarcinoma": 0.6136684417724609,
+        "Small Cell": 0.17986004706472158,
+        "Squamous": 0.20647149719297886
+      }
+    },
+    {
+      "sample_index": 28,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0174/1.3.6.1.4.1.14519.5.2.1.6655.2359.383702598777443812138592855495_image.nii.gz",
+      "patient_id": "Lung_Dx-A0174",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.5202062018215656,
+      "probabilities": {
+        "Adenocarcinoma": 0.5202062018215656,
+        "Small Cell": 0.26190414279699326,
+        "Squamous": 0.21788965817540884
+      }
+    },
+    {
+      "sample_index": 29,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0174/1.3.6.1.4.1.14519.5.2.1.6655.2359.669441825695249183272478349685_image.nii.gz",
+      "patient_id": "Lung_Dx-A0174",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.5283946432173252,
+      "probabilities": {
+        "Adenocarcinoma": 0.5283946432173252,
+        "Small Cell": 0.2666673641651869,
+        "Squamous": 0.20493800193071365
+      }
+    },
+    {
+      "sample_index": 30,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0018/1.3.6.1.4.1.14519.5.2.1.6655.2359.172360766237921614772815928725_image.nii.gz",
+      "patient_id": "Lung_Dx-G0018",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.4175661467015743,
+      "probabilities": {
+        "Adenocarcinoma": 0.18289712630212307,
+        "Small Cell": 0.4175661467015743,
+        "Squamous": 0.39953672140836716
+      }
+    },
+    {
+      "sample_index": 31,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0018/1.3.6.1.4.1.14519.5.2.1.6655.2359.664258235274009264224848388888_image.nii.gz",
+      "patient_id": "Lung_Dx-G0018",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.4621929004788399,
+      "probabilities": {
+        "Adenocarcinoma": 0.17436167504638433,
+        "Small Cell": 0.3634454309940338,
+        "Squamous": 0.4621929004788399
+      }
+    },
+    {
+      "sample_index": 32,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0043/1.3.6.1.4.1.14519.5.2.1.6655.2359.198666459344567602975266683619_image.nii.gz",
+      "patient_id": "Lung_Dx-B0043",
+      "num_slices": 8,
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.570887416601181,
+      "probabilities": {
+        "Adenocarcinoma": 0.13873223774135113,
+        "Small Cell": 0.2903803326189518,
+        "Squamous": 0.570887416601181
+      }
+    },
+    {
+      "sample_index": 33,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0043/1.3.6.1.4.1.14519.5.2.1.6655.2359.299608846350221771363695695722_image.nii.gz",
+      "patient_id": "Lung_Dx-B0043",
+      "num_slices": 8,
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.5445123165845871,
+      "probabilities": {
+        "Adenocarcinoma": 0.18084242194890976,
+        "Small Cell": 0.27464523911476135,
+        "Squamous": 0.5445123165845871
+      }
+    },
+    {
+      "sample_index": 34,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0041/1.3.6.1.4.1.14519.5.2.1.6655.2359.240343507599199635858295628249_image.nii.gz",
+      "patient_id": "Lung_Dx-G0041",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.3735194895416498,
+      "probabilities": {
+        "Adenocarcinoma": 0.28251010179519653,
+        "Small Cell": 0.34397040866315365,
+        "Squamous": 0.3735194895416498
+      }
+    },
+    {
+      "sample_index": 35,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0041/1.3.6.1.4.1.14519.5.2.1.6655.2359.988239706900412200563896789591_image.nii.gz",
+      "patient_id": "Lung_Dx-G0041",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.4115433879196644,
+      "probabilities": {
+        "Adenocarcinoma": 0.29596362728625536,
+        "Small Cell": 0.2924930062144995,
+        "Squamous": 0.4115433879196644
+      }
+    },
+    {
+      "sample_index": 36,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0025/1.3.6.1.4.1.14519.5.2.1.6655.2359.325974724648222537395086688711_image.nii.gz",
+      "patient_id": "Lung_Dx-G0025",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.5148161351680756,
+      "probabilities": {
+        "Adenocarcinoma": 0.18890693131834269,
+        "Small Cell": 0.2962769363075495,
+        "Squamous": 0.5148161351680756
+      }
+    },
+    {
+      "sample_index": 37,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0025/1.3.6.1.4.1.14519.5.2.1.6655.2359.980425944274184040708374276735_image.nii.gz",
+      "patient_id": "Lung_Dx-G0025",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.5659636333584785,
+      "probabilities": {
+        "Adenocarcinoma": 0.13474835827946663,
+        "Small Cell": 0.2992880120873451,
+        "Squamous": 0.5659636333584785
+      }
+    },
+    {
+      "sample_index": 38,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0235/1.3.6.1.4.1.14519.5.2.1.6655.2359.102853167529514656720460196470_image.nii.gz",
+      "patient_id": "Lung_Dx-A0235",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.49091409146785736,
+      "probabilities": {
+        "Adenocarcinoma": 0.31090448796749115,
+        "Small Cell": 0.19818140380084515,
+        "Squamous": 0.49091409146785736
+      }
+    },
+    {
+      "sample_index": 39,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0235/1.3.6.1.4.1.14519.5.2.1.6655.2359.248701917894648433127498845262_image.nii.gz",
+      "patient_id": "Lung_Dx-A0235",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.5308352196589112,
+      "probabilities": {
+        "Adenocarcinoma": 0.25730200950056314,
+        "Small Cell": 0.21186276618391275,
+        "Squamous": 0.5308352196589112
+      }
+    },
+    {
+      "sample_index": 40,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0129/1.3.6.1.4.1.14519.5.2.1.6655.2359.137367030017539154193138902596_image.nii.gz",
+      "patient_id": "Lung_Dx-A0129",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.6419688239693642,
+      "probabilities": {
+        "Adenocarcinoma": 0.6419688239693642,
+        "Small Cell": 0.23738715797662735,
+        "Squamous": 0.12064403761178255
+      }
+    },
+    {
+      "sample_index": 41,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0129/1.3.6.1.4.1.14519.5.2.1.6655.2359.165015917123212796499269389347_image.nii.gz",
+      "patient_id": "Lung_Dx-A0129",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.5772453546524048,
+      "probabilities": {
+        "Adenocarcinoma": 0.5772453546524048,
+        "Small Cell": 0.32378486543893814,
+        "Squamous": 0.09896976174786687
+      }
+    },
+    {
+      "sample_index": 42,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0035/1.3.6.1.4.1.14519.5.2.1.6655.2359.207996564953560023420110335860_image.nii.gz",
+      "patient_id": "Lung_Dx-A0035",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.6627849042415619,
+      "probabilities": {
+        "Adenocarcinoma": 0.6627849042415619,
+        "Small Cell": 0.2178527880460024,
+        "Squamous": 0.11936233332380652
+      }
+    },
+    {
+      "sample_index": 43,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0035/1.3.6.1.4.1.14519.5.2.1.6655.2359.245824809669940828570219659020_image.nii.gz",
+      "patient_id": "Lung_Dx-A0035",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.6401028744876385,
+      "probabilities": {
+        "Adenocarcinoma": 0.6401028744876385,
+        "Small Cell": 0.19760391488671303,
+        "Squamous": 0.16229321621358395
+      }
+    },
+    {
+      "sample_index": 44,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0054/1.3.6.1.4.1.14519.5.2.1.6655.2359.304543682991840548566793184265_image.nii.gz",
+      "patient_id": "Lung_Dx-G0054",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.5897764191031456,
+      "probabilities": {
+        "Adenocarcinoma": 0.13217431958764791,
+        "Small Cell": 0.2780492529273033,
+        "Squamous": 0.5897764191031456
+      }
+    },
+    {
+      "sample_index": 45,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0054/1.3.6.1.4.1.14519.5.2.1.6655.2359.894929401718500818279503979310_image.nii.gz",
+      "patient_id": "Lung_Dx-G0054",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.5846316777169704,
+      "probabilities": {
+        "Adenocarcinoma": 0.16648194566369057,
+        "Small Cell": 0.248886376619339,
+        "Squamous": 0.5846316777169704
+      }
+    },
+    {
+      "sample_index": 46,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0113/1.3.6.1.4.1.14519.5.2.1.6655.2359.164221678519539568633610013466_image.nii.gz",
+      "patient_id": "Lung_Dx-A0113",
+      "num_slices": 6,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.7644885083039602,
+      "probabilities": {
+        "Adenocarcinoma": 0.7644885083039602,
+        "Small Cell": 0.15239351987838745,
+        "Squamous": 0.08311797430117925
+      }
+    },
+    {
+      "sample_index": 47,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0113/1.3.6.1.4.1.14519.5.2.1.6655.2359.196600760498278440810850906562_image.nii.gz",
+      "patient_id": "Lung_Dx-A0113",
+      "num_slices": 6,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.8520072201887766,
+      "probabilities": {
+        "Adenocarcinoma": 0.8520072201887766,
+        "Small Cell": 0.07428231338659923,
+        "Squamous": 0.07371048505107562
+      }
+    },
+    {
+      "sample_index": 48,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0007/1.3.6.1.4.1.14519.5.2.1.6655.2359.187686057502459363734942859199_image.nii.gz",
+      "patient_id": "Lung_Dx-B0007",
+      "num_slices": 8,
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.6519976928830147,
+      "probabilities": {
+        "Adenocarcinoma": 0.6519976928830147,
+        "Small Cell": 0.1574734691530466,
+        "Squamous": 0.1905288454145193
+      }
+    },
+    {
+      "sample_index": 49,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0007/1.3.6.1.4.1.14519.5.2.1.6655.2359.189307988729418555032286866008_image.nii.gz",
+      "patient_id": "Lung_Dx-B0007",
+      "num_slices": 8,
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.642645075917244,
+      "probabilities": {
+        "Adenocarcinoma": 0.642645075917244,
+        "Small Cell": 0.1844120342284441,
+        "Squamous": 0.17294290754944086
+      }
+    },
+    {
+      "sample_index": 50,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0247/1.3.6.1.4.1.14519.5.2.1.6655.2359.118945173766264954174925778680_image.nii.gz",
+      "patient_id": "Lung_Dx-A0247",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.7472778111696243,
+      "probabilities": {
+        "Adenocarcinoma": 0.7472778111696243,
+        "Small Cell": 0.11613634694367647,
+        "Squamous": 0.13658585399389267
+      }
+    },
+    {
+      "sample_index": 51,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0247/1.3.6.1.4.1.14519.5.2.1.6655.2359.714878093299754896285823130469_image.nii.gz",
+      "patient_id": "Lung_Dx-A0247",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.5833484902977943,
+      "probabilities": {
+        "Adenocarcinoma": 0.5833484902977943,
+        "Small Cell": 0.1430225158110261,
+        "Squamous": 0.27362899482250214
+      }
+    },
+    {
+      "sample_index": 52,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0265/1.3.6.1.4.1.14519.5.2.1.6655.2359.154818928589211366709079355433_image.nii.gz",
+      "patient_id": "Lung_Dx-A0265",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3819793164730072,
+      "probabilities": {
+        "Adenocarcinoma": 0.3819793164730072,
+        "Small Cell": 0.3188347704708576,
+        "Squamous": 0.2991859149187803
+      }
+    },
+    {
+      "sample_index": 53,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0265/1.3.6.1.4.1.14519.5.2.1.6655.2359.164924420190528779219609372122_image.nii.gz",
+      "patient_id": "Lung_Dx-A0265",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 1.0,
+      "probabilities": {
+        "Adenocarcinoma": 0.0,
+        "Small Cell": 1.0,
+        "Squamous": 0.0
+      }
+    },
+    {
+      "sample_index": 54,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0117/1.3.6.1.4.1.14519.5.2.1.6655.2359.165966245397991195857816310237_image.nii.gz",
+      "patient_id": "Lung_Dx-A0117",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.8674565181136131,
+      "probabilities": {
+        "Adenocarcinoma": 0.8674565181136131,
+        "Small Cell": 0.07876725308597088,
+        "Squamous": 0.053776254411786795
+      }
+    },
+    {
+      "sample_index": 55,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0117/1.3.6.1.4.1.14519.5.2.1.6655.2359.244920982079420277264739971379_image.nii.gz",
+      "patient_id": "Lung_Dx-A0117",
+      "num_slices": 7,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.8894746644156319,
+      "probabilities": {
+        "Adenocarcinoma": 0.8894746644156319,
+        "Small Cell": 0.0545791643006461,
+        "Squamous": 0.05594617208199842
+      }
+    },
+    {
+      "sample_index": 56,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0137/1.3.6.1.4.1.14519.5.2.1.6655.2359.577696542903677768892324795837_image.nii.gz",
+      "patient_id": "Lung_Dx-A0137",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3788261543959379,
+      "probabilities": {
+        "Adenocarcinoma": 0.3788261543959379,
+        "Small Cell": 0.2554677091538906,
+        "Squamous": 0.3657061457633972
+      }
+    },
+    {
+      "sample_index": 57,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0137/1.3.6.1.4.1.14519.5.2.1.6655.2359.945975385858457292567581857816_image.nii.gz",
+      "patient_id": "Lung_Dx-A0137",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.4163975864648819,
+      "probabilities": {
+        "Adenocarcinoma": 0.4163975864648819,
+        "Small Cell": 0.26990971341729164,
+        "Squamous": 0.3136927019804716
+      }
+    },
+    {
+      "sample_index": 58,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0068/1.3.6.1.4.1.14519.5.2.1.6655.2359.195584506494362409451850964953_image.nii.gz",
+      "patient_id": "Lung_Dx-A0068",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.39753682911396027,
+      "probabilities": {
+        "Adenocarcinoma": 0.39753682911396027,
+        "Small Cell": 0.30677306838333607,
+        "Squamous": 0.29569010622799397
+      }
+    },
+    {
+      "sample_index": 59,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0068/1.3.6.1.4.1.14519.5.2.1.6655.2359.793147200524272450376976003141_image.nii.gz",
+      "patient_id": "Lung_Dx-A0068",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.4502533245831728,
+      "probabilities": {
+        "Adenocarcinoma": 0.4502533245831728,
+        "Small Cell": 0.2774288896471262,
+        "Squamous": 0.2723177969455719
+      }
+    },
+    {
+      "sample_index": 60,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0020/1.3.6.1.4.1.14519.5.2.1.6655.2359.294884297826712546377720244853_image.nii.gz",
+      "patient_id": "Lung_Dx-G0020",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.5719543509185314,
+      "probabilities": {
+        "Adenocarcinoma": 0.2231286782771349,
+        "Small Cell": 0.5719543509185314,
+        "Squamous": 0.20491697173565626
+      }
+    },
+    {
+      "sample_index": 61,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0020/1.3.6.1.4.1.14519.5.2.1.6655.2359.379511290971887097959764788457_image.nii.gz",
+      "patient_id": "Lung_Dx-G0020",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.596646785736084,
+      "probabilities": {
+        "Adenocarcinoma": 0.2198155876249075,
+        "Small Cell": 0.596646785736084,
+        "Squamous": 0.18353763967752457
+      }
+    },
+    {
+      "sample_index": 62,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0034/1.3.6.1.4.1.14519.5.2.1.6655.2359.199976111023246107640387546836_image.nii.gz",
+      "patient_id": "Lung_Dx-B0034",
+      "num_slices": 8,
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.4498262032866478,
+      "probabilities": {
+        "Adenocarcinoma": 0.23189502581954002,
+        "Small Cell": 0.4498262032866478,
+        "Squamous": 0.3182787448167801
+      }
+    },
+    {
+      "sample_index": 63,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0034/1.3.6.1.4.1.14519.5.2.1.6655.2359.713885642416372374778510754572_image.nii.gz",
+      "patient_id": "Lung_Dx-B0034",
+      "num_slices": 8,
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.4148107320070267,
+      "probabilities": {
+        "Adenocarcinoma": 0.2694524172693491,
+        "Small Cell": 0.3157368581742048,
+        "Squamous": 0.4148107320070267
+      }
+    },
+    {
+      "sample_index": 64,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0229/1.3.6.1.4.1.14519.5.2.1.6655.2359.102109358412174438572451998598_image.nii.gz",
+      "patient_id": "Lung_Dx-A0229",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.423581600189209,
+      "probabilities": {
+        "Adenocarcinoma": 0.34268014691770077,
+        "Small Cell": 0.2337382547557354,
+        "Squamous": 0.423581600189209
+      }
+    },
+    {
+      "sample_index": 65,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0229/1.3.6.1.4.1.14519.5.2.1.6655.2359.180532508929066340046719563815_image.nii.gz",
+      "patient_id": "Lung_Dx-A0229",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.4843480922281742,
+      "probabilities": {
+        "Adenocarcinoma": 0.4843480922281742,
+        "Small Cell": 0.20741908065974712,
+        "Squamous": 0.3082328289747238
+      }
+    },
+    {
+      "sample_index": 66,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0250/1.3.6.1.4.1.14519.5.2.1.6655.2359.155652490332939256059568022270_image.nii.gz",
+      "patient_id": "Lung_Dx-A0250",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.44299739226698875,
+      "probabilities": {
+        "Adenocarcinoma": 0.35643224231898785,
+        "Small Cell": 0.2005703691393137,
+        "Squamous": 0.44299739226698875
+      }
+    },
+    {
+      "sample_index": 67,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0250/1.3.6.1.4.1.14519.5.2.1.6655.2359.377068144376366574957659842073_image.nii.gz",
+      "patient_id": "Lung_Dx-A0250",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.48066509887576103,
+      "probabilities": {
+        "Adenocarcinoma": 0.26152013428509235,
+        "Small Cell": 0.2578147705644369,
+        "Squamous": 0.48066509887576103
+      }
+    },
+    {
+      "sample_index": 68,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0038/1.3.6.1.4.1.14519.5.2.1.6655.2359.326542547200408214523936022479_image.nii.gz",
+      "patient_id": "Lung_Dx-G0038",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.44948216900229454,
+      "probabilities": {
+        "Adenocarcinoma": 0.24280352517962456,
+        "Small Cell": 0.3077143095433712,
+        "Squamous": 0.44948216900229454
+      }
+    },
+    {
+      "sample_index": 69,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0038/1.3.6.1.4.1.14519.5.2.1.6655.2359.911824182485868113635551731557_image.nii.gz",
+      "patient_id": "Lung_Dx-G0038",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.5203125961124897,
+      "probabilities": {
+        "Adenocarcinoma": 0.19066282827407122,
+        "Small Cell": 0.28902455791831017,
+        "Squamous": 0.5203125961124897
+      }
+    },
+    {
+      "sample_index": 70,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0012/1.3.6.1.4.1.14519.5.2.1.6655.2359.264014525724342754519275659874_image.nii.gz",
+      "patient_id": "Lung_Dx-B0012",
+      "num_slices": 8,
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.43233106285333633,
+      "probabilities": {
+        "Adenocarcinoma": 0.1775506753474474,
+        "Small Cell": 0.3901182487607002,
+        "Squamous": 0.43233106285333633
+      }
+    },
+    {
+      "sample_index": 71,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0012/1.3.6.1.4.1.14519.5.2.1.6655.2359.274532498392684120869311295822_image.nii.gz",
+      "patient_id": "Lung_Dx-B0012",
+      "num_slices": 8,
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.40458520874381065,
+      "probabilities": {
+        "Adenocarcinoma": 0.2518018875271082,
+        "Small Cell": 0.34361289255321026,
+        "Squamous": 0.40458520874381065
+      }
+    },
+    {
+      "sample_index": 72,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0096/1.3.6.1.4.1.14519.5.2.1.6655.2359.140536049745423447670853555666_image.nii.gz",
+      "patient_id": "Lung_Dx-A0096",
+      "num_slices": 7,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.7871183497565133,
+      "probabilities": {
+        "Adenocarcinoma": 0.7871183497565133,
+        "Small Cell": 0.10512612893113069,
+        "Squamous": 0.10775551332959107
+      }
+    },
+    {
+      "sample_index": 73,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0096/1.3.6.1.4.1.14519.5.2.1.6655.2359.282456554317921670882738238004_image.nii.gz",
+      "patient_id": "Lung_Dx-A0096",
+      "num_slices": 7,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.844416686466762,
+      "probabilities": {
+        "Adenocarcinoma": 0.844416686466762,
+        "Small Cell": 0.09467797087771553,
+        "Squamous": 0.06090535303311689
+      }
+    },
+    {
+      "sample_index": 74,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0055/1.3.6.1.4.1.14519.5.2.1.6655.2359.213883616931911566884306937551_image.nii.gz",
+      "patient_id": "Lung_Dx-G0055",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.5341595783829689,
+      "probabilities": {
+        "Adenocarcinoma": 0.26640004850924015,
+        "Small Cell": 0.19944040104746819,
+        "Squamous": 0.5341595783829689
+      }
+    },
+    {
+      "sample_index": 75,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0055/1.3.6.1.4.1.14519.5.2.1.6655.2359.266606758789593112811601011108_image.nii.gz",
+      "patient_id": "Lung_Dx-G0055",
+      "num_slices": 8,
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.5210404768586159,
+      "probabilities": {
+        "Adenocarcinoma": 0.2745837913826108,
+        "Small Cell": 0.20437573175877333,
+        "Squamous": 0.5210404768586159
+      }
+    },
+    {
+      "sample_index": 76,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0244/1.3.6.1.4.1.14519.5.2.1.6655.2359.306658399872604816252581521202_image.nii.gz",
+      "patient_id": "Lung_Dx-A0244",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.6725240908563137,
+      "probabilities": {
+        "Adenocarcinoma": 0.6725240908563137,
+        "Small Cell": 0.12037587352097034,
+        "Squamous": 0.20710003934800625
+      }
+    },
+    {
+      "sample_index": 77,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0244/1.3.6.1.4.1.14519.5.2.1.6655.2359.861992228692875719127182378683_image.nii.gz",
+      "patient_id": "Lung_Dx-A0244",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.5865060426294804,
+      "probabilities": {
+        "Adenocarcinoma": 0.5865060426294804,
+        "Small Cell": 0.17316042818129063,
+        "Squamous": 0.24033353943377733
+      }
+    },
+    {
+      "sample_index": 78,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0139/1.3.6.1.4.1.14519.5.2.1.6655.2359.150849033327571939907865248909_image.nii.gz",
+      "patient_id": "Lung_Dx-A0139",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.4162047989666462,
+      "probabilities": {
+        "Adenocarcinoma": 0.35043504647910595,
+        "Small Cell": 0.4162047989666462,
+        "Squamous": 0.2333601601421833
+      }
+    },
+    {
+      "sample_index": 79,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0139/1.3.6.1.4.1.14519.5.2.1.6655.2359.981805853033905814313076139008_image.nii.gz",
+      "patient_id": "Lung_Dx-A0139",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.46094565466046333,
+      "probabilities": {
+        "Adenocarcinoma": 0.34241252951323986,
+        "Small Cell": 0.46094565466046333,
+        "Squamous": 0.1966418381780386
+      }
+    },
+    {
+      "sample_index": 80,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0234/1.3.6.1.4.1.14519.5.2.1.6655.2359.204385280345656870739949208603_image.nii.gz",
+      "patient_id": "Lung_Dx-A0234",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.508392944931984,
+      "probabilities": {
+        "Adenocarcinoma": 0.508392944931984,
+        "Small Cell": 0.3056766763329506,
+        "Squamous": 0.18593037314713
+      }
+    },
+    {
+      "sample_index": 81,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0234/1.3.6.1.4.1.14519.5.2.1.6655.2359.319325059586648329679182896165_image.nii.gz",
+      "patient_id": "Lung_Dx-A0234",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.5849710330367088,
+      "probabilities": {
+        "Adenocarcinoma": 0.5849710330367088,
+        "Small Cell": 0.24299252405762672,
+        "Squamous": 0.17203644290566444
+      }
+    },
+    {
+      "sample_index": 82,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0161/1.3.6.1.4.1.14519.5.2.1.6655.2359.265870732387520052319176684484_image.nii.gz",
+      "patient_id": "Lung_Dx-A0161",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3791981767863035,
+      "probabilities": {
+        "Adenocarcinoma": 0.3791981767863035,
+        "Small Cell": 0.3729021027684212,
+        "Squamous": 0.2478997204452753
+      }
+    },
+    {
+      "sample_index": 83,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0161/1.3.6.1.4.1.14519.5.2.1.6655.2359.963899043253242600398614324920_image.nii.gz",
+      "patient_id": "Lung_Dx-A0161",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.4430859088897705,
+      "probabilities": {
+        "Adenocarcinoma": 0.34965779446065426,
+        "Small Cell": 0.4430859088897705,
+        "Squamous": 0.20725630596280098
+      }
+    },
+    {
+      "sample_index": 84,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0095/1.3.6.1.4.1.14519.5.2.1.6655.2359.289101986332127976260151260541_image.nii.gz",
+      "patient_id": "Lung_Dx-A0095",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.3998440280556679,
+      "probabilities": {
+        "Adenocarcinoma": 0.24888169020414352,
+        "Small Cell": 0.3998440280556679,
+        "Squamous": 0.3512742854654789
+      }
+    },
+    {
+      "sample_index": 85,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0095/1.3.6.1.4.1.14519.5.2.1.6655.2359.770997754464014629894803316547_image.nii.gz",
+      "patient_id": "Lung_Dx-A0095",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.38239967823028564,
+      "probabilities": {
+        "Adenocarcinoma": 0.3433164283633232,
+        "Small Cell": 0.27428389340639114,
+        "Squamous": 0.38239967823028564
+      }
+    },
+    {
+      "sample_index": 86,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0221/1.3.6.1.4.1.14519.5.2.1.6655.2359.133751412863597629557196311607_image.nii.gz",
+      "patient_id": "Lung_Dx-A0221",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.46791353449225426,
+      "probabilities": {
+        "Adenocarcinoma": 0.228609723970294,
+        "Small Cell": 0.3034767545759678,
+        "Squamous": 0.46791353449225426
+      }
+    },
+    {
+      "sample_index": 87,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0221/1.3.6.1.4.1.14519.5.2.1.6655.2359.201123092569278896371598097449_image.nii.gz",
+      "patient_id": "Lung_Dx-A0221",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.44537417590618134,
+      "probabilities": {
+        "Adenocarcinoma": 0.2620131727308035,
+        "Small Cell": 0.2926126606762409,
+        "Squamous": 0.44537417590618134
+      }
+    },
+    {
+      "sample_index": 88,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0199/1.3.6.1.4.1.14519.5.2.1.6655.2359.203507214399714467440348586992_image.nii.gz",
+      "patient_id": "Lung_Dx-A0199",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.5546650141477585,
+      "probabilities": {
+        "Adenocarcinoma": 0.5546650141477585,
+        "Small Cell": 0.26074870862066746,
+        "Squamous": 0.18458627630025148
+      }
+    },
+    {
+      "sample_index": 89,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0199/1.3.6.1.4.1.14519.5.2.1.6655.2359.502766288420847107562042795778_image.nii.gz",
+      "patient_id": "Lung_Dx-A0199",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.6608587503433228,
+      "probabilities": {
+        "Adenocarcinoma": 0.6608587503433228,
+        "Small Cell": 0.17418910935521126,
+        "Squamous": 0.164952140301466
+      }
+    },
+    {
+      "sample_index": 90,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0061/1.3.6.1.4.1.14519.5.2.1.6655.2359.111352338460555369158493499334_image.nii.gz",
+      "patient_id": "Lung_Dx-A0061",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.40190575644373894,
+      "probabilities": {
+        "Adenocarcinoma": 0.27083031833171844,
+        "Small Cell": 0.3272639252245426,
+        "Squamous": 0.40190575644373894
+      }
+    },
+    {
+      "sample_index": 91,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0061/1.3.6.1.4.1.14519.5.2.1.6655.2359.309813585416803873905396754677_image.nii.gz",
+      "patient_id": "Lung_Dx-A0061",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.3709975481033325,
+      "probabilities": {
+        "Adenocarcinoma": 0.28006632812321186,
+        "Small Cell": 0.34893612936139107,
+        "Squamous": 0.3709975481033325
+      }
+    },
+    {
+      "sample_index": 92,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0051/1.3.6.1.4.1.14519.5.2.1.6655.2359.176849385785637303858625185442_image.nii.gz",
+      "patient_id": "Lung_Dx-A0051",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.5265920795500278,
+      "probabilities": {
+        "Adenocarcinoma": 0.20901713706552982,
+        "Small Cell": 0.5265920795500278,
+        "Squamous": 0.26439076475799084
+      }
+    },
+    {
+      "sample_index": 93,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0051/1.3.6.1.4.1.14519.5.2.1.6655.2359.661825582272377734973292263956_image.nii.gz",
+      "patient_id": "Lung_Dx-A0051",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.4928436614573002,
+      "probabilities": {
+        "Adenocarcinoma": 0.23122355714440346,
+        "Small Cell": 0.4928436614573002,
+        "Squamous": 0.27593278884887695
+      }
+    },
+    {
+      "sample_index": 94,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0022/1.3.6.1.4.1.14519.5.2.1.6655.2359.110956083233957783983544363625_image.nii.gz",
+      "patient_id": "Lung_Dx-A0022",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3995781596750021,
+      "probabilities": {
+        "Adenocarcinoma": 0.3995781596750021,
+        "Small Cell": 0.33562893234193325,
+        "Squamous": 0.26479291170835495
+      }
+    },
+    {
+      "sample_index": 95,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0022/1.3.6.1.4.1.14519.5.2.1.6655.2359.182013739909837582128519481154_image.nii.gz",
+      "patient_id": "Lung_Dx-A0022",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3638444449752569,
+      "probabilities": {
+        "Adenocarcinoma": 0.3638444449752569,
+        "Small Cell": 0.3416642099618912,
+        "Squamous": 0.2944913487881422
+      }
+    },
+    {
+      "sample_index": 96,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0191/1.3.6.1.4.1.14519.5.2.1.6655.2359.186603334306258357140966941313_image.nii.gz",
+      "patient_id": "Lung_Dx-A0191",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.8525031879544258,
+      "probabilities": {
+        "Adenocarcinoma": 0.8525031879544258,
+        "Small Cell": 0.06486397748813033,
+        "Squamous": 0.08263285038992763
+      }
+    },
+    {
+      "sample_index": 97,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0191/1.3.6.1.4.1.14519.5.2.1.6655.2359.295718257802424130434536820869_image.nii.gz",
+      "patient_id": "Lung_Dx-A0191",
+      "num_slices": 7,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.6427327479634967,
+      "probabilities": {
+        "Adenocarcinoma": 0.6427327479634967,
+        "Small Cell": 0.2190087820802416,
+        "Squamous": 0.13825848272868566
+      }
+    },
+    {
+      "sample_index": 98,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0222/1.3.6.1.4.1.14519.5.2.1.6655.2359.890005550153384921896601387843_image.nii.gz",
+      "patient_id": "Lung_Dx-A0222",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.4583485834300518,
+      "probabilities": {
+        "Adenocarcinoma": 0.18219599686563015,
+        "Small Cell": 0.4583485834300518,
+        "Squamous": 0.35945540852844715
+      }
+    },
+    {
+      "sample_index": 99,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0222/1.3.6.1.4.1.14519.5.2.1.6655.2359.971469858068737005215510835101_image.nii.gz",
+      "patient_id": "Lung_Dx-A0222",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.4472658857703209,
+      "probabilities": {
+        "Adenocarcinoma": 0.16428750194609165,
+        "Small Cell": 0.4472658857703209,
+        "Squamous": 0.388446606695652
+      }
+    },
+    {
+      "sample_index": 100,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0138/1.3.6.1.4.1.14519.5.2.1.6655.2359.140815271600318009310461437953_image.nii.gz",
+      "patient_id": "Lung_Dx-A0138",
+      "num_slices": 7,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.35834209833826336,
+      "probabilities": {
+        "Adenocarcinoma": 0.35248819845063345,
+        "Small Cell": 0.2891696904386793,
+        "Squamous": 0.35834209833826336
+      }
+    },
+    {
+      "sample_index": 101,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0138/1.3.6.1.4.1.14519.5.2.1.6655.2359.322260919863833770916070730810_image.nii.gz",
+      "patient_id": "Lung_Dx-A0138",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.3890085592865944,
+      "probabilities": {
+        "Adenocarcinoma": 0.22493702173233032,
+        "Small Cell": 0.3890085592865944,
+        "Squamous": 0.3860544264316559
+      }
+    },
+    {
+      "sample_index": 102,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0063/1.3.6.1.4.1.14519.5.2.1.6655.2359.122569226553077774104964138677_image.nii.gz",
+      "patient_id": "Lung_Dx-A0063",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.4194571450352669,
+      "probabilities": {
+        "Adenocarcinoma": 0.27389173209667206,
+        "Small Cell": 0.3066511359065771,
+        "Squamous": 0.4194571450352669
+      }
+    },
+    {
+      "sample_index": 103,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0063/1.3.6.1.4.1.14519.5.2.1.6655.2359.184030379575357456895073926897_image.nii.gz",
+      "patient_id": "Lung_Dx-A0063",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.4061554819345474,
+      "probabilities": {
+        "Adenocarcinoma": 0.2314038034528494,
+        "Small Cell": 0.4061554819345474,
+        "Squamous": 0.36244069412350655
+      }
+    },
+    {
+      "sample_index": 104,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0106/1.3.6.1.4.1.14519.5.2.1.6655.2359.129778562347628294400341610955_image.nii.gz",
+      "patient_id": "Lung_Dx-A0106",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.5837401747703552,
+      "probabilities": {
+        "Adenocarcinoma": 0.5837401747703552,
+        "Small Cell": 0.13262617029249668,
+        "Squamous": 0.2836336400359869
+      }
+    },
+    {
+      "sample_index": 105,
+      "volume_id": "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0106/1.3.6.1.4.1.14519.5.2.1.6655.2359.152550152973076280216440638306_image.nii.gz",
+      "patient_id": "Lung_Dx-A0106",
+      "num_slices": 8,
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.6368492692708969,
+      "probabilities": {
+        "Adenocarcinoma": 0.6368492692708969,
+        "Small Cell": 0.17657187581062317,
+        "Squamous": 0.18657885864377022
+      }
+    }
+  ],
+  "patient_level": {
+    "num_patients": 53,
+    "mean_probability_per_class": {
+      "Adenocarcinoma": 0.4149222899896077,
+      "Small Cell": 0.28452358021819674,
+      "Squamous": 0.30055413029634837
+    },
+    "predicted_class_counts": {
+      "Adenocarcinoma": 26,
+      "Small Cell": 10,
+      "Squamous": 17
+    },
+    "predicted_class_fractions": {
+      "Adenocarcinoma": 0.49056603773584906,
+      "Small Cell": 0.18867924528301888,
+      "Squamous": 0.32075471698113206
+    },
+    "samples": [
+      {
+        "sample_index": 0,
+        "patient_id": "Lung_Dx-G0062",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0062/1.3.6.1.4.1.14519.5.2.1.6655.2359.175757871322358372209202025490_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0062/1.3.6.1.4.1.14519.5.2.1.6655.2359.333321236537063355599236377825_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 2,
+        "true_name": "Squamous",
+        "pred_label": 1,
+        "pred_name": "Small Cell",
+        "confidence": 0.43596339505165815,
+        "probabilities": {
+          "Adenocarcinoma": 0.3149447748437524,
+          "Small Cell": 0.43596339505165815,
+          "Squamous": 0.249091817997396
+        }
+      },
+      {
+        "sample_index": 1,
+        "patient_id": "Lung_Dx-A0201",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0201/1.3.6.1.4.1.14519.5.2.1.6655.2359.278413521309429954235467985013_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0201/1.3.6.1.4.1.14519.5.2.1.6655.2359.295155415349218847868434589027_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 14,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.652133122086525,
+        "probabilities": {
+          "Adenocarcinoma": 0.652133122086525,
+          "Small Cell": 0.15510599528040203,
+          "Squamous": 0.19276088795491628
+        }
+      },
+      {
+        "sample_index": 2,
+        "patient_id": "Lung_Dx-A0203",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0203/1.3.6.1.4.1.14519.5.2.1.6655.2359.224133559419001557541781592286_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0203/1.3.6.1.4.1.14519.5.2.1.6655.2359.817255521805911719905903246901_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.6071703042834997,
+        "probabilities": {
+          "Adenocarcinoma": 0.6071703042834997,
+          "Small Cell": 0.13408672204241157,
+          "Squamous": 0.25874296529218554
+        }
+      },
+      {
+        "sample_index": 3,
+        "patient_id": "Lung_Dx-A0087",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0087/1.3.6.1.4.1.14519.5.2.1.6655.2359.152344144036304784027071976298_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0087/1.3.6.1.4.1.14519.5.2.1.6655.2359.229829119308840404027078176410_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 15,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.850175289703267,
+        "probabilities": {
+          "Adenocarcinoma": 0.850175289703267,
+          "Small Cell": 0.07714237114747188,
+          "Squamous": 0.07268232483017657
+        }
+      },
+      {
+        "sample_index": 4,
+        "patient_id": "Lung_Dx-A0090",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0090/1.3.6.1.4.1.14519.5.2.1.6655.2359.106345707873123991031734518401_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0090/1.3.6.1.4.1.14519.5.2.1.6655.2359.246595946283544761341253893344_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 14,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.3697664546115058,
+        "probabilities": {
+          "Adenocarcinoma": 0.3697664546115058,
+          "Small Cell": 0.27908680800880703,
+          "Squamous": 0.35114672567163197
+        }
+      },
+      {
+        "sample_index": 5,
+        "patient_id": "Lung_Dx-G0040",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0040/1.3.6.1.4.1.14519.5.2.1.6655.2359.281353530179599159227079419769_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0040/1.3.6.1.4.1.14519.5.2.1.6655.2359.286929266369981518672204158323_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 2,
+        "true_name": "Squamous",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.41026199609041214,
+        "probabilities": {
+          "Adenocarcinoma": 0.41026199609041214,
+          "Small Cell": 0.2117170316632837,
+          "Squamous": 0.37802095885854214
+        }
+      },
+      {
+        "sample_index": 6,
+        "patient_id": "Lung_Dx-B0019",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0019/1.3.6.1.4.1.14519.5.2.1.6655.2359.328119545492186765373504219604_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0019/1.3.6.1.4.1.14519.5.2.1.6655.2359.554985317763093443697721816348_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 1,
+        "true_name": "Small Cell",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.5125398263335228,
+        "probabilities": {
+          "Adenocarcinoma": 0.22622371092438698,
+          "Small Cell": 0.26123646181076765,
+          "Squamous": 0.5125398263335228
+        }
+      },
+      {
+        "sample_index": 7,
+        "patient_id": "Lung_Dx-A0099",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0099/1.3.6.1.4.1.14519.5.2.1.6655.2359.222986498792670955826010591858_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0099/1.3.6.1.4.1.14519.5.2.1.6655.2359.498667720428236792368278408421_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.6772401630878448,
+        "probabilities": {
+          "Adenocarcinoma": 0.6772401630878448,
+          "Small Cell": 0.1717003877274692,
+          "Squamous": 0.15105944871902466
+        }
+      },
+      {
+        "sample_index": 8,
+        "patient_id": "Lung_Dx-A0237",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0237/1.3.6.1.4.1.14519.5.2.1.6655.2359.173885623940580643999984988552_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0237/1.3.6.1.4.1.14519.5.2.1.6655.2359.379788844094348609714355815637_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.3762447852641344,
+        "probabilities": {
+          "Adenocarcinoma": 0.3762447852641344,
+          "Small Cell": 0.3371382411569357,
+          "Squamous": 0.2866169810295105
+        }
+      },
+      {
+        "sample_index": 9,
+        "patient_id": "Lung_Dx-A0049",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0049/1.3.6.1.4.1.14519.5.2.1.6655.2359.874773035744838337584349904328_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0049/1.3.6.1.4.1.14519.5.2.1.6655.2359.906988784415400947583455067526_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.38725687749683857,
+        "probabilities": {
+          "Adenocarcinoma": 0.38725687749683857,
+          "Small Cell": 0.3305059131234884,
+          "Squamous": 0.28223719261586666
+        }
+      },
+      {
+        "sample_index": 10,
+        "patient_id": "Lung_Dx-A0098",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0098/1.3.6.1.4.1.14519.5.2.1.6655.2359.120850088656741346172551846366_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0098/1.3.6.1.4.1.14519.5.2.1.6655.2359.220228282617615068804083765741_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 1,
+        "pred_name": "Small Cell",
+        "confidence": 0.4445770736783743,
+        "probabilities": {
+          "Adenocarcinoma": 0.3213544376194477,
+          "Small Cell": 0.4445770736783743,
+          "Squamous": 0.23406849056482315
+        }
+      },
+      {
+        "sample_index": 11,
+        "patient_id": "Lung_Dx-A0170",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0170/1.3.6.1.4.1.14519.5.2.1.6655.2359.278727158206966673583609748719_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0170/1.3.6.1.4.1.14519.5.2.1.6655.2359.312238367022457521717464246132_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.5306937005370855,
+        "probabilities": {
+          "Adenocarcinoma": 0.18417093204334378,
+          "Small Cell": 0.2851353641599417,
+          "Squamous": 0.5306937005370855
+        }
+      },
+      {
+        "sample_index": 12,
+        "patient_id": "Lung_Dx-B0026",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0026/1.3.6.1.4.1.14519.5.2.1.6655.2359.293506179812608718480537254745_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0026/1.3.6.1.4.1.14519.5.2.1.6655.2359.368954869250280601065139599435_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 1,
+        "true_name": "Small Cell",
+        "pred_label": 1,
+        "pred_name": "Small Cell",
+        "confidence": 0.42945488542318344,
+        "probabilities": {
+          "Adenocarcinoma": 0.2919536307454109,
+          "Small Cell": 0.42945488542318344,
+          "Squamous": 0.27859149407595396
+        }
+      },
+      {
+        "sample_index": 13,
+        "patient_id": "Lung_Dx-A0185",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0185/1.3.6.1.4.1.14519.5.2.1.6655.2359.162746788641134093183880666111_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0185/1.3.6.1.4.1.14519.5.2.1.6655.2359.271786297407096950324795091663_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.603555204346776,
+        "probabilities": {
+          "Adenocarcinoma": 0.603555204346776,
+          "Small Cell": 0.18658838607370853,
+          "Squamous": 0.20985640212893486
+        }
+      },
+      {
+        "sample_index": 14,
+        "patient_id": "Lung_Dx-A0174",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0174/1.3.6.1.4.1.14519.5.2.1.6655.2359.383702598777443812138592855495_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0174/1.3.6.1.4.1.14519.5.2.1.6655.2359.669441825695249183272478349685_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.5243004225194454,
+        "probabilities": {
+          "Adenocarcinoma": 0.5243004225194454,
+          "Small Cell": 0.26428575348109007,
+          "Squamous": 0.21141383005306125
+        }
+      },
+      {
+        "sample_index": 15,
+        "patient_id": "Lung_Dx-G0018",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0018/1.3.6.1.4.1.14519.5.2.1.6655.2359.172360766237921614772815928725_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0018/1.3.6.1.4.1.14519.5.2.1.6655.2359.664258235274009264224848388888_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 2,
+        "true_name": "Squamous",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.4308648109436035,
+        "probabilities": {
+          "Adenocarcinoma": 0.1786294006742537,
+          "Small Cell": 0.39050578884780407,
+          "Squamous": 0.4308648109436035
+        }
+      },
+      {
+        "sample_index": 16,
+        "patient_id": "Lung_Dx-B0043",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0043/1.3.6.1.4.1.14519.5.2.1.6655.2359.198666459344567602975266683619_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0043/1.3.6.1.4.1.14519.5.2.1.6655.2359.299608846350221771363695695722_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 1,
+        "true_name": "Small Cell",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.5576998665928841,
+        "probabilities": {
+          "Adenocarcinoma": 0.15978732984513044,
+          "Small Cell": 0.2825127858668566,
+          "Squamous": 0.5576998665928841
+        }
+      },
+      {
+        "sample_index": 17,
+        "patient_id": "Lung_Dx-G0041",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0041/1.3.6.1.4.1.14519.5.2.1.6655.2359.240343507599199635858295628249_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0041/1.3.6.1.4.1.14519.5.2.1.6655.2359.988239706900412200563896789591_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 2,
+        "true_name": "Squamous",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.3925314387306571,
+        "probabilities": {
+          "Adenocarcinoma": 0.28923686454072595,
+          "Small Cell": 0.31823170743882656,
+          "Squamous": 0.3925314387306571
+        }
+      },
+      {
+        "sample_index": 18,
+        "patient_id": "Lung_Dx-G0025",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0025/1.3.6.1.4.1.14519.5.2.1.6655.2359.325974724648222537395086688711_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0025/1.3.6.1.4.1.14519.5.2.1.6655.2359.980425944274184040708374276735_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 2,
+        "true_name": "Squamous",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.540389884263277,
+        "probabilities": {
+          "Adenocarcinoma": 0.16182764479890466,
+          "Small Cell": 0.2977824741974473,
+          "Squamous": 0.540389884263277
+        }
+      },
+      {
+        "sample_index": 19,
+        "patient_id": "Lung_Dx-A0235",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0235/1.3.6.1.4.1.14519.5.2.1.6655.2359.102853167529514656720460196470_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0235/1.3.6.1.4.1.14519.5.2.1.6655.2359.248701917894648433127498845262_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.5108746555633843,
+        "probabilities": {
+          "Adenocarcinoma": 0.28410324873402715,
+          "Small Cell": 0.20502208499237895,
+          "Squamous": 0.5108746555633843
+        }
+      },
+      {
+        "sample_index": 20,
+        "patient_id": "Lung_Dx-A0129",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0129/1.3.6.1.4.1.14519.5.2.1.6655.2359.137367030017539154193138902596_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0129/1.3.6.1.4.1.14519.5.2.1.6655.2359.165015917123212796499269389347_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.6096070893108845,
+        "probabilities": {
+          "Adenocarcinoma": 0.6096070893108845,
+          "Small Cell": 0.28058601170778275,
+          "Squamous": 0.10980689967982471
+        }
+      },
+      {
+        "sample_index": 21,
+        "patient_id": "Lung_Dx-A0035",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0035/1.3.6.1.4.1.14519.5.2.1.6655.2359.207996564953560023420110335860_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0035/1.3.6.1.4.1.14519.5.2.1.6655.2359.245824809669940828570219659020_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.6514438893646002,
+        "probabilities": {
+          "Adenocarcinoma": 0.6514438893646002,
+          "Small Cell": 0.2077283514663577,
+          "Squamous": 0.14082777476869524
+        }
+      },
+      {
+        "sample_index": 22,
+        "patient_id": "Lung_Dx-G0054",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0054/1.3.6.1.4.1.14519.5.2.1.6655.2359.304543682991840548566793184265_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0054/1.3.6.1.4.1.14519.5.2.1.6655.2359.894929401718500818279503979310_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 2,
+        "true_name": "Squamous",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.587204048410058,
+        "probabilities": {
+          "Adenocarcinoma": 0.14932813262566924,
+          "Small Cell": 0.26346781477332115,
+          "Squamous": 0.587204048410058
+        }
+      },
+      {
+        "sample_index": 23,
+        "patient_id": "Lung_Dx-A0113",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0113/1.3.6.1.4.1.14519.5.2.1.6655.2359.164221678519539568633610013466_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0113/1.3.6.1.4.1.14519.5.2.1.6655.2359.196600760498278440810850906562_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 12,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.8082478642463684,
+        "probabilities": {
+          "Adenocarcinoma": 0.8082478642463684,
+          "Small Cell": 0.11333791663249335,
+          "Squamous": 0.07841422967612743
+        }
+      },
+      {
+        "sample_index": 24,
+        "patient_id": "Lung_Dx-B0007",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0007/1.3.6.1.4.1.14519.5.2.1.6655.2359.187686057502459363734942859199_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0007/1.3.6.1.4.1.14519.5.2.1.6655.2359.189307988729418555032286866008_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 1,
+        "true_name": "Small Cell",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.6473213844001293,
+        "probabilities": {
+          "Adenocarcinoma": 0.6473213844001293,
+          "Small Cell": 0.17094275169074535,
+          "Squamous": 0.18173587648198009
+        }
+      },
+      {
+        "sample_index": 25,
+        "patient_id": "Lung_Dx-A0247",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0247/1.3.6.1.4.1.14519.5.2.1.6655.2359.118945173766264954174925778680_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0247/1.3.6.1.4.1.14519.5.2.1.6655.2359.714878093299754896285823130469_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.6653131507337093,
+        "probabilities": {
+          "Adenocarcinoma": 0.6653131507337093,
+          "Small Cell": 0.12957943137735128,
+          "Squamous": 0.2051074244081974
+        }
+      },
+      {
+        "sample_index": 26,
+        "patient_id": "Lung_Dx-A0265",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0265/1.3.6.1.4.1.14519.5.2.1.6655.2359.154818928589211366709079355433_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0265/1.3.6.1.4.1.14519.5.2.1.6655.2359.164924420190528779219609372122_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 1,
+        "pred_name": "Small Cell",
+        "confidence": 0.6594173852354288,
+        "probabilities": {
+          "Adenocarcinoma": 0.1909896582365036,
+          "Small Cell": 0.6594173852354288,
+          "Squamous": 0.14959295745939016
+        }
+      },
+      {
+        "sample_index": 27,
+        "patient_id": "Lung_Dx-A0117",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0117/1.3.6.1.4.1.14519.5.2.1.6655.2359.165966245397991195857816310237_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0117/1.3.6.1.4.1.14519.5.2.1.6655.2359.244920982079420277264739971379_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 15,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.8784655912646225,
+        "probabilities": {
+          "Adenocarcinoma": 0.8784655912646225,
+          "Small Cell": 0.06667320869330849,
+          "Squamous": 0.05486121324689261
+        }
+      },
+      {
+        "sample_index": 28,
+        "patient_id": "Lung_Dx-A0137",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0137/1.3.6.1.4.1.14519.5.2.1.6655.2359.577696542903677768892324795837_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0137/1.3.6.1.4.1.14519.5.2.1.6655.2359.945975385858457292567581857816_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.3976118704304099,
+        "probabilities": {
+          "Adenocarcinoma": 0.3976118704304099,
+          "Small Cell": 0.2626887112855911,
+          "Squamous": 0.3396994238719344
+        }
+      },
+      {
+        "sample_index": 29,
+        "patient_id": "Lung_Dx-A0068",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0068/1.3.6.1.4.1.14519.5.2.1.6655.2359.195584506494362409451850964953_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0068/1.3.6.1.4.1.14519.5.2.1.6655.2359.793147200524272450376976003141_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.42389507684856653,
+        "probabilities": {
+          "Adenocarcinoma": 0.42389507684856653,
+          "Small Cell": 0.29210097901523113,
+          "Squamous": 0.28400395158678293
+        }
+      },
+      {
+        "sample_index": 30,
+        "patient_id": "Lung_Dx-G0020",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0020/1.3.6.1.4.1.14519.5.2.1.6655.2359.294884297826712546377720244853_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0020/1.3.6.1.4.1.14519.5.2.1.6655.2359.379511290971887097959764788457_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 2,
+        "true_name": "Squamous",
+        "pred_label": 1,
+        "pred_name": "Small Cell",
+        "confidence": 0.5843005683273077,
+        "probabilities": {
+          "Adenocarcinoma": 0.2214721329510212,
+          "Small Cell": 0.5843005683273077,
+          "Squamous": 0.19422730570659041
+        }
+      },
+      {
+        "sample_index": 31,
+        "patient_id": "Lung_Dx-B0034",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0034/1.3.6.1.4.1.14519.5.2.1.6655.2359.199976111023246107640387546836_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0034/1.3.6.1.4.1.14519.5.2.1.6655.2359.713885642416372374778510754572_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 1,
+        "true_name": "Small Cell",
+        "pred_label": 1,
+        "pred_name": "Small Cell",
+        "confidence": 0.3827815307304263,
+        "probabilities": {
+          "Adenocarcinoma": 0.25067372154444456,
+          "Small Cell": 0.3827815307304263,
+          "Squamous": 0.3665447384119034
+        }
+      },
+      {
+        "sample_index": 32,
+        "patient_id": "Lung_Dx-A0229",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0229/1.3.6.1.4.1.14519.5.2.1.6655.2359.102109358412174438572451998598_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0229/1.3.6.1.4.1.14519.5.2.1.6655.2359.180532508929066340046719563815_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.4135141195729375,
+        "probabilities": {
+          "Adenocarcinoma": 0.4135141195729375,
+          "Small Cell": 0.22057866770774126,
+          "Squamous": 0.3659072145819664
+        }
+      },
+      {
+        "sample_index": 33,
+        "patient_id": "Lung_Dx-A0250",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0250/1.3.6.1.4.1.14519.5.2.1.6655.2359.155652490332939256059568022270_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0250/1.3.6.1.4.1.14519.5.2.1.6655.2359.377068144376366574957659842073_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.4618312455713749,
+        "probabilities": {
+          "Adenocarcinoma": 0.3089761883020401,
+          "Small Cell": 0.2291925698518753,
+          "Squamous": 0.4618312455713749
+        }
+      },
+      {
+        "sample_index": 34,
+        "patient_id": "Lung_Dx-G0038",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0038/1.3.6.1.4.1.14519.5.2.1.6655.2359.326542547200408214523936022479_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0038/1.3.6.1.4.1.14519.5.2.1.6655.2359.911824182485868113635551731557_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 2,
+        "true_name": "Squamous",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.4848973825573921,
+        "probabilities": {
+          "Adenocarcinoma": 0.2167331767268479,
+          "Small Cell": 0.2983694337308407,
+          "Squamous": 0.4848973825573921
+        }
+      },
+      {
+        "sample_index": 35,
+        "patient_id": "Lung_Dx-B0012",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0012/1.3.6.1.4.1.14519.5.2.1.6655.2359.264014525724342754519275659874_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-B0012/1.3.6.1.4.1.14519.5.2.1.6655.2359.274532498392684120869311295822_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 1,
+        "true_name": "Small Cell",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.4184581357985735,
+        "probabilities": {
+          "Adenocarcinoma": 0.2146762814372778,
+          "Small Cell": 0.36686557065695524,
+          "Squamous": 0.4184581357985735
+        }
+      },
+      {
+        "sample_index": 36,
+        "patient_id": "Lung_Dx-A0096",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0096/1.3.6.1.4.1.14519.5.2.1.6655.2359.140536049745423447670853555666_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0096/1.3.6.1.4.1.14519.5.2.1.6655.2359.282456554317921670882738238004_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 14,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.8157675181116377,
+        "probabilities": {
+          "Adenocarcinoma": 0.8157675181116377,
+          "Small Cell": 0.09990204990442311,
+          "Squamous": 0.08433043318135398
+        }
+      },
+      {
+        "sample_index": 37,
+        "patient_id": "Lung_Dx-G0055",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0055/1.3.6.1.4.1.14519.5.2.1.6655.2359.213883616931911566884306937551_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-G0055/1.3.6.1.4.1.14519.5.2.1.6655.2359.266606758789593112811601011108_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 2,
+        "true_name": "Squamous",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.5276000276207924,
+        "probabilities": {
+          "Adenocarcinoma": 0.2704919199459255,
+          "Small Cell": 0.20190806640312076,
+          "Squamous": 0.5276000276207924
+        }
+      },
+      {
+        "sample_index": 38,
+        "patient_id": "Lung_Dx-A0244",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0244/1.3.6.1.4.1.14519.5.2.1.6655.2359.306658399872604816252581521202_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0244/1.3.6.1.4.1.14519.5.2.1.6655.2359.861992228692875719127182378683_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.629515066742897,
+        "probabilities": {
+          "Adenocarcinoma": 0.629515066742897,
+          "Small Cell": 0.14676815085113049,
+          "Squamous": 0.2237167893908918
+        }
+      },
+      {
+        "sample_index": 39,
+        "patient_id": "Lung_Dx-A0139",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0139/1.3.6.1.4.1.14519.5.2.1.6655.2359.150849033327571939907865248909_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0139/1.3.6.1.4.1.14519.5.2.1.6655.2359.981805853033905814313076139008_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 1,
+        "pred_name": "Small Cell",
+        "confidence": 0.43857522681355476,
+        "probabilities": {
+          "Adenocarcinoma": 0.3464237879961729,
+          "Small Cell": 0.43857522681355476,
+          "Squamous": 0.21500099916011095
+        }
+      },
+      {
+        "sample_index": 40,
+        "patient_id": "Lung_Dx-A0234",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0234/1.3.6.1.4.1.14519.5.2.1.6655.2359.204385280345656870739949208603_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0234/1.3.6.1.4.1.14519.5.2.1.6655.2359.319325059586648329679182896165_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.5466819889843464,
+        "probabilities": {
+          "Adenocarcinoma": 0.5466819889843464,
+          "Small Cell": 0.27433460019528866,
+          "Squamous": 0.17898340802639723
+        }
+      },
+      {
+        "sample_index": 41,
+        "patient_id": "Lung_Dx-A0161",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0161/1.3.6.1.4.1.14519.5.2.1.6655.2359.265870732387520052319176684484_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0161/1.3.6.1.4.1.14519.5.2.1.6655.2359.963899043253242600398614324920_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 1,
+        "pred_name": "Small Cell",
+        "confidence": 0.40799400582909584,
+        "probabilities": {
+          "Adenocarcinoma": 0.3644279856234789,
+          "Small Cell": 0.40799400582909584,
+          "Squamous": 0.22757801320403814
+        }
+      },
+      {
+        "sample_index": 42,
+        "patient_id": "Lung_Dx-A0095",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0095/1.3.6.1.4.1.14519.5.2.1.6655.2359.289101986332127976260151260541_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0095/1.3.6.1.4.1.14519.5.2.1.6655.2359.770997754464014629894803316547_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.36683698184788227,
+        "probabilities": {
+          "Adenocarcinoma": 0.29609905928373337,
+          "Small Cell": 0.3370639607310295,
+          "Squamous": 0.36683698184788227
+        }
+      },
+      {
+        "sample_index": 43,
+        "patient_id": "Lung_Dx-A0221",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0221/1.3.6.1.4.1.14519.5.2.1.6655.2359.133751412863597629557196311607_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0221/1.3.6.1.4.1.14519.5.2.1.6655.2359.201123092569278896371598097449_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.4566438551992178,
+        "probabilities": {
+          "Adenocarcinoma": 0.24531144835054874,
+          "Small Cell": 0.29804470762610435,
+          "Squamous": 0.4566438551992178
+        }
+      },
+      {
+        "sample_index": 44,
+        "patient_id": "Lung_Dx-A0199",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0199/1.3.6.1.4.1.14519.5.2.1.6655.2359.203507214399714467440348586992_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0199/1.3.6.1.4.1.14519.5.2.1.6655.2359.502766288420847107562042795778_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.6077618822455406,
+        "probabilities": {
+          "Adenocarcinoma": 0.6077618822455406,
+          "Small Cell": 0.21746890898793936,
+          "Squamous": 0.17476920830085874
+        }
+      },
+      {
+        "sample_index": 45,
+        "patient_id": "Lung_Dx-A0061",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0061/1.3.6.1.4.1.14519.5.2.1.6655.2359.111352338460555369158493499334_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0061/1.3.6.1.4.1.14519.5.2.1.6655.2359.309813585416803873905396754677_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.38645165227353573,
+        "probabilities": {
+          "Adenocarcinoma": 0.27544832322746515,
+          "Small Cell": 0.33810002729296684,
+          "Squamous": 0.38645165227353573
+        }
+      },
+      {
+        "sample_index": 46,
+        "patient_id": "Lung_Dx-A0051",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0051/1.3.6.1.4.1.14519.5.2.1.6655.2359.176849385785637303858625185442_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0051/1.3.6.1.4.1.14519.5.2.1.6655.2359.661825582272377734973292263956_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 1,
+        "pred_name": "Small Cell",
+        "confidence": 0.509717870503664,
+        "probabilities": {
+          "Adenocarcinoma": 0.22012034710496664,
+          "Small Cell": 0.509717870503664,
+          "Squamous": 0.2701617768034339
+        }
+      },
+      {
+        "sample_index": 47,
+        "patient_id": "Lung_Dx-A0022",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0022/1.3.6.1.4.1.14519.5.2.1.6655.2359.110956083233957783983544363625_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0022/1.3.6.1.4.1.14519.5.2.1.6655.2359.182013739909837582128519481154_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.3817113023251295,
+        "probabilities": {
+          "Adenocarcinoma": 0.3817113023251295,
+          "Small Cell": 0.3386465711519122,
+          "Squamous": 0.2796421302482486
+        }
+      },
+      {
+        "sample_index": 48,
+        "patient_id": "Lung_Dx-A0191",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0191/1.3.6.1.4.1.14519.5.2.1.6655.2359.186603334306258357140966941313_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0191/1.3.6.1.4.1.14519.5.2.1.6655.2359.295718257802424130434536820869_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 15,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.7476179679589612,
+        "probabilities": {
+          "Adenocarcinoma": 0.7476179679589612,
+          "Small Cell": 0.14193637978418597,
+          "Squamous": 0.11044566655930664
+        }
+      },
+      {
+        "sample_index": 49,
+        "patient_id": "Lung_Dx-A0222",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0222/1.3.6.1.4.1.14519.5.2.1.6655.2359.890005550153384921896601387843_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0222/1.3.6.1.4.1.14519.5.2.1.6655.2359.971469858068737005215510835101_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 1,
+        "pred_name": "Small Cell",
+        "confidence": 0.45280723460018635,
+        "probabilities": {
+          "Adenocarcinoma": 0.1732417494058609,
+          "Small Cell": 0.45280723460018635,
+          "Squamous": 0.3739510076120496
+        }
+      },
+      {
+        "sample_index": 50,
+        "patient_id": "Lung_Dx-A0138",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0138/1.3.6.1.4.1.14519.5.2.1.6655.2359.140815271600318009310461437953_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0138/1.3.6.1.4.1.14519.5.2.1.6655.2359.322260919863833770916070730810_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 15,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.3721982623849596,
+        "probabilities": {
+          "Adenocarcinoma": 0.28871261009148186,
+          "Small Cell": 0.33908912486263687,
+          "Squamous": 0.3721982623849596
+        }
+      },
+      {
+        "sample_index": 51,
+        "patient_id": "Lung_Dx-A0063",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0063/1.3.6.1.4.1.14519.5.2.1.6655.2359.122569226553077774104964138677_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0063/1.3.6.1.4.1.14519.5.2.1.6655.2359.184030379575357456895073926897_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 2,
+        "pred_name": "Squamous",
+        "confidence": 0.3909489195793867,
+        "probabilities": {
+          "Adenocarcinoma": 0.2526477677747607,
+          "Small Cell": 0.35640330892056227,
+          "Squamous": 0.3909489195793867
+        }
+      },
+      {
+        "sample_index": 52,
+        "patient_id": "Lung_Dx-A0106",
+        "volume_ids": [
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0106/1.3.6.1.4.1.14519.5.2.1.6655.2359.129778562347628294400341610955_image.nii.gz",
+          "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0106/1.3.6.1.4.1.14519.5.2.1.6655.2359.152550152973076280216440638306_image.nii.gz"
+        ],
+        "num_volumes": 2,
+        "num_slices": 16,
+        "true_label": 0,
+        "true_name": "Adenocarcinoma",
+        "pred_label": 0,
+        "pred_name": "Adenocarcinoma",
+        "confidence": 0.6102947220206261,
+        "probabilities": {
+          "Adenocarcinoma": 0.6102947220206261,
+          "Small Cell": 0.15459902305155993,
+          "Squamous": 0.23510624933987856
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+=== Thesis pipeline retrain starting at Mon Apr 27 17:17:21 UTC 2026 ===
+Logs: runs/2026-04-27_v2
+[17:17:21] === START: efficientnet_b0_2d ===
+[17:17:21]   cmd: python main.py --config configs/experiments/2d_efficientnet_b0.yaml --clear-cache
+[00:29:26] === DONE:  efficientnet_b0_2d ===
+[00:29:26] === START: resnet50_2d ===
+[00:29:26]   cmd: python main.py --config configs/experiments/2d_resnet50.yaml 
