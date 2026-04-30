@@ -37,18 +37,19 @@ training:
   dapt_lr: 5.0e-5
   dapt_warmup_epochs: 5
   dapt_weight_decay: 5.0e-2
-  # Fine-tune: bag-level MIL on BigLunge. Same AMP-fp16 NaN risk as the
-  # ResNet50 MIL variant (random-init attention head on top of a strong
-  # backbone). Lower head LR + longer warmup; recommend --disable-amp for
-  # the first run.
+  # Fine-tune: bag-level MIL on BigLunge. Same fix as mil_resnet50.yaml —
+  # attention had collapsed to uniform under finetune_lr=1e-5 +
+  # bag_dropout=0.15. See docs/investigation_2026_04_30.md §1.3.
   finetune_epochs: 40
-  finetune_lr: 1.0e-5
+  # Head LR raised 30x; backbone gets 3e-5 via the diff-LR split.
+  finetune_lr: 3.0e-4
   finetune_warmup_epochs: 3
   warmup_start_lr: 1.0e-6
   finetune_backbone_lr_scale: 0.1
-  # Native LP-FT: head trains on a frozen Swin-Tiny backbone for 5 epochs,
-  # then differential-LR fine-tune resumes for 35 epochs.
-  finetune_freeze_backbone_epochs: 5
+  # Native LP-FT: head trains on a frozen Swin-Tiny backbone for 2 epochs,
+  # then differential-LR fine-tune resumes. Shorter than the prior 5 since
+  # the head LR is now high enough to converge in a couple of epochs.
+  finetune_freeze_backbone_epochs: 2
   weight_decay: 5.0e-2
   # Bag size * B is what sits on the GPU per step; keep batch_size small and
   # use accumulation_steps to hit a larger effective batch.
@@ -60,10 +61,10 @@ training:
   # strong-augs + mixup regularization bundle.
   mixup_alpha: 0.2
   strong_augs: true
-  # Bag-instance dropout: zero a Bernoulli(p) subset of slices per bag at
-  # train time. Forces attention to spread across multiple slices instead
-  # of latching onto one.
-  bag_dropout: 0.15
+  # Bag-instance dropout disabled (was 0.15). Was forcing attention to
+  # stay diffuse — the opposite of what we want when attention has
+  # collapsed to uniform. Revisit if attention entropy drops below 0.4.
+  bag_dropout: 0.0
 
 system:
   num_workers: 4

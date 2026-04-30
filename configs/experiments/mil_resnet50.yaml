@@ -30,20 +30,28 @@ training:
   dapt_lr: 1.0e-4
   dapt_warmup_epochs: 3
   dapt_weight_decay: 3.0e-3
-  # Fine-tune: bag-level MIL on BigLunge. The random-init attention head on top
-  # of a strong backbone caused AMP fp16 overflow in the softmax (NaN loss from
-  # batch 50 of ep1). We now: (a) lower the head LR so early attention logits
-  # stay in range, (b) extend warmup, (c) recommend --disable-amp for the first
-  # run so the fp16 instability is fully ruled out before re-enabling.
+  # Fine-tune: bag-level MIL on BigLunge.
+  #
+  # 2026-04-30: previous run had finetune_lr=1e-5 + bag_dropout=0.15 +
+  # 5-epoch freeze. Result: attention.entropy_mean stuck at 0.95-0.98
+  # (uniform = 1.0), train loss flat at ln(3)=1.099 — model literally not
+  # learning. The fresh attention head on top of a DAPT-warm backbone
+  # needs a much higher head LR than the backbone, and bag_dropout was
+  # actively training AGAINST concentrated attention. Investigation log:
+  # docs/investigation_2026_04_30.md, section 1.3.
   finetune_epochs: 40
-  finetune_lr: 1.0e-5
+  # Head LR raised 30x. With backbone_lr_scale=0.1 the backbone is at
+  # 3e-5 — gentle enough for a pretrained ResNet50, fast enough to let the
+  # backbone co-adapt to MIL bag features rather than freezing in place.
+  finetune_lr: 3.0e-4
   finetune_warmup_epochs: 3
   warmup_start_lr: 1.0e-6
   finetune_backbone_lr_scale: 0.1
-  # Native LP-FT (flaws.md 1.6 fix): replaces the prior two-run hack
-  # (LP phase A + FT phase B). Head trains on a frozen ResNet50 backbone for
-  # 5 epochs, then differential-LR fine-tune resumes for 35 epochs.
-  finetune_freeze_backbone_epochs: 5
+  # Native LP-FT: head trains on a frozen ResNet50 backbone for 2 epochs,
+  # then differential-LR fine-tune resumes. Reduced from 5 because at
+  # 3e-4 head LR the head converges fast; longer freeze just burns
+  # cosine-schedule budget before the backbone gets to move.
+  finetune_freeze_backbone_epochs: 2
   weight_decay: 1.0e-3
   # Bag size * B is what sits on the GPU per step; keep batch_size small and
   # use accumulation_steps to hit a larger effective batch.
@@ -56,11 +64,12 @@ training:
   # (flaws.md 1.4) makes this actually apply on every step.
   mixup_alpha: 0.2
   strong_augs: true
-  # Bag-instance dropout: zero a Bernoulli(p) subset of slices per bag at
-  # train time. Forces attention to spread across multiple slices instead
-  # of latching onto one — directly tested via attention entropy / top-k
-  # mass logged each val epoch. 0.15 is a conservative starting point.
-  bag_dropout: 0.15
+  # Bag-instance dropout: was 0.15. With the previous low head LR the
+  # model collapsed to uniform attention (entropy 0.95-0.98 of 1.0), so
+  # bag dropout was working against the model's ability to ever
+  # concentrate on tumor-bearing slices. Disabled now; revisit if the
+  # next run shows over-peaked attention (entropy < 0.4) instead.
+  bag_dropout: 0.0
 
 system:
   num_workers: 4
