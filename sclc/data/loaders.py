@@ -15,7 +15,7 @@ from sclc.data.transforms import (
     get_train_transforms_3d,
     get_val_transforms_3d,
 )
-from sclc.data.exclusions import TRUNCATED_LUNG_MASK
+from sclc.data.exclusions import TRUNCATED_LUNG_MASK, EMPTY_TUMOR_MASK
 
 from sklearn.model_selection import train_test_split
 
@@ -132,14 +132,27 @@ def get_lung_pet_ct_dx_data_list(
             label = matched[0]
                 
             patient_dir = data_root / pid
-            images = sorted(
-                [f for f in patient_dir.iterdir() if f.is_file() and f.name.endswith("_image.nii.gz")],
-                key=lambda f: f.name,
-            )
+            image_files = [
+                f for f in patient_dir.iterdir()
+                if f.is_file() and f.name.endswith("_image.nii.gz")
+            ]
+            # Sort: thinnest Z-spacing first (so multi-reconstruction patients
+            # prefer the 1mm version over the 5mm one when capped). Falls back
+            # to filename for ties or if the header can't be read. The
+            # ``data_pipeline/upgrade_thin_reconstructions.py`` step adds a
+            # second NIfTI per upgraded patient; this sort is what lets the
+            # loader prefer it without a code change there.
+            def _z_then_name(p):
+                try:
+                    import nibabel as _nib
+                    return (float(_nib.load(str(p)).header.get_zooms()[2]), p.name)
+                except Exception:
+                    return (float("inf"), p.name)
+            images = sorted(image_files, key=_z_then_name)
             # Flatten adeno dominance (~8 scans/patient) so WeightedRandomSampler
             # doesn't repeat-sample the same SCLC volumes dozens of times per epoch.
-            # Deterministic: sorted by filename, take first N.
-            # SCLC (class 1) is exempt — it's too rare to cap.
+            # Deterministic: thinnest-Z first, take first N. SCLC (class 1)
+            # is exempt — it's too rare to cap.
             if max_scans_per_patient is not None and max_scans_per_patient > 0 and label != 1:
                 images = images[:max_scans_per_patient]
 
@@ -208,8 +221,18 @@ def get_biglunge_data_list(
     # wrongly-bounded volume. Same exclusion the MIL pipeline applies.
     excluded = [pid for pid in patient_folders if pid in TRUNCATED_LUNG_MASK]
     if excluded:
-        print(f"[3D big_lunge] Excluding {len(excluded)} truncated-lung-mask patients: {excluded}")
+        print(f"[big_lunge] Excluding {len(excluded)} truncated-lung-mask patients: {excluded}")
         patient_folders = [pid for pid in patient_folders if pid not in TRUNCATED_LUNG_MASK]
+
+    # Drop patients whose tumor mask is empty / sub-threshold (largest CC
+    # below 50 voxels). The 2D pipeline silently drops these (no tumor
+    # slices found); the 3D pipeline silently falls back to volume-center
+    # crop. Both paths produce noise; honest fix is to exclude them up
+    # front. Source: results/output/multifocal_audit.csv.
+    excluded_tumor = [pid for pid in patient_folders if pid in EMPTY_TUMOR_MASK]
+    if excluded_tumor:
+        print(f"[big_lunge] Excluding {len(excluded_tumor)} empty-tumor-mask patients: {excluded_tumor}")
+        patient_folders = [pid for pid in patient_folders if pid not in EMPTY_TUMOR_MASK]
 
     if not patient_folders:
         raise ValueError(
