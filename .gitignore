@@ -18,6 +18,14 @@ results/output/
 results/runs/
 results/thesis/_archive/
 
+# Regenerable visualization outputs (built from checkpoints by sclc.grad_cam)
+results/grad_cam/
+
+# Ad-hoc reference uploads at repo root (uploaded papers, dataset manifests, etc.).
+# Root-anchored so the tracked thesis PDFs under results/figures/ stay tracked.
+/*.pdf
+/*.xlsx
+
 # Internal-only docs
 CLAUDE.md
 .claude/

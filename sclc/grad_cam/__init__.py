@@ -1,1 +1,1 @@
-from .grad_cam import use_grad_cam
+from .grad_cam import run_grad_cam
