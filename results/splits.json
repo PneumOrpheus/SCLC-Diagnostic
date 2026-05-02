@@ -1,0 +1,3123 @@
+{
+  "params": {
+    "seed": 42,
+    "val_frac": 0.15,
+    "test_frac": 0.15
+  },
+  "class_names": [
+    "Adenocarcinoma",
+    "Small Cell Carcinoma",
+    "Squamous Cell Carcinoma"
+  ],
+  "lung_pet_ct_dx": {
+    "train": [
+      {
+        "patient_id": "Lung_Dx-A0001",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0003",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0004",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0005",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0006",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0007",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0010",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0011",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0012",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0013",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0016",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0017",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0019",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0020",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0023",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0024",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0025",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0026",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0027",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0028",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0029",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0030",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0031",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0032",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0033",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0034",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0036",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0037",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0039",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0040",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0041",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0042",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0043",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0044",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0045",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0046",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0047",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0048",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0052",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0054",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0056",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0059",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0064",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0065",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0066",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0069",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0070",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0071",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0072",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0073",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0074",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0075",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0080",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0082",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0083",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0084",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0085",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0086",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0088",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0089",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0091",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0092",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0093",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0097",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0100",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0101",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0102",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0103",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0104",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0105",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0107",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0108",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0111",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0112",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0115",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0116",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0118",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0119",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0120",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0121",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0123",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0125",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0126",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0127",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0128",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0130",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0131",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0132",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0133",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0134",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0135",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0136",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0140",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0141",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0143",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0144",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0145",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0146",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0147",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0148",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0149",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0150",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0152",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0153",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0154",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0155",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0156",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0157",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0160",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0162",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0163",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0164",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0165",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0166",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0168",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0169",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0171",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0173",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0175",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0176",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0178",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0179",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0181",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0183",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0184",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0187",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0188",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0189",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0190",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0192",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0193",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0194",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0195",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0196",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0197",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0198",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0202",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0204",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0205",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0206",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0208",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0210",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0211",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0212",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0213",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0214",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0216",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0224",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0225",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0227",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0228",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0231",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0232",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0233",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0236",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0238",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0239",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0240",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0241",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0243",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0246",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0248",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0249",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0253",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0254",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0255",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0256",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0257",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0259",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0260",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0261",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0263",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0264",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0002",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0004",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0005",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0006",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0008",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0009",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0013",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0014",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0015",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0016",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0017",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0018",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0020",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0021",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0022",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0023",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0025",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0027",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0028",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0033",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0036",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0037",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0040",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0041",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0042",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0044",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0001",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0003",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0004",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0005",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0006",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0007",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0008",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0009",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0010",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0011",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0012",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0013",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0014",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0015",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0017",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0019",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0021",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0022",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0023",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0024",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0026",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0027",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0028",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0030",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0031",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0032",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0033",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0034",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0037",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0039",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0042",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0043",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0044",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0045",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0047",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0049",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0050",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0052",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0053",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0056",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0058",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0059",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0060",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      }
+    ],
+    "val": [
+      {
+        "patient_id": "Lung_Dx-A0002",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0008",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0009",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0014",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0015",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0018",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0021",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0038",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0050",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0053",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0055",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0062",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0077",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0078",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0081",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0094",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0109",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0110",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0114",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0124",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0142",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0159",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0167",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0177",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0180",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0182",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0200",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0217",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0218",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0220",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0223",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0226",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0230",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0242",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0252",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0258",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0262",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0001",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0003",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0011",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0024",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0031",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0038",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0002",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0016",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0029",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0035",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0036",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0046",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0048",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0051",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0057",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      }
+    ],
+    "test": [
+      {
+        "patient_id": "Lung_Dx-A0022",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0035",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0049",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0051",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0061",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0063",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0068",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0087",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0090",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0095",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0096",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0098",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0099",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0106",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0113",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0117",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0129",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0137",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0138",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0139",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0161",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0170",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0174",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0185",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0191",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0199",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0201",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0203",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0221",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0222",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0229",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0234",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0235",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0237",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0244",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0247",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0250",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-A0265",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0007",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0012",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0019",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0026",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0034",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-B0043",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0018",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0020",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0025",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0038",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0040",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0041",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0054",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0055",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "Lung_Dx-G0062",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      }
+    ]
+  },
+  "biglunge": {
+    "train": [
+      {
+        "patient_id": "patient_001454",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_003166",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_003246",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_003569",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_004454",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_004796",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_005582",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_005585",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_006348",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_006356",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_006821",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_007426",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_007534",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_008027",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_008679",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_009180",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_009287",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_011117",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_011180",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_011250",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_011437",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_012914",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_013058",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_013079",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_013807",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_013859",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_014228",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_014930",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_015256",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_015408",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_015856",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_016419",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_016638",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_017032",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_018277",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_018674",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_019084",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_019697",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_020298",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_021189",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_021377",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_021593",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_022249",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_022587",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_022777",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_025933",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_026148",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_026290",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_026988",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_027218",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_027639",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_027729",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_027776",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_028360",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_029476",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_029883",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_030289",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_030423",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_030571",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_030764",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_031225",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_032030",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_032318",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_033306",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_035023",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_035776",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_035864",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_036404",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_036837",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_037165",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_037310",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_037781",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_038095",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_038334",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_038531",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_038555",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_038718",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_039614",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_040364",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_040796",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_041139",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_041324",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_041474",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_041559",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_042556",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_042814",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_043671",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_044884",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_045039",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_046517",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_046783",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_047235",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_047814",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_047983",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_048647",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_049205",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_049476",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_049487",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_050759",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_051320",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_051869",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_052755",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_053264",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_053381",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_054454",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_056195",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_057637",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_057751",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_057929",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_057965",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_058488",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_059805",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_060084",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_060445",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_060812",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_061431",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_061937",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_062246",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_062296",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_062776",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_063030",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_064160",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_064426",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_064784",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_065164",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_065740",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_068297",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_068619",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_069266",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_070483",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_070625",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_071095",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_071505",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_071708",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_072076",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_072297",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_072607",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_072653",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_073208",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_074195",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_075113",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_075159",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_075175",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_075519",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_075941",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_076243",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_076313",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_076336",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_076453",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_076668",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_077180",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_077196",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_077318",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_077969",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_078251",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_079290",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_079524",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_079660",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_079951",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_081613",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_081787",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_081833",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_082144",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_083851",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_084187",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_084606",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_085173",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_085288",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_085871",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_086852",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_087008",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_087032",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_087513",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_089028",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_089042",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_089145",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_089320",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_089876",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_090593",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_093419",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_095204",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_095578",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_095688",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_096202",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_096272",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_096546",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_096826",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_098074",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_099210",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_099903",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      }
+    ],
+    "val": [
+      {
+        "patient_id": "patient_000647",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_001589",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_002094",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_002281",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_002874",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_003206",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_012394",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_014320",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_022865",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_024173",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_032119",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_032633",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_034186",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_037640",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_038015",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_041619",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_044352",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_046807",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_061546",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_063247",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_065744",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_071584",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_072114",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_072318",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_072722",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_073406",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_073809",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_076135",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_078186",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_078733",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_083936",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_084189",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_086648",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_090058",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_091022",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_091777",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_092591",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_094171",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_095085",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_095240",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_099083",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      }
+    ],
+    "test": [
+      {
+        "patient_id": "patient_009896",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_012475",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_012600",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_014590",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_018174",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_024756",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_025040",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_028854",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_034363",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_035547",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_035664",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_036908",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_037441",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_041428",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_041463",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_050329",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_050965",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_055122",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_055748",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_057085",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_058841",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_059748",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_060353",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_061812",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_063818",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_067318",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_073212",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_073690",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_074290",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_077553",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_080332",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_080359",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_089556",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_090383",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_090857",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_090921",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_091701",
+        "class_idx": 1,
+        "class_name": "Small Cell Carcinoma"
+      },
+      {
+        "patient_id": "patient_093463",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_096247",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_097319",
+        "class_idx": 0,
+        "class_name": "Adenocarcinoma"
+      },
+      {
+        "patient_id": "patient_099295",
+        "class_idx": 2,
+        "class_name": "Squamous Cell Carcinoma"
+      }
+    ]
+  }
+}

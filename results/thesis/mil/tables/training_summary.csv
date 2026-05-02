@@ -1,3 +1,5 @@
 model_type,phase,n_epochs,first_epoch,last_epoch,peak_val_macro_f1_raw,peak_val_macro_f1_raw_epoch,peak_val_macro_f1_rolling,peak_val_macro_f1_rolling_epoch,first_timestamp,last_timestamp
 mil_resnet50,dapt,12,1,12,0.548611111111111,5,0.4641124893428225,12,2026-04-28T22:56:36,2026-04-28T23:14:40
 mil_resnet50,finetune,16,1,16,0.4584023777584892,8,0.43173598045945155,6,2026-04-29T10:49:35,2026-04-29T11:58:33
+mil_swin_tiny,dapt,13,1,13,0.5875980042765502,3,0.5356029007514572,3,2026-04-29T16:24:54,2026-04-29T17:02:34
+mil_swin_tiny,finetune,13,1,13,0.30666666666666664,2,0.29758169934640516,3,2026-04-29T17:31:32,2026-04-29T17:37:40

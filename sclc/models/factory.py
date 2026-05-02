@@ -242,24 +242,57 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
         model = SwinUNETRClassifier(in_channels=in_channels, num_classes=3)
         if checkpoint_path:
             if os.path.exists(checkpoint_path):
-                print(f"[*] Loading pretrained SwinUNETR weights from {checkpoint_path}")
+                print(f"[*] Loading SwinUNETR weights from {checkpoint_path}")
                 state_dict = torch.load(checkpoint_path, map_location="cpu")
                 # MONAI checkpoints sometimes wrap the weights in a 'state_dict' key
                 if "state_dict" in state_dict:
                     state_dict = state_dict["state_dict"]
-                
-                # Load into the underlying swin_unetr backbone
-                # Pop out the final segmentation layer mismatched sizes so strict=False can work efficiently
-                if 'out.conv.conv.weight' in state_dict:
-                    state_dict.pop('out.conv.conv.weight')
-                if 'out.conv.conv.bias' in state_dict:
-                    state_dict.pop('out.conv.conv.bias')
-                        
-                missing, unexpected = model.swin_unetr.load_state_dict(state_dict, strict=False)
-                matched = len(state_dict) - len(unexpected)
-                print(f"[*] Pretrained weights loaded. Matched {matched}/{len(state_dict)} keys.")
+
+                # Two valid formats sit under this branch:
+                #   (a) BTCV pretrained — keys live inside the SwinUNETR module
+                #       (``swinViT.*``, ``encoder*.*``, ``decoder*.*``, ``out.*``).
+                #       Load into ``model.swin_unetr`` and drop the segmentation
+                #       head conv (``out.conv.conv.*``) which doesn't match our
+                #       1-channel output.
+                #   (b) SCLC-trained ``SwinUNETRClassifier`` checkpoint — keys are
+                #       prefixed with the wrapper's attribute names
+                #       (``swin_unetr.*`` for the encoder/decoder, plus
+                #       ``classification_head.*`` for the trained head). Load into
+                #       the full module so the head actually loads.
+                # Detected by inspecting key prefixes; mirrors the same DAPT-vs-
+                # full-MIL detection used by the ``mil_resnet50`` branch above.
+                probe_keys = list(state_dict.keys())
+                is_full_classifier = any(
+                    k.startswith("swin_unetr.") or k.startswith("classification_head.")
+                    for k in probe_keys
+                )
+
+                if is_full_classifier:
+                    missing, unexpected = model.load_state_dict(state_dict, strict=False)
+                    target_n = len(model.state_dict())
+                    matched = target_n - len(missing)
+                    print(
+                        f"[*] SwinUNETRClassifier weights loaded. Matched "
+                        f"{matched}/{target_n} target keys (source had "
+                        f"{len(state_dict)}, missing={len(missing)}, "
+                        f"unexpected={len(unexpected)})."
+                    )
+                else:
+                    state_dict.pop('out.conv.conv.weight', None)
+                    state_dict.pop('out.conv.conv.bias', None)
+                    missing, unexpected = model.swin_unetr.load_state_dict(state_dict, strict=False)
+                    matched = len(state_dict) - len(unexpected)
+                    print(f"[*] Pretrained SwinUNETR weights loaded. Matched {matched}/{len(state_dict)} keys.")
+
+                # Hard fail on a zero-match load — silent random-init was the
+                # original failure mode of this branch (see grad_cam reload
+                # 2026-05-02). Any caller that hands us a checkpoint clearly
+                # expects it to take effect.
                 if matched == 0:
-                    print(f"[!] Warning: 0 keys matched! Checkpoint {checkpoint_path} is likely for a different architecture.")
+                    raise RuntimeError(
+                        f"Loaded 0 keys from {checkpoint_path}; checkpoint format "
+                        f"does not match SwinUNETRClassifier or the BTCV pretrained layout."
+                    )
             else:
                 print(f"[!] Warning: Checkpoint path {checkpoint_path} does not exist. Initializing from scratch.")
     return model
