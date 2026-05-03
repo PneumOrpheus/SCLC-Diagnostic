@@ -19,7 +19,7 @@
 #            and computes one-vs-rest AUC there.
 #
 # Usage (always in tmux per CLAUDE.md):
-#   tmux new -d -s rerun "PATH=/home/hansstem/anaconda3/envs/sclc/bin:\$PATH \
+#   tmux new -d -s rerun "PATH=/home/rhoversa/anaconda3/envs/sclc/bin:\$PATH \
 #                          bash scripts/runners/run_full_rerun.sh \
 #                          results/runs/$(date +%Y-%m-%d)_full_rerun"
 #
@@ -32,7 +32,7 @@ set -uo pipefail
 LOG_ROOT=${1:-results/runs/$(date +%Y-%m-%d_%H-%M)_full_rerun}
 mkdir -p "$LOG_ROOT"
 SUMMARY="$LOG_ROOT/_summary.txt"
-PY=/home/hansstem/anaconda3/envs/sclc/bin/python
+PY=/home/rhoversa/anaconda3/bin/python
 
 declare -a MODELS_2D=(
     "efficientnet_b0_2d  configs/experiments/2d_efficientnet_b0.yaml"
