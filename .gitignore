@@ -13,13 +13,9 @@ anaconda3/
 *.pth
 NIFTI_data/
 
-# Training artifacts (raw outputs, run logs, archived results)
-results/output/
-results/runs/
-results/thesis/_archive/
-
-# Regenerable visualization outputs (built from checkpoints by sclc.grad_cam)
-results/grad_cam/
+# Everything under results/ is regenerable from checkpoints + scripts.
+# Tracked files already in git stay tracked; this only blocks new additions.
+/results/*
 
 # Ad-hoc reference uploads at repo root (uploaded papers, dataset manifests, etc.).
 # Root-anchored so the tracked thesis PDFs under results/figures/ stay tracked.

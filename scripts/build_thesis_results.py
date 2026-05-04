@@ -82,6 +82,9 @@ PIPELINES: Dict[str, List[str]] = {
         "resnet50_2d", "resnet50_2d_rin",
         "densenet121_2d", "densenet121_2d_rin",
         "swin_tiny_2d",
+        "radiomics_svm", "radiomics_svm_bl",
+        "radiomics_rf",  "radiomics_rf_bl",
+        "radiomics_gb",  "radiomics_gb_bl",
     ],
     "mil": ["mil_resnet50", "mil_swin_tiny"],
     "3d":  ["swin_unetr"],
@@ -98,6 +101,12 @@ MODEL_LABEL: Dict[str, str] = {
     "mil_resnet50":        "MIL ResNet-50",
     "mil_swin_tiny":       "MIL Swin-Tiny (RadImageNet)",
     "swin_unetr":          "SwinUNETR (3D)",
+    "radiomics_svm": "Radiomics SVM (LPCT-train \u2192 LPCT-test / BL-test transfer)",
+    "radiomics_svm_bl": "Radiomics SVM (BL-train \u2192 BL-test in-sample)",
+    "radiomics_rf": "Radiomics RF (LPCT-train \u2192 LPCT-test / BL-test transfer)",
+    "radiomics_rf_bl": "Radiomics RF (BL-train \u2192 BL-test in-sample)",
+    "radiomics_gb": "Radiomics GB (LPCT-train \u2192 LPCT-test / BL-test transfer)",
+    "radiomics_gb_bl": "Radiomics GB (BL-train \u2192 BL-test in-sample)",
 }
 
 # Tableau-10 colorblind-friendly palette.
