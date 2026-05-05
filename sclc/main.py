@@ -354,6 +354,24 @@ def parse_args():
     parser.add_argument("--accumulation-steps", type=int, default=4, help="Gradient accumulation steps to increase effective batch size")
     parser.add_argument("--seg-loss-weight", type=float, default=0.1,
                         help="Weight for the auxiliary segmentation loss (only active for SwinUNETR; ignored otherwise).")
+    parser.add_argument("--use-advanced-fpn", action="store_true",
+                        help="Enable the advanced FPN neck (SPM/CAM/MBFFM + optional TFPN).")
+    parser.add_argument("--use-det-seg", action="store_true",
+                        help="Enable detection + segmentation heads and losses (requires tumor masks).")
+    parser.add_argument("--bbox-loss-weight", type=float, default=0.1,
+                        help="Weight for the bounding-box regression loss when --use-det-seg is active.")
+    parser.add_argument("--bbox-source", type=str, default="mask", choices=["mask", "xml"],
+                        help="Bounding box source for det/seg targets. 'mask' derives boxes from tumor masks.")
+    parser.add_argument("--fpn-channels", type=int, default=256,
+                        help="Channel width for the advanced FPN neck.")
+    parser.add_argument("--tfpn-heads", type=int, default=4,
+                        help="Number of attention heads in each TFPN block.")
+    parser.add_argument("--tfpn-layers", type=int, default=1,
+                        help="Number of TFPN layers per pyramid level.")
+    parser.add_argument("--tfpn-levels", type=int, default=1,
+                        help="Number of highest pyramid levels to run TFPN on.")
+    parser.add_argument("--disable-tfpn", action="store_true",
+                        help="Disable TFPN blocks inside the advanced FPN neck.")
     parser.add_argument("--weight-decay", type=float, default=1e-3) # Fine-tune weight decay
     parser.add_argument("--dapt-weight-decay", type=float, default=3e-3,
                         help="Weight decay for DAPT. Higher than fine-tune to combat scan-diversity overfitting. "
@@ -461,6 +479,8 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
     All other pipelines ignore ``phase``.
     """
     pipeline = get_pipeline(args.model_type)
+    include_mask = bool(getattr(args, "use_det_seg", False))
+    include_bbox = bool(getattr(args, "use_det_seg", False))
     if pipeline == "mil":
         if phase in ("finetune", "inference"):
             train_ds, val_ds, test_ds = create_dataset_mil_bag(
@@ -470,10 +490,13 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
                 img_size=args.img_size_mil,
                 bag_size=args.bag_size,
                 lung_mask_suffix=args.lung_mask_suffix,
+                tumor_mask_suffix=args.tumor_mask_suffix,
                 testing=args.testing,
                 cache_workers=args.cache_workers,
                 strong_augs=bool(getattr(args, "strong_augs", False)),
                 clear_cache=bool(getattr(args, "clear_cache", False)),
+                include_mask=include_mask,
+                include_bbox=include_bbox,
             )
             collate_fn = simple_collate_fn_mil
         else:  # dapt
@@ -490,6 +513,8 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
                 cache_workers=args.cache_workers,
                 strong_augs=bool(getattr(args, "strong_augs", False)),
                 clear_cache=bool(getattr(args, "clear_cache", False)),
+                include_mask=include_mask,
+                include_bbox=include_bbox,
             )
             collate_fn = simple_collate_fn_2d
     elif pipeline == "2d":
@@ -507,6 +532,8 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
             cache_workers=args.cache_workers,
             strong_augs=bool(getattr(args, "strong_augs", False)),
             clear_cache=bool(getattr(args, "clear_cache", False)),
+            include_mask=include_mask,
+            include_bbox=include_bbox,
         )
         collate_fn = simple_collate_fn_2d
     else:
@@ -524,6 +551,7 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
             warm_cache=False,
             strong_augs=bool(getattr(args, "strong_augs", False)),
             clear_cache=bool(getattr(args, "clear_cache", False)),
+            include_bbox=include_bbox,
         )
         collate_fn = simple_collate_fn
 
@@ -652,6 +680,39 @@ def _build_scheduler(optimizer, epochs: int, warmup_epochs: int, warmup_start_lr
     )
 
 
+def _ensure_writable_dir(path: str) -> Tuple[bool, str]:
+    """Create dir if needed and verify write access with a tiny probe file."""
+    try:
+        os.makedirs(path, exist_ok=True)
+        probe_name = f".write_test_{os.getpid()}"
+        probe_path = os.path.join(path, probe_name)
+        with open(probe_path, "w") as f:
+            f.write("ok")
+        os.remove(probe_path)
+        return True, ""
+    except OSError as exc:
+        return False, str(exc)
+
+
+def _resolve_checkpoint_dir(checkpoint_dir: str, output_dir: str) -> Tuple[str, str]:
+    """Return a writable checkpoint dir and an optional warning message."""
+    ok, err = _ensure_writable_dir(checkpoint_dir)
+    if ok:
+        return checkpoint_dir, ""
+    fallback_dir = os.path.join(output_dir, "checkpoints")
+    ok_fallback, err_fallback = _ensure_writable_dir(fallback_dir)
+    if not ok_fallback:
+        raise RuntimeError(
+            f"Checkpoint dir not writable: {checkpoint_dir} ({err}). "
+            f"Fallback failed: {fallback_dir} ({err_fallback})."
+        )
+    msg = (
+        f"[checkpoint] '{checkpoint_dir}' not writable ({err}). "
+        f"Falling back to '{fallback_dir}'."
+    )
+    return fallback_dir, msg
+
+
 def run_training_phase(
     model, train_loader, val_loader, device, epochs, lr, weight_decay,
     checkpoint_dir, logger, phase_name, patience=10, scaler=None, use_segmentation=False, accumulation_steps=4,
@@ -661,6 +722,8 @@ def run_training_phase(
     differential_lr: bool = False,
     backbone_lr_scale: float = 0.1,
     seg_loss_weight: float = 0.1,
+    use_det_seg: bool = False,
+    bbox_loss_weight: float = 0.1,
     mixup_alpha: float = 0.0,
     bag_dropout: float = 0.0,
     train_fn=train_epoch,
@@ -668,6 +731,7 @@ def run_training_phase(
     metrics_path: str = "",
 ):
     seg_loss_weight = max(0.0, float(seg_loss_weight))
+    bbox_loss_weight = max(0.0, float(bbox_loss_weight))
 
     # Differential LR for fine-tune stability:
     # - backbone updates are gentle (pretrained features)
@@ -772,6 +836,8 @@ def run_training_phase(
 
     if use_segmentation:
         logger.info(f"[{phase_name}] Segmentation auxiliary loss enabled with seg_loss_weight={seg_loss_weight:.3f}")
+    if use_det_seg:
+        logger.info(f"[{phase_name}] Detection/segmentation enabled with bbox_loss_weight={bbox_loss_weight:.3f}")
 
     for epoch in range(1, epochs + 1):
         # Unfreeze exactly once, at the boundary. Same boundary regardless of
@@ -800,8 +866,10 @@ def run_training_phase(
             logger=logger,
             scaler=scaler,
             use_segmentation=use_segmentation,
+            use_det_seg=use_det_seg,
             accumulation_steps=accumulation_steps, # Pass down here
             seg_loss_weight=seg_loss_weight,
+            bbox_loss_weight=bbox_loss_weight,
             mixup_alpha=mixup_alpha,
             bag_dropout=bag_dropout,
         )
@@ -958,7 +1026,7 @@ def main():
     pipeline_dir = get_pipeline(args.model_type)
     args.output_dir = os.path.join(args.output_dir, pipeline_dir, args.model_type)
     os.makedirs(args.output_dir, exist_ok=True)
-    os.makedirs(args.checkpoint_dir, exist_ok=True)
+    args.checkpoint_dir, checkpoint_msg = _resolve_checkpoint_dir(args.checkpoint_dir, args.output_dir)
 
     # --clear-cache is now scoped: each create_dataset_* builder rmtree's
     # only its own run-specific cache parent (the parameterized subdir
@@ -977,6 +1045,9 @@ def main():
     logger = create_logger(output_dir=args.output_dir, dist_rank=-1, name=f"{args.model_type}")
     logger.info(f"Running {args.model_type} 3D Classification Pipeline")
     logger.info(f"Mode: {args.mode} | Testing: {args.testing} | Device: {device} | AMP: {not args.disable_amp}")
+    if checkpoint_msg:
+        logger.warning(checkpoint_msg)
+        print(checkpoint_msg)
     if getattr(args, "config", ""):
         applied = getattr(args, "_config_applied", {})
         logger.info(f"Loaded config: {args.config} ({len(applied)} values applied as defaults)")
@@ -1002,6 +1073,13 @@ def main():
     use_segmentation_loss = (args.model_type == "swin_unetr")
     dapt_use_seg = use_segmentation_loss          # Lung-PET-CT-Dx has tumor masks
     finetune_use_seg = False                       # BigLunge 3D path has no tumor masks
+    use_det_seg = bool(getattr(args, "use_det_seg", False))
+    tfpn_enabled = not bool(getattr(args, "disable_tfpn", False))
+    if args.bbox_source != "mask":
+        logger.warning(
+            f"bbox_source='{args.bbox_source}' requested but only 'mask' is wired up; "
+            "falling back to mask-derived boxes."
+        )
 
     # Pipeline dispatch. For MIL the train/validate fns are phase-specific:
     # DAPT runs as per-slice whole-slice classification (shares the 2D loop);
@@ -1034,10 +1112,30 @@ def main():
             # so we hand the initial_checkpoint straight to its constructor
             # rather than trying to strict-load it post-hoc.
             rin_init = args.initial_checkpoint or ""
-            model = SwinTiny2DClassifier(num_classes=3, radimagenet_ckpt=rin_init).to(device)
+            model = SwinTiny2DClassifier(
+                num_classes=3,
+                radimagenet_ckpt=rin_init,
+                use_advanced_fpn=bool(getattr(args, "use_advanced_fpn", False)),
+                use_det_seg=use_det_seg,
+                fpn_channels=args.fpn_channels,
+                tfpn_enabled=tfpn_enabled,
+                tfpn_heads=args.tfpn_heads,
+                tfpn_layers=args.tfpn_layers,
+                tfpn_levels=args.tfpn_levels,
+            ).to(device)
             logger.info("[MIL] DAPT phase: using SwinTiny2DClassifier (will switch to MIL-Swin for finetune).")
         else:  # mil_resnet50
-            model = TorchVisionResNet2DClassifier(num_classes=3, model_name="resnet50").to(device)
+            model = TorchVisionResNet2DClassifier(
+                num_classes=3,
+                model_name="resnet50",
+                use_advanced_fpn=bool(getattr(args, "use_advanced_fpn", False)),
+                use_det_seg=use_det_seg,
+                fpn_channels=args.fpn_channels,
+                tfpn_enabled=tfpn_enabled,
+                tfpn_heads=args.tfpn_heads,
+                tfpn_layers=args.tfpn_layers,
+                tfpn_levels=args.tfpn_levels,
+            ).to(device)
             if args.initial_checkpoint and os.path.exists(args.initial_checkpoint):
                 sd = torch.load(args.initial_checkpoint, map_location=device)
                 if isinstance(sd, dict) and "state_dict" in sd:
@@ -1057,10 +1155,25 @@ def main():
             mil_mode=args.mil_mode,
             mil_trans_blocks=args.mil_trans_blocks,
             mil_trans_dropout=args.mil_trans_dropout,
+            use_advanced_fpn=bool(getattr(args, "use_advanced_fpn", False)),
+            use_det_seg=use_det_seg,
+            fpn_channels=args.fpn_channels,
+            tfpn_enabled=tfpn_enabled,
+            tfpn_heads=args.tfpn_heads,
+            tfpn_layers=args.tfpn_layers,
+            tfpn_levels=args.tfpn_levels,
         ).to(device)
-    num_params = sum(p.numel() for p in model.parameters())
-    logger.info(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
-    print(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
+    # LazyConv lateral projections in AdvancedFPNNeck are UninitializedParameter
+    # until the first forward pass; skip the count rather than crash.
+    if any(isinstance(p, torch.nn.parameter.UninitializedParameter)
+           for p in model.parameters()):
+        logger.info(f"Initialized {args.model_type} Classifier (FPN LazyConv params "
+                    "will materialize on first forward pass).")
+        print(f"Initialized {args.model_type} Classifier (LazyConv params pending).")
+    else:
+        num_params = sum(p.numel() for p in model.parameters())
+        logger.info(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
+        print(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
 
     current_checkpoint = args.initial_checkpoint
     
@@ -1090,10 +1203,12 @@ def main():
             args.dapt_epochs, dapt_lr, args.dapt_weight_decay, args.checkpoint_dir, logger,
             dapt_phase_name, scaler=scaler,
             use_segmentation=dapt_use_seg and not args.linear_probe,
+            use_det_seg=use_det_seg and not args.linear_probe,
             accumulation_steps=args.accumulation_steps,
             model_type=args.model_type,
             monitor_window=args.monitor_rolling_window,
             seg_loss_weight=args.seg_loss_weight,
+            bbox_loss_weight=args.bbox_loss_weight,
             warmup_epochs=args.dapt_warmup_epochs,
             warmup_start_lr=args.warmup_start_lr,
             freeze_backbone_epochs=dapt_freeze_epochs,
@@ -1190,12 +1305,19 @@ def main():
                         f"[MIL] Loaded MIL-style checkpoint (missing={len(missing)}, "
                         f"unexpected={len(unexpected)})."
                     )
-            num_params = sum(p.numel() for p in model.parameters())
-            trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-            logger.info(
-                f"[MIL] Rebuilt as {rebuilt_name} (mil_mode={args.mil_mode}). "
-                f"Total params: {num_params:,} (trainable: {trainable:,})"
-            )
+            if any(isinstance(p, torch.nn.parameter.UninitializedParameter)
+                   for p in model.parameters()):
+                logger.info(
+                    f"[MIL] Rebuilt as {rebuilt_name} (mil_mode={args.mil_mode}). "
+                    "FPN LazyConv params will materialize on first forward pass."
+                )
+            else:
+                num_params = sum(p.numel() for p in model.parameters())
+                trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
+                logger.info(
+                    f"[MIL] Rebuilt as {rebuilt_name} (mil_mode={args.mil_mode}). "
+                    f"Total params: {num_params:,} (trainable: {trainable:,})"
+                )
         else:
             if args.mode == "finetune" and args.model_checkpoint:
                 sd = torch.load(args.model_checkpoint, map_location=device)
@@ -1237,12 +1359,14 @@ def main():
             args.finetune_epochs, args.finetune_lr, args.weight_decay, args.checkpoint_dir, logger,
             "finetune", scaler=scaler,
             use_segmentation=finetune_use_seg,
+            use_det_seg=use_det_seg,
             accumulation_steps=args.accumulation_steps,
             model_type=args.model_type,
             monitor_window=args.monitor_rolling_window,
             differential_lr=True,
             backbone_lr_scale=args.finetune_backbone_lr_scale,
             seg_loss_weight=args.seg_loss_weight,
+            bbox_loss_weight=args.bbox_loss_weight,
             warmup_epochs=args.finetune_warmup_epochs,
             warmup_start_lr=args.warmup_start_lr,
             freeze_backbone_epochs=int(getattr(args, "finetune_freeze_backbone_epochs", 0)),

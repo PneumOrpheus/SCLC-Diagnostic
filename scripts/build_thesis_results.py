@@ -120,6 +120,7 @@ MODEL_COLORS: Dict[str, str] = {
 }
 
 REPO_ROOT = Path(_REPO)
+# Overridden at parse time via --output-root / --results-root / --checkpoint-root.
 OUTPUT_ROOT = REPO_ROOT / "results" / "output"
 RESULTS_ROOT = REPO_ROOT / "results" / "thesis"
 CHECKPOINT_ROOT = Path("/home/data/trained_models")
@@ -1556,6 +1557,8 @@ def snapshot_existing(out_root: Path, pipelines: List[str]) -> List[Path]:
 
 
 def main() -> None:
+    global OUTPUT_ROOT, RESULTS_ROOT, CHECKPOINT_ROOT
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--pipeline", choices=list(PIPELINES.keys()) + ["all"],
                         default="all")
@@ -1564,10 +1567,27 @@ def main() -> None:
     parser.add_argument("--skip-figures", action="store_true",
                         help="Build per_model/ + tables/ but no figures.")
     parser.add_argument("--no-snapshot", action="store_true",
-                        help="Skip snapshotting the existing thesis_results/<pipeline>/ "
-                             "to thesis_results/_archive/ before overwriting. Default is "
+                        help="Skip snapshotting the existing results_root/<pipeline>/ "
+                             "to results_root/_archive/ before overwriting. Default is "
                              "to always snapshot.")
+    parser.add_argument("--output-root", default=None,
+                        help="Directory tree containing output/<pipeline>/<model>/metrics.jsonl. "
+                             "Defaults to <repo>/results/output.")
+    parser.add_argument("--results-root", default=None,
+                        help="Where to write the thesis_results tree. "
+                             "Defaults to <repo>/results/thesis.")
+    parser.add_argument("--checkpoint-root", default=None,
+                        help="Root for trained-model checkpoints (used for provenance only). "
+                             "Defaults to /home/data/trained_models.")
     args = parser.parse_args()
+
+    # Apply root overrides before any function uses the globals.
+    if args.output_root:
+        OUTPUT_ROOT = Path(args.output_root).expanduser().resolve()
+    if args.results_root:
+        RESULTS_ROOT = Path(args.results_root).expanduser().resolve()
+    if args.checkpoint_root:
+        CHECKPOINT_ROOT = Path(args.checkpoint_root).expanduser().resolve()
 
     RESULTS_ROOT.mkdir(parents=True, exist_ok=True)
     pipelines = list(PIPELINES.keys()) if args.pipeline == "all" else [args.pipeline]
@@ -1580,7 +1600,7 @@ def main() -> None:
         model_data_per_pipeline[pipeline] = build_pipeline(pipeline, args.model, args.skip_figures)
 
     write_readme(RESULTS_ROOT / "README.md", model_data_per_pipeline)
-    print(f"\nthesis_results/ rebuilt — see {RESULTS_ROOT / 'README.md'}")
+    print(f"\nresults rebuilt — see {RESULTS_ROOT / 'README.md'}")
 
 
 if __name__ == "__main__":

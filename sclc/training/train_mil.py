@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import torch
 import torch.nn as nn
+from monai.losses import DiceLoss
 
 from sklearn.metrics import balanced_accuracy_score, f1_score
 
@@ -28,6 +29,7 @@ from sclc.training.train_3d import (
     NUM_CLASSES,
     _compute_classification_metrics,
 )
+from sclc.training.bbox_utils import bbox_loss_2d
 
 
 def _macro_f1(yt, yp):
@@ -43,19 +45,59 @@ def simple_collate_fn_mil(batch):
 
     Returns
     -------
-    images : (B, N, 1, H, W) float tensor
-    labels : (B,) long tensor
-    meta   : list[dict] per sample with ``patient_id``, ``volume_id``.
+    images   : (B, N, 1, H, W) float tensor
+    labels   : (B,) long tensor
+    masks    : (B, N, 1, H, W) float tensor or None
+    has_mask : (B, N) bool tensor or None
+    bboxes   : (B, N, 4) float tensor or None
+    has_bbox : (B, N) bool tensor or None
+    meta     : list[dict] per sample with ``patient_id``, ``volume_id``.
     """
     images = torch.stack([item["image"] for item in batch], dim=0)
     labels = torch.tensor([int(item["scan_label"]) for item in batch], dtype=torch.long)
+
+    masks = None
+    has_mask = None
+    if any("tumor_mask" in item for item in batch):
+        masks_list = []
+        for item in batch:
+            mask = item.get("tumor_mask")
+            if mask is None:
+                mask = torch.zeros_like(item["image"])
+            masks_list.append(mask)
+        masks = torch.stack(masks_list, dim=0)
+        has_mask = masks.sum(dim=(2, 3, 4)) > 0
+
+    bboxes = None
+    has_bbox = None
+    if any("bbox" in item for item in batch):
+        bbox_list = []
+        has_bbox_list = []
+        for item in batch:
+            bbox = item.get("bbox")
+            if bbox is None:
+                bag_n = int(item["image"].shape[0])
+                bbox_t = torch.zeros((bag_n, 4), dtype=torch.float32)
+                hb = torch.zeros(bag_n, dtype=torch.bool)
+            else:
+                bbox_t = bbox if torch.is_tensor(bbox) else torch.as_tensor(bbox, dtype=torch.float32)
+                hb_raw = item.get("has_bbox")
+                if hb_raw is None:
+                    hb = torch.ones(bbox_t.shape[0], dtype=torch.bool)
+                else:
+                    hb = hb_raw if torch.is_tensor(hb_raw) else torch.as_tensor(hb_raw, dtype=torch.bool)
+            bbox_list.append(bbox_t)
+            has_bbox_list.append(hb)
+        bboxes = torch.stack(bbox_list, dim=0)
+        has_bbox = torch.stack(has_bbox_list, dim=0)
+
     meta: List[Dict[str, Any]] = []
     for item in batch:
         meta.append({
             "patient_id": item.get("patient_id"),
             "volume_id": item.get("volume_id") or item.get("image"),
         })
-    return images, labels, meta
+    return images, labels, masks, has_mask, bboxes, has_bbox, meta
 
 
 def _bag_instance_dropout(x: torch.Tensor, drop_prob: float) -> torch.Tensor:
@@ -117,38 +159,122 @@ def train_epoch_mil(
     accumulation_steps: int = 1,
     mixup_alpha: float = 0.0,
     bag_dropout: float = 0.0,
+    use_det_seg: bool = False,
+    seg_loss_weight: float = 0.1,
+    bbox_loss_weight: float = 0.1,
     **_unused,
 ):
     model.train()
     start_time = time.time()
     run_loss = AverageMeter()
+    run_cls_loss = AverageMeter()
+    run_seg_loss = AverageMeter()
+    run_box_loss = AverageMeter()
     all_preds: List[int] = []
     all_targets: List[int] = []
 
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    dice_loss_fn = DiceLoss(sigmoid=True)
     optimizer.zero_grad()
-    mixup_active = float(mixup_alpha) > 0.0
-    bag_dropout = float(bag_dropout)
+    use_det_seg = bool(use_det_seg)
+    seg_loss_weight = max(0.0, float(seg_loss_weight))
+    bbox_loss_weight = max(0.0, float(bbox_loss_weight))
+    mixup_active = float(mixup_alpha) > 0.0 and not use_det_seg
+    bag_dropout_raw = float(bag_dropout)
+    bag_dropout = bag_dropout_raw if not use_det_seg else 0.0
     if mixup_active and epoch == 1:
         logger.info(f"[MIL] Mixup active with alpha={mixup_alpha:.3f} (Beta({mixup_alpha},{mixup_alpha}))")
     if bag_dropout > 0.0 and epoch == 1:
         logger.info(f"[MIL] Bag-instance dropout active: drop_prob={bag_dropout:.3f}")
+    if float(mixup_alpha) > 0.0 and use_det_seg and epoch == 1:
+        logger.info(
+            f"[MIL] Mixup requested (alpha={mixup_alpha:.3f}) but suppressed because "
+            f"use_det_seg=True (image/mask alignment would break)."
+        )
+    if bag_dropout_raw > 0.0 and use_det_seg and epoch == 1:
+        logger.info(
+            f"[MIL] Bag-instance dropout requested (p={bag_dropout_raw:.3f}) but suppressed because "
+            f"use_det_seg=True (mask/box alignment would break)."
+        )
     nonfinite_count = 0
     nonfinite_grad_steps = 0
 
     for idx, batch_data in enumerate(loader):
-        data, target, _ = batch_data
+        if len(batch_data) >= 7:
+            data, target, masks, has_mask, bboxes, has_bbox, _ = batch_data
+        else:
+            data, target, _ = batch_data
+            masks = has_mask = bboxes = has_bbox = None
         data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
+        masks = masks.to(device) if masks is not None else None
+        bboxes = bboxes.to(device) if bboxes is not None else None
         if bag_dropout > 0.0:
             data = _bag_instance_dropout(data, drop_prob=bag_dropout)
-        data_mix, y_a, y_b, lam = _mixup_bags(data, target, alpha=float(mixup_alpha))
+        if mixup_active:
+            data_mix, y_a, y_b, lam = _mixup_bags(data, target, alpha=float(mixup_alpha))
+        else:
+            data_mix, y_a, y_b, lam = data, target, target, 1.0
 
         with torch.amp.autocast(enabled=(scaler is not None), device_type="cuda"):
-            logits = model(data_mix, return_segmentation=False)
-            if mixup_active:
-                loss = lam * criterion(logits, y_a) + (1.0 - lam) * criterion(logits, y_b)
+            if use_det_seg:
+                outputs = model(data_mix, return_segmentation=True)
+                if isinstance(outputs, tuple):
+                    if len(outputs) == 3:
+                        logits, seg_logits, box_pred = outputs
+                    else:
+                        logits, seg_logits = outputs
+                        box_pred = None
+                else:
+                    logits, seg_logits, box_pred = outputs, None, None
+                cls_loss = criterion(logits, y_a)
+                loss = cls_loss
+
+                seg_loss_val = 0.0
+                if (
+                    seg_logits is not None
+                    and seg_logits.requires_grad
+                    and masks is not None
+                    and has_mask is not None
+                    and has_mask.any()
+                ):
+                    B, N = seg_logits.shape[0], seg_logits.shape[1]
+                    seg_flat = seg_logits.reshape(B * N, 1, *seg_logits.shape[-2:])
+                    mask_flat = masks.reshape(B * N, 1, *masks.shape[-2:]).float()
+                    valid = has_mask.view(-1).to(device)
+                    seg_logits_valid = seg_flat[valid]
+                    masks_valid = mask_flat[valid]
+                    bce_seg = nn.functional.binary_cross_entropy_with_logits(seg_logits_valid, masks_valid)
+                    dice_seg = dice_loss_fn(seg_logits_valid, masks_valid)
+                    seg_loss = 0.5 * bce_seg + 0.5 * dice_seg
+                    loss = loss + (seg_loss_weight * seg_loss)
+                    seg_loss_val = seg_loss.item()
+                run_seg_loss.update(seg_loss_val, n=data.size(0))
+
+                box_loss_val = 0.0
+                if (
+                    box_pred is not None
+                    and box_pred.requires_grad
+                    and bboxes is not None
+                    and has_bbox is not None
+                    and has_bbox.any()
+                ):
+                    pred_flat = box_pred.reshape(-1, box_pred.shape[-1])
+                    tgt_flat = bboxes.reshape(-1, bboxes.shape[-1])
+                    valid = has_bbox.view(-1).to(device)
+                    pred_boxes = pred_flat[valid]
+                    tgt_boxes = tgt_flat[valid]
+                    l1, giou = bbox_loss_2d(pred_boxes, tgt_boxes)
+                    box_loss = l1.mean() + giou.mean()
+                    loss = loss + (bbox_loss_weight * box_loss)
+                    box_loss_val = box_loss.item()
+                run_box_loss.update(box_loss_val, n=data.size(0))
             else:
-                loss = criterion(logits, y_a)
+                logits = model(data_mix, return_segmentation=False)
+                if mixup_active:
+                    loss = lam * criterion(logits, y_a) + (1.0 - lam) * criterion(logits, y_b)
+                else:
+                    loss = criterion(logits, y_a)
+                cls_loss = loss
 
             preds = torch.argmax(logits.detach(), dim=1)
             all_preds.extend(preds.cpu().tolist())
@@ -194,12 +320,21 @@ def train_epoch_mil(
             optimizer.zero_grad()
 
         run_loss.update(unscaled_loss, n=data.size(0))
+        run_cls_loss.update(cls_loss.item(), n=data.size(0))
 
         if (idx + 1) % 10 == 0 or (idx + 1) == len(loader):
-            msg = (
-                f"[MIL] Epoch {epoch} [{idx + 1}/{len(loader)}] "
-                f"Loss: {run_loss.avg:.4f} Time: {time.time() - start_time:.2f}s"
-            )
+            if use_det_seg:
+                msg = (
+                    f"[MIL] Epoch {epoch} [{idx + 1}/{len(loader)}] "
+                    f"Loss: {run_loss.avg:.4f} (Cls: {run_cls_loss.avg:.4f} / "
+                    f"Seg: {run_seg_loss.avg:.4f} / Box: {run_box_loss.avg:.4f}) "
+                    f"Time: {time.time() - start_time:.2f}s"
+                )
+            else:
+                msg = (
+                    f"[MIL] Epoch {epoch} [{idx + 1}/{len(loader)}] "
+                    f"Loss: {run_loss.avg:.4f} Time: {time.time() - start_time:.2f}s"
+                )
             print(msg)
             logger.info(msg)
             start_time = time.time()
@@ -253,7 +388,10 @@ def validate_epoch_mil(
     logger.info("[MIL] Starting validation...")
 
     for batch_data in loader:
-        data, target, meta = batch_data
+        if len(batch_data) >= 7:
+            data, target, _, _, _, _, meta = batch_data
+        else:
+            data, target, meta = batch_data
         data, target = data.to(device, non_blocking=True), target.to(device, non_blocking=True)
         logits = model(data)
         loss = criterion(logits, target)

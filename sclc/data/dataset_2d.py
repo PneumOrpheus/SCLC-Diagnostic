@@ -390,6 +390,8 @@ def create_dataset_2d(
     strong_augs: bool = False,
     crop_size: int = 96,
     clear_cache: bool = False,
+    include_mask: bool = False,
+    include_bbox: bool = False,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
     """Create train/val/test ``PersistentDataset``s of 2D tumor slices.
     Samples are (C=1, img_size, img_size). Supported ``dataset_type``:
@@ -406,9 +408,10 @@ def create_dataset_2d(
     # three change the on-disk tensor content. Different values live in
     # separate directories so switching between configs doesn't invalidate
     # the prior cache (and doesn't silently reuse stale tensors either).
+    _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
     cache_root = os.path.join(
         os.path.expanduser("~"), ".cache", cache_name,
-        f"img{img_size}_crop{int(crop_size)}_mp{int(min_tumor_pixels)}{'_testing' if testing else ''}",
+        f"img{img_size}_crop{int(crop_size)}_mp{int(min_tumor_pixels)}{_mask_tag}{'_testing' if testing else ''}",
     )
     if clear_cache and os.path.isdir(cache_root):
         import shutil as _shutil
@@ -439,9 +442,20 @@ def create_dataset_2d(
     for split in ("train", "val", "test"):
         data_list = all_splits[split]
         transforms = (
-            get_train_transforms_2d(img_size=img_size, strong_augs=strong_augs, crop_size=crop_size)
+            get_train_transforms_2d(
+                img_size=img_size,
+                strong_augs=strong_augs,
+                crop_size=crop_size,
+                include_mask=include_mask,
+                include_bbox=include_bbox,
+            )
             if split == "train"
-            else get_val_transforms_2d(img_size=img_size, crop_size=crop_size)
+            else get_val_transforms_2d(
+                img_size=img_size,
+                crop_size=crop_size,
+                include_mask=include_mask,
+                include_bbox=include_bbox,
+            )
         )
 
         if cache_dir is None:
@@ -473,6 +487,8 @@ def create_dataset_2d(
             # CropAroundTumord's algorithm; bump it when min_component_voxels
             # or the connectivity changes. flaws.md §1.7.
             "centroid_algo": "largest_cc_min50",
+            "include_mask": bool(include_mask),
+            "include_bbox": bool(include_bbox),
         }
 
         cached_meta = None

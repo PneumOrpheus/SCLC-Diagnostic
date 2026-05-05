@@ -337,6 +337,7 @@ def create_dataset(
     seed: int = 42,
     strong_augs: bool = False,
     clear_cache: bool = False,
+    include_bbox: bool = False,
     **kwargs: Any,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
     """
@@ -400,11 +401,13 @@ def create_dataset(
                     img_size=img_size, depth_size=depth_size,
                     use_lung_crop=use_lung_crop,
                     strong_augs=strong_augs,
+                    include_bbox=include_bbox,
                 )
             else:
                 transforms = get_val_transforms_3d(
                     img_size=img_size, depth_size=depth_size,
                     use_lung_crop=use_lung_crop,
+                    include_bbox=include_bbox,
                 )
 
 
@@ -441,6 +444,7 @@ def create_dataset(
             "img_size": int(img_size),
             "depth_size": int(depth_size),
             "split": split,
+            "include_bbox": bool(include_bbox),
         }
 
         cached_meta = None
