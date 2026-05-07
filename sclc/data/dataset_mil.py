@@ -231,6 +231,8 @@ def get_biglunge_mil_data_list(
     test_frac: float = 0.15,
     seed: int = 42,
     testing: bool = False,
+    cv_fold: int = -1,
+    cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """BigLunge data list for MIL. One entry per patient.
 
@@ -244,6 +246,7 @@ def get_biglunge_mil_data_list(
     splits = get_biglunge_data_list(
         data_path=data_path, csv_path=csv_path,
         val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
+        cv_fold=cv_fold, cv_folds=cv_folds,
     )
 
     # Truncated-lung-mask exclusions live in data/exclusions.py so the 3D
@@ -323,6 +326,8 @@ def create_dataset_mil_bag(
     clear_cache: bool = False,
     include_mask: bool = False,
     include_bbox: bool = False,
+    cv_fold: int = -1,
+    cv_folds: int = 5,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
     """Create train/val/test MIL-bag PersistentDatasets for BigLunge.
 
@@ -337,9 +342,10 @@ def create_dataset_mil_bag(
 
     cache_name = "monai_biglunge_mil"
     _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
+    _fold_tag = f"_fold{cv_fold}" if cv_fold >= 0 else ""
     cache_root = os.path.join(
         os.path.expanduser("~"), ".cache", cache_name,
-        f"img{img_size}_bag{int(bag_size)}{_mask_tag}{'_testing' if testing else ''}",
+        f"img{img_size}_bag{int(bag_size)}{_mask_tag}{_fold_tag}{'_testing' if testing else ''}",
     )
     if clear_cache and os.path.isdir(cache_root):
         import shutil as _shutil
@@ -352,6 +358,7 @@ def create_dataset_mil_bag(
         lung_mask_suffix=lung_mask_suffix,
         tumor_mask_suffix=tumor_mask_suffix,
         val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
+        cv_fold=cv_fold, cv_folds=cv_folds,
     )
 
     datasets: List[PersistentDataset] = []

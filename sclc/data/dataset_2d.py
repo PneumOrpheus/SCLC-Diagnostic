@@ -223,6 +223,8 @@ def get_biglunge_2d_data_list(
     testing: bool = False,
     min_tumor_pixels: int = 1,
     max_slices_per_volume: Optional[int] = None,
+    cv_fold: int = -1,
+    cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """BigLunge 2D data list: one entry per tumor slice. Reuses the standard
     patient-stratified split from ``get_biglunge_data_list``, then attaches the
@@ -231,6 +233,7 @@ def get_biglunge_2d_data_list(
     volumes = get_biglunge_data_list(
         data_path=data_path, csv_path=csv_path,
         val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
+        cv_fold=cv_fold, cv_folds=cv_folds,
     )
 
     data_root = Path(data_path)
@@ -392,6 +395,8 @@ def create_dataset_2d(
     clear_cache: bool = False,
     include_mask: bool = False,
     include_bbox: bool = False,
+    cv_fold: int = -1,
+    cv_folds: int = 5,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
     """Create train/val/test ``PersistentDataset``s of 2D tumor slices.
     Samples are (C=1, img_size, img_size). Supported ``dataset_type``:
@@ -404,14 +409,14 @@ def create_dataset_2d(
     else:
         raise ValueError(f"Unknown dataset_type for 2D: '{dataset_type}'.")
 
-    # Cache is keyed on (img_size, crop_size, min_tumor_pixels) because all
-    # three change the on-disk tensor content. Different values live in
-    # separate directories so switching between configs doesn't invalidate
-    # the prior cache (and doesn't silently reuse stale tensors either).
+    # Cache is keyed on (img_size, crop_size, min_tumor_pixels, mask/bbox flags,
+    # fold index). Different values live in separate directories so switching
+    # between configs doesn't invalidate the prior cache.
     _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
+    _fold_tag = f"_fold{cv_fold}" if cv_fold >= 0 else ""
     cache_root = os.path.join(
         os.path.expanduser("~"), ".cache", cache_name,
-        f"img{img_size}_crop{int(crop_size)}_mp{int(min_tumor_pixels)}{_mask_tag}{'_testing' if testing else ''}",
+        f"img{img_size}_crop{int(crop_size)}_mp{int(min_tumor_pixels)}{_mask_tag}{_fold_tag}{'_testing' if testing else ''}",
     )
     if clear_cache and os.path.isdir(cache_root):
         import shutil as _shutil
@@ -429,6 +434,7 @@ def create_dataset_2d(
             val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
             min_tumor_pixels=min_tumor_pixels,
             max_slices_per_volume=max_slices_per_volume,
+            cv_fold=cv_fold, cv_folds=cv_folds,
         )
     else:
         all_splits = get_lung_pet_ct_dx_2d_data_list(

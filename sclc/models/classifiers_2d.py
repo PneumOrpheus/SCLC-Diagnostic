@@ -267,6 +267,107 @@ class TorchVisionResNet2DClassifier(nn.Module):
 
 
 
+class SwinV2Base2DClassifier(nn.Module):
+    """2D SwinV2-Base (swinv2_base_window8_256.ms_in1k) backbone,
+    ImageNet-pretrained via timm, adapted to 1-channel CT slice classification.
+
+    timm automatically averages the 3-channel pretrained patch_embed stem to
+    1 channel when ``in_chans=1`` is passed alongside ``pretrained=True``,
+    using the same channel-mean trick applied in the other 2D classifiers here.
+    Input resolution must be 256 × 256 (window8 constraint).
+    """
+
+    def __init__(
+        self,
+        num_classes: int = 3,
+        use_advanced_fpn: bool = False,
+        use_det_seg: bool = False,
+        fpn_channels: int = 256,
+        tfpn_enabled: bool = True,
+        tfpn_heads: int = 4,
+        tfpn_layers: int = 1,
+        tfpn_pool: tuple = (14, 14),
+        tfpn_levels: int = 1,
+    ):
+        super().__init__()
+        self._use_advanced_fpn = bool(use_advanced_fpn or use_det_seg)
+        self._use_det_seg = bool(use_det_seg)
+
+        if not self._use_advanced_fpn:
+            # timm adapts the 3-channel stem to 1 channel automatically when
+            # in_chans differs from the pretrained model's in_chans.
+            self.swin = timm.create_model(
+                "swinv2_base_window8_256.ms_in1k",
+                pretrained=True,
+                num_classes=num_classes,
+                in_chans=1,
+            )
+        else:
+            self.swin = timm.create_model(
+                "swinv2_base_window8_256.ms_in1k",
+                pretrained=True,
+                features_only=True,
+                out_indices=(0, 1, 2, 3),
+                in_chans=1,
+            )
+            self.fpn = AdvancedFPNNeck(
+                num_levels=4,
+                out_channels=fpn_channels,
+                spatial_dims=2,
+                use_tfpn=bool(tfpn_enabled),
+                tfpn_heads=tfpn_heads,
+                tfpn_layers=tfpn_layers,
+                tfpn_pool=tfpn_pool,
+                tfpn_levels=tfpn_levels,
+            )
+            self.head = MultiTaskHead(
+                in_channels=fpn_channels,
+                num_classes=num_classes,
+                spatial_dims=2,
+                use_seg=bool(use_det_seg),
+                use_det=bool(use_det_seg),
+            )
+
+    def forward(self, x, return_segmentation=False, return_detection: bool = False):
+        if x.ndim == 5:
+            if x.shape[-1] == 1:
+                x = x.squeeze(-1)
+            elif x.shape[2] == 1:
+                x = x.squeeze(2)
+        if not self._use_advanced_fpn:
+            cls_logits = self.swin(x)
+            if return_segmentation:
+                seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+                if return_detection:
+                    box_pred = torch.zeros((x.shape[0], 4), device=x.device)
+                    return cls_logits, seg_logits, box_pred
+                return cls_logits, seg_logits
+            if return_detection:
+                box_pred = torch.zeros((x.shape[0], 4), device=x.device)
+                return cls_logits, None, box_pred
+            return cls_logits
+
+        feats = self.swin(x)
+        # timm SwinV2 features_only returns NHWC; FPN expects NCHW
+        feats_nchw = []
+        for f, info in zip(feats, self.swin.feature_info):
+            expected_c = info["num_chs"]
+            if f.ndim == 4 and f.shape[-1] == expected_c and f.shape[1] != expected_c:
+                f = f.permute(0, 3, 1, 2).contiguous()
+            feats_nchw.append(f)
+        fused, _ = self.fpn(feats_nchw)
+        cls_logits, seg_logits, box_pred = self.head(fused, x.shape)
+        if return_segmentation or return_detection:
+            if return_segmentation and seg_logits is None:
+                seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+            if return_detection and box_pred is None:
+                box_pred = torch.zeros((x.shape[0], 4), device=x.device)
+            if return_detection:
+                return cls_logits, seg_logits, box_pred
+            return cls_logits, seg_logits
+        return cls_logits
+
+
 class SwinTiny2DClassifier(nn.Module):
     """2D Swin-Tiny (swin_tiny_patch4_window7_224) backbone with a
     RadImageNet-pretrained init, adapted to 1-channel CT slice classification.

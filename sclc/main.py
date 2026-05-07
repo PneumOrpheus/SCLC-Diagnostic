@@ -242,6 +242,106 @@ def _run_test_inference(
         )
     return test_metrics
 
+def _save_cv_aggregate_metrics(
+    fold_results: List[Dict[str, Any]],
+    metrics_path: str,
+    model_type: str,
+    n_folds: int,
+    logger,
+) -> None:
+    """Average per-fold test metrics and write a single 'test' row to metrics.jsonl.
+
+    The row mirrors the schema of a regular test row so downstream scripts
+    (ablation_plots.py, build_thesis_results.py) read it without modification.
+    """
+    import numpy as np
+
+    def _avg(key_path):
+        vals = []
+        for r in fold_results:
+            v = r
+            for k in key_path:
+                v = v.get(k) if isinstance(v, dict) else None
+                if v is None:
+                    break
+            if isinstance(v, (int, float)):
+                vals.append(float(v))
+        return float(np.mean(vals)) if vals else None
+
+    def _avg_list(key_path):
+        lists = []
+        for r in fold_results:
+            v = r
+            for k in key_path:
+                v = v.get(k) if isinstance(v, dict) else None
+                if v is None:
+                    break
+            if isinstance(v, list) and v:
+                lists.append([float(x) for x in v])
+        if not lists:
+            return None
+        length = len(lists[0])
+        return [float(np.mean([lst[i] for lst in lists if i < len(lst)])) for i in range(length)]
+
+    pl, sl = "patient_level", "slice_level"
+
+    # per_class_f1_ci95 is [[lo,hi],[lo,hi],[lo,hi]] — average per class per bound.
+    def _avg_pc_ci():
+        all_ci = [r.get(pl, {}).get("per_class_f1_ci95") for r in fold_results]
+        all_ci = [c for c in all_ci if isinstance(c, list) and c]
+        if not all_ci:
+            return None
+        n_classes = len(all_ci[0])
+        return [
+            [float(np.mean([all_ci[f][c][b] for f in range(len(all_ci))])) for b in range(2)]
+            for c in range(n_classes)
+        ]
+
+    patient_agg: Dict[str, Any] = {
+        "accuracy": _avg([pl, "accuracy"]),
+        "balanced_accuracy": _avg([pl, "balanced_accuracy"]),
+        "macro_precision": _avg([pl, "macro_precision"]),
+        "macro_recall": _avg([pl, "macro_recall"]),
+        "macro_f1": _avg([pl, "macro_f1"]),
+        "per_class_precision": _avg_list([pl, "per_class_precision"]),
+        "per_class_recall": _avg_list([pl, "per_class_recall"]),
+        "per_class_f1": _avg_list([pl, "per_class_f1"]),
+        "macro_f1_ci95": _avg_list([pl, "macro_f1_ci95"]),
+        "balanced_accuracy_ci95": _avg_list([pl, "balanced_accuracy_ci95"]),
+        "per_class_f1_ci95": _avg_pc_ci(),
+        "num_patients": sum(r.get(pl, {}).get("num_patients", 0) for r in fold_results),
+    }
+
+    agg_row: Dict[str, Any] = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "phase": "test",
+        "epoch": None,
+        "model_type": model_type,
+        "cv_folds": n_folds,
+        "test_loss": _avg(["loss"]),
+        "test_accuracy": _avg(["accuracy"]),
+        "test_balanced_accuracy": _avg(["balanced_accuracy"]),
+        "test_macro_precision": _avg(["macro_precision"]),
+        "test_macro_recall": _avg(["macro_recall"]),
+        "test_macro_f1": _avg(["macro_f1"]),
+    }
+    if any(sl in r for r in fold_results):
+        agg_row["test_slice"] = {
+            "accuracy": _avg([sl, "accuracy"]),
+            "macro_f1": _avg([sl, "macro_f1"]),
+            "num_slices": sum(r.get(sl, {}).get("num_slices", 0) for r in fold_results),
+        }
+    if any(pl in r for r in fold_results):
+        agg_row["test_patient"] = patient_agg
+
+    _append_metrics_row(metrics_path, agg_row)
+    mf1 = patient_agg.get("macro_f1") or agg_row.get("test_macro_f1")
+    logger.info(
+        f"[CV] {n_folds}-fold average → MacroF1={mf1:.4f} "
+        f"(per-fold rows tagged test_fold_0 … test_fold_{n_folds-1})"
+    )
+
+
 def _flatten_config(cfg: Any, out: Dict[str, Any] = None) -> Dict[str, Any]:
     """Flatten a nested YAML config into {dest_name: value}.
 
@@ -343,6 +443,11 @@ def parse_args():
     parser.add_argument("--linear-probe-lr", type=float, default=1e-3,
                         help="Head-only LR for --linear-probe. A fresh linear head converges faster on a "
                              "frozen backbone than the full-model DAPT LR.")
+    parser.add_argument("--cv-folds", type=int, default=1,
+                        help="Number of stratified CV folds for the BigLunge finetune phase. "
+                             "1 (default) uses the original fixed 70/15/15 split. "
+                             "5 runs 5-fold CV and writes per-fold metrics (test_fold_k) "
+                             "plus an averaged 'test' row.")
     parser.add_argument("--finetune-freeze-backbone-epochs", type=int, default=0,
                         help="LP-FT recipe: freeze the backbone for the first N fine-tune epochs (head trains "
                              "alone), then unfreeze and apply differential LR. 0 disables (full diff-LR from "
@@ -471,16 +576,21 @@ def parse_args():
     return args
 
 
-def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64, phase: str = "dapt"):
+def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64, phase: str = "dapt",
+                       cv_fold: int = -1):
     """Build train/val/test DataLoaders for the current phase.
 
     ``phase`` matters only for the MIL pipeline, which uses different datasets
     for DAPT (per-slice whole-slice) vs fine-tune / inference (bag-level).
     All other pipelines ignore ``phase``.
+
+    ``cv_fold`` selects a specific stratified k-fold split when >= 0 (the
+    number of folds comes from ``args.cv_folds``). -1 uses the original fixed split.
     """
     pipeline = get_pipeline(args.model_type)
     include_mask = bool(getattr(args, "use_det_seg", False))
     include_bbox = bool(getattr(args, "use_det_seg", False))
+    n_folds = int(getattr(args, "cv_folds", 1))
     if pipeline == "mil":
         if phase in ("finetune", "inference"):
             train_ds, val_ds, test_ds = create_dataset_mil_bag(
@@ -497,6 +607,8 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
                 clear_cache=bool(getattr(args, "clear_cache", False)),
                 include_mask=include_mask,
                 include_bbox=include_bbox,
+                cv_fold=cv_fold,
+                cv_folds=n_folds,
             )
             collate_fn = simple_collate_fn_mil
         else:  # dapt
@@ -534,6 +646,8 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
             clear_cache=bool(getattr(args, "clear_cache", False)),
             include_mask=include_mask,
             include_bbox=include_bbox,
+            cv_fold=cv_fold,
+            cv_folds=n_folds,
         )
         collate_fn = simple_collate_fn_2d
     else:
@@ -552,6 +666,8 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
             strong_augs=bool(getattr(args, "strong_augs", False)),
             clear_cache=bool(getattr(args, "clear_cache", False)),
             include_bbox=include_bbox,
+            cv_fold=cv_fold,
+            cv_folds=n_folds,
         )
         collate_fn = simple_collate_fn
 
@@ -1348,102 +1464,135 @@ def main():
                 # by get_sclc_model(), which is a valid starting point.
                 logger.info("Fine-tuning from initial in-memory weights (no DAPT checkpoint).")
 
-        logger.info(f"Setting up FineTuning Datasets from: {args.finetune_dataset}")
-        train_loader, val_loader, test_loader = create_dataloaders(
-            args, "big_lunge", args.finetune_dataset, args.finetune_csv,
-            depth_size=args.depth_size, phase="finetune",
-        )
+        # Capture pre-finetune model state so it can be restored between CV folds.
+        finetune_start_state = {k: v.clone() for k, v in model.state_dict().items()}
 
-        best_finetune_ckpt = run_training_phase(
-            model, train_loader, val_loader, device,
-            args.finetune_epochs, args.finetune_lr, args.weight_decay, args.checkpoint_dir, logger,
-            "finetune", scaler=scaler,
-            use_segmentation=finetune_use_seg,
-            use_det_seg=use_det_seg,
-            accumulation_steps=args.accumulation_steps,
-            model_type=args.model_type,
-            monitor_window=args.monitor_rolling_window,
-            differential_lr=True,
-            backbone_lr_scale=args.finetune_backbone_lr_scale,
-            seg_loss_weight=args.seg_loss_weight,
-            bbox_loss_weight=args.bbox_loss_weight,
-            warmup_epochs=args.finetune_warmup_epochs,
-            warmup_start_lr=args.warmup_start_lr,
-            freeze_backbone_epochs=int(getattr(args, "finetune_freeze_backbone_epochs", 0)),
-            mixup_alpha=args.mixup_alpha,
-            bag_dropout=float(getattr(args, "bag_dropout", 0.0)),
-            train_fn=ft_train_fn, validate_fn=ft_validate_fn,
-            metrics_path=metrics_path,
-        )
+        n_folds = int(getattr(args, "cv_folds", 1))
+        fold_test_results: List[Dict[str, Any]] = []
 
-    # --- PHASE 3: INFERENCE ---
-    if args.mode in ["full", "inference"]:
+        for fold_idx in range(n_folds):
+            cv_fold = fold_idx if n_folds > 1 else -1
+
+            if fold_idx > 0:
+                model.load_state_dict(finetune_start_state)
+                logger.info(f"[CV fold {fold_idx+1}/{n_folds}] Reset model to pre-finetune state.")
+
+            if n_folds > 1:
+                logger.info(f"\n{'='*60}\nCV Fold {fold_idx+1}/{n_folds}\n{'='*60}")
+
+            fold_ckpt_dir = (
+                os.path.join(args.checkpoint_dir, f"fold_{fold_idx}")
+                if n_folds > 1 else args.checkpoint_dir
+            )
+
+            logger.info(f"Setting up FineTuning Datasets from: {args.finetune_dataset}")
+            train_loader, val_loader, test_loader = create_dataloaders(
+                args, "big_lunge", args.finetune_dataset, args.finetune_csv,
+                depth_size=args.depth_size, phase="finetune",
+                cv_fold=cv_fold,
+            )
+
+            best_finetune_ckpt = run_training_phase(
+                model, train_loader, val_loader, device,
+                args.finetune_epochs, args.finetune_lr, args.weight_decay, fold_ckpt_dir, logger,
+                "finetune", scaler=scaler,
+                use_segmentation=finetune_use_seg,
+                use_det_seg=use_det_seg,
+                accumulation_steps=args.accumulation_steps,
+                model_type=args.model_type,
+                monitor_window=args.monitor_rolling_window,
+                differential_lr=True,
+                backbone_lr_scale=args.finetune_backbone_lr_scale,
+                seg_loss_weight=args.seg_loss_weight,
+                bbox_loss_weight=args.bbox_loss_weight,
+                warmup_epochs=args.finetune_warmup_epochs,
+                warmup_start_lr=args.warmup_start_lr,
+                freeze_backbone_epochs=int(getattr(args, "finetune_freeze_backbone_epochs", 0)),
+                mixup_alpha=args.mixup_alpha,
+                bag_dropout=float(getattr(args, "bag_dropout", 0.0)),
+                train_fn=ft_train_fn, validate_fn=ft_validate_fn,
+                metrics_path=metrics_path,
+            )
+
+            # Per-fold inference (only in full mode; finetune mode skips this).
+            if args.mode == "full":
+                if best_finetune_ckpt and os.path.isfile(best_finetune_ckpt):
+                    model.load_state_dict(torch.load(best_finetune_ckpt, map_location=device))
+                    logger.info("Loaded best FineTune checkpoint for inference.")
+                elif 'best_dapt_ckpt' in locals() and best_dapt_ckpt:
+                    if not isinstance(model, (MILResNet50Classifier, MILSwinTinyClassifier)):
+                        model.load_state_dict(torch.load(best_dapt_ckpt, map_location=device))
+                        logger.info("Loaded best DAPT checkpoint for final inference (no finetune ckpt).")
+                    else:
+                        logger.warning(
+                            "[MIL] No fine-tune checkpoint; MIL model retains DAPT-backbone transfer + "
+                            "random attention head. Test metrics will be uninformative."
+                        )
+
+                test_phase = f"test_fold_{fold_idx}" if n_folds > 1 else "test"
+                fold_metrics = _run_test_inference(
+                    model=model,
+                    test_loader=test_loader,
+                    device=device,
+                    logger=logger,
+                    validate_fn=ft_validate_fn,
+                    metrics_path=metrics_path,
+                    output_dir=args.output_dir,
+                    model_type=args.model_type,
+                    phase=test_phase,
+                    prob_file_suffix=f"_fold{fold_idx}" if n_folds > 1 else "",
+                )
+                if n_folds > 1:
+                    fold_test_results.append(fold_metrics)
+
+        # Aggregate CV metrics into a single 'test' row after all folds.
+        if n_folds > 1 and fold_test_results and args.mode == "full":
+            _save_cv_aggregate_metrics(fold_test_results, metrics_path, args.model_type, n_folds, logger)
+
+    # --- PHASE 3: INFERENCE (standalone --mode inference only) ---
+    if args.mode == "inference":
         logger.info(f"\n{'='*60}\nStarting Inference Phase\n{'='*60}")
 
-        if args.mode == "inference":
-            if args.model_checkpoint:
-                sd = torch.load(args.model_checkpoint, map_location=device)
-                if isinstance(sd, dict) and "state_dict" in sd:
-                    sd = sd["state_dict"]
-                # MIL model built above via get_sclc_model with initial_checkpoint
-                # (for inference mode pipeline=='mil' takes the get_sclc_model
-                # branch). --model-checkpoint may still point at either a MIL
-                # checkpoint or a DAPT-only backbone.
-                if isinstance(model, MILResNet50Classifier) and any(
-                    k.startswith("backbone.features.") for k in sd.keys()
-                ):
-                    model.load_backbone_from_dapt(sd, logger=logger)
-                elif isinstance(model, MILSwinTinyClassifier) and any(
-                    k.startswith("swin.") for k in sd.keys()
-                ):
-                    model.load_backbone_from_dapt(sd, logger=logger)
-                else:
-                    model.load_state_dict(sd, strict=False)
-                logger.info(f"Loaded model checkpoint from: {args.model_checkpoint}")
+        if args.model_checkpoint:
+            sd = torch.load(args.model_checkpoint, map_location=device)
+            if isinstance(sd, dict) and "state_dict" in sd:
+                sd = sd["state_dict"]
+            # MIL model built above via get_sclc_model with initial_checkpoint
+            # (for inference mode pipeline=='mil' takes the get_sclc_model
+            # branch). --model-checkpoint may still point at either a MIL
+            # checkpoint or a DAPT-only backbone.
+            if isinstance(model, MILResNet50Classifier) and any(
+                k.startswith("backbone.features.") for k in sd.keys()
+            ):
+                model.load_backbone_from_dapt(sd, logger=logger)
+            elif isinstance(model, MILSwinTinyClassifier) and any(
+                k.startswith("swin.") for k in sd.keys()
+            ):
+                model.load_backbone_from_dapt(sd, logger=logger)
             else:
-                logger.info("No --model-checkpoint provided for inference mode. Using initial weights.")
-
-            logger.info("Setting up Test Datasets...")
-            if 'test_loader' not in locals() or test_loader is None:
-                _, _, test_loader = create_dataloaders(
-                    args, "big_lunge", args.finetune_dataset, args.finetune_csv,
-                    depth_size=args.depth_size, phase="inference",
-                )
-
-        elif args.mode == "full":
-            if 'best_finetune_ckpt' in locals() and best_finetune_ckpt:
-                model.load_state_dict(torch.load(best_finetune_ckpt, map_location=device))
-                logger.info("Loaded best FineTune checkpoint for final inference.")
-            elif 'best_dapt_ckpt' in locals() and best_dapt_ckpt:
-                # Full mode without a finetune checkpoint: fall back to the best
-                # DAPT checkpoint for inference. For MIL this path is typically
-                # hit only on catastrophic failure (MIL didn't improve once) —
-                # we leave the just-transferred MIL model and skip loading the
-                # DAPT-only state_dict which wouldn't strict-load into MIL.
-                if not isinstance(model, (MILResNet50Classifier, MILSwinTinyClassifier)):
-                    model.load_state_dict(torch.load(best_dapt_ckpt, map_location=device))
-                    logger.info("Loaded best DAPT checkpoint for final inference.")
-                else:
-                    logger.warning(
-                        "[MIL] No fine-tune checkpoint; MIL model retains its DAPT-backbone transfer + "
-                        "randomly-initialized attention head. Test metrics will be uninformative."
-                    )
-
-        if 'test_loader' in locals():
-            _run_test_inference(
-                model=model,
-                test_loader=test_loader,
-                device=device,
-                logger=logger,
-                validate_fn=ft_validate_fn,
-                metrics_path=metrics_path,
-                output_dir=args.output_dir,
-                model_type=args.model_type,
-                phase="test",
-                prob_file_suffix="",
-            )
+                model.load_state_dict(sd, strict=False)
+            logger.info(f"Loaded model checkpoint from: {args.model_checkpoint}")
         else:
-            logger.error("Test loader not available. Skipping inference.")
+            logger.info("No --model-checkpoint provided for inference mode. Using initial weights.")
+
+        logger.info("Setting up Test Datasets...")
+        _, _, test_loader = create_dataloaders(
+            args, "big_lunge", args.finetune_dataset, args.finetune_csv,
+            depth_size=args.depth_size, phase="inference",
+        )
+
+        _run_test_inference(
+            model=model,
+            test_loader=test_loader,
+            device=device,
+            logger=logger,
+            validate_fn=ft_validate_fn,
+            metrics_path=metrics_path,
+            output_dir=args.output_dir,
+            model_type=args.model_type,
+            phase="test",
+            prob_file_suffix="",
+        )
             
     logger.info("Pipeline Execution Complete!")
 

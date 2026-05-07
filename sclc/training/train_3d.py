@@ -1,4 +1,5 @@
 import time
+import warnings
 from typing import Any, Dict, List, Optional
 
 import torch
@@ -6,6 +7,8 @@ import torch.nn as nn
 import numpy as np
 from monai.losses import DiceLoss
 from sklearn.metrics import balanced_accuracy_score, f1_score
+
+warnings.filterwarnings("ignore", message="y_pred contains classes not in y_true", category=UserWarning)
 from sclc.training.bbox_utils import bbox_loss_3d
 
 NUM_CLASSES = 3

@@ -202,8 +202,16 @@ def get_biglunge_data_list(
     test_frac: float = 0.15,
     seed: int = 42,
     testing: bool = False,
+    cv_fold: int = -1,
+    cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Build {split: data_list} dict with patient-level splitting for BigLunge."""
+    """Build {split: data_list} dict with patient-level splitting for BigLunge.
+
+    When ``cv_fold >= 0`` the split uses stratified k-fold CV (StratifiedKFold
+    with ``n_splits=cv_folds``): fold ``cv_fold`` becomes the test set and the
+    remaining folds are further split into train/val with an inner stratified
+    split that keeps val_frac of the total as validation.
+    """
     if not os.path.isdir(data_path):
         raise ValueError(f"Data path '{data_path}' does not exist or is not a directory.")
     if not os.path.isfile(csv_path):
@@ -244,26 +252,42 @@ def get_biglunge_data_list(
     
     patient_classes = [patient_labels[pid] for pid in patient_folders]
 
-    from sklearn.model_selection import train_test_split
+    from sklearn.model_selection import train_test_split, StratifiedKFold
 
-    val_test_frac = val_frac + test_frac
-    if val_test_frac > 0:
-        train_ids, temp_ids, train_classes, temp_classes = train_test_split(
-            patient_folders, patient_classes, test_size=val_test_frac, random_state=seed, stratify=patient_classes
+    if cv_fold >= 0:
+        # Stratified k-fold: fold cv_fold → test; rest → inner train/val split.
+        skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
+        all_folds = list(skf.split(patient_folders, patient_classes))
+        train_val_idx, test_idx = all_folds[cv_fold]
+        test_ids = [patient_folders[i] for i in test_idx]
+        train_val_folders = [patient_folders[i] for i in train_val_idx]
+        train_val_classes = [patient_classes[i] for i in train_val_idx]
+        # Scale val_frac to the train+val portion size so that the fraction of
+        # the TOTAL dataset used for validation stays roughly equal to val_frac.
+        val_frac_inner = min(val_frac / (1.0 - 1.0 / cv_folds), 0.49)
+        train_ids, val_ids, _, _ = train_test_split(
+            train_val_folders, train_val_classes,
+            test_size=val_frac_inner, random_state=seed, stratify=train_val_classes,
         )
-        
-        # Split temp into val and test
-        if test_frac > 0 and val_frac > 0:
-            test_ratio = test_frac / val_test_frac
-            val_ids, test_ids, val_classes, test_classes = train_test_split(
-                temp_ids, temp_classes, test_size=test_ratio, random_state=seed, stratify=temp_classes
-            )
-        elif test_frac > 0:
-            val_ids, test_ids = [], temp_ids
-        else:
-            val_ids, test_ids = temp_ids, []
+        print(f"[big_lunge CV fold {cv_fold}/{cv_folds}] "
+              f"train={len(train_ids)}, val={len(val_ids)}, test={len(test_ids)}")
     else:
-        train_ids, val_ids, test_ids = patient_folders, [], []
+        val_test_frac = val_frac + test_frac
+        if val_test_frac > 0:
+            train_ids, temp_ids, train_classes, temp_classes = train_test_split(
+                patient_folders, patient_classes, test_size=val_test_frac, random_state=seed, stratify=patient_classes
+            )
+            if test_frac > 0 and val_frac > 0:
+                test_ratio = test_frac / val_test_frac
+                val_ids, test_ids, val_classes, test_classes = train_test_split(
+                    temp_ids, temp_classes, test_size=test_ratio, random_state=seed, stratify=temp_classes
+                )
+            elif test_frac > 0:
+                val_ids, test_ids = [], temp_ids
+            else:
+                val_ids, test_ids = temp_ids, []
+        else:
+            train_ids, val_ids, test_ids = patient_folders, [], []
 
     split_patients = {
         "train": train_ids,
@@ -338,11 +362,13 @@ def create_dataset(
     strong_augs: bool = False,
     clear_cache: bool = False,
     include_bbox: bool = False,
+    cv_fold: int = -1,
+    cv_folds: int = 5,
     **kwargs: Any,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
     """
     Unified function to create train/val/test PersistentDatasets for SCLC.
-    
+
     Args:
         dataset_type: "big_lunge" or "lung_pet_ct_dx"
         ...
@@ -351,7 +377,7 @@ def create_dataset(
         all_splits = get_biglunge_data_list(
             data_path=data_path, csv_path=csv_path,
             val_frac=val_frac, test_frac=test_frac, seed=seed,
-            testing=testing,
+            testing=testing, cv_fold=cv_fold, cv_folds=cv_folds,
         )
         cache_name = "monai_biglunge"
     elif dataset_type == "lung_pet_ct_dx":
@@ -370,10 +396,11 @@ def create_dataset(
     # configs with different img_size/depth_size stay intact.
     if cache_dir is None:
         mode_key = "3d" if use_3d else "2d"
+        _fold_tag = f"_fold{cv_fold}" if cv_fold >= 0 else ""
         test_suffix = "_testing" if testing else ""
         run_cache_root = os.path.join(
             os.path.expanduser("~"), ".cache", cache_name,
-            f"{mode_key}_img{img_size}_d{depth_size}{test_suffix}",
+            f"{mode_key}_img{img_size}_d{depth_size}{_fold_tag}{test_suffix}",
         )
     else:
         run_cache_root = cache_dir

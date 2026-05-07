@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import math
 import time
+import warnings
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -21,6 +22,8 @@ import torch.nn as nn
 from monai.losses import DiceLoss
 
 from sklearn.metrics import balanced_accuracy_score, f1_score
+
+warnings.filterwarnings("ignore", message="y_pred contains classes not in y_true", category=UserWarning)
 
 from sclc.training.bootstrap import bootstrap_ci, per_class_f1_ci
 from sclc.training.train_3d import (

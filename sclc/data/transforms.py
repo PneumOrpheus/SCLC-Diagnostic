@@ -277,9 +277,13 @@ class BBoxFromMaskd(MapTransform):
         return norm
 
     def _bbox_single(self, mask: np.ndarray):
-        if mask.ndim > 3:
-            # strip channel dim if present
-            mask = mask[0] if mask.shape[0] == 1 else mask.any(axis=0)
+        # Strip single leading channel dim for both (1,H,W) and (1,H,W,D).
+        # Without this, (1,H,W) after SqueezeDimd has ndim=3 and falls into the
+        # 3D branch below, producing a 6-element bbox for a 2D slice.
+        if mask.ndim >= 3 and mask.shape[0] == 1:
+            mask = mask[0]
+        elif mask.ndim > 3:
+            mask = mask.any(axis=0)
         binary = mask > 0.5
         if not binary.any():
             return None
