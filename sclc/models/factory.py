@@ -8,12 +8,13 @@ from .classifiers_2d import (
     DenseNet2DClassifier,
     TorchVisionResNet2DClassifier,
     SwinTiny2DClassifier,
+    SwinV2Base2DClassifier,
 )
 from .classifiers_rin import (
     RadImageNetResNet502DClassifier,
     RadImageNetDenseNet1212DClassifier,
 )
-from .classifiers_mil import MILResNet50Classifier, MILSwinTinyClassifier
+from .classifiers_mil import MILResNet50Classifier, MILSwinTinyClassifier, MILSwinV2BaseClassifier
 
 
 TWO_D_MODEL_TYPES = (
@@ -21,12 +22,14 @@ TWO_D_MODEL_TYPES = (
     "densenet121_2d",
     "resnet50_2d",
     "swin_tiny_2d",
+    "swinv2_base_2d",
     "resnet50_2d_rin",
     "densenet121_2d_rin",
 )
 MIL_MODEL_TYPES = (
     "mil_resnet50",
     "mil_swin_tiny",
+    "mil_swinv2_base",
 )
 
 
@@ -46,15 +49,34 @@ def get_pipeline(model_type: str) -> str:
     return "3d"
 
 
-def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in_channels: int = 1, depth_size: int = 128, mil_mode: str = "att", mil_trans_blocks: int = 4, mil_trans_dropout: float = 0.0) -> nn.Module:
+def get_sclc_model(
+    checkpoint_path: str = "",
+    model_type: str = "swin_unetr",
+    in_channels: int = 1,
+    depth_size: int = 128,
+    mil_mode: str = "att",
+    mil_trans_blocks: int = 4,
+    mil_trans_dropout: float = 0.0,
+    use_advanced_fpn: bool = False,
+    use_det_seg: bool = False,
+    fpn_channels: int = 256,
+    tfpn_enabled: bool = True,
+    tfpn_heads: int = 4,
+    tfpn_layers: int = 1,
+    tfpn_levels: int = 1,
+) -> nn.Module:
     if model_type.lower() == "mil_resnet50":
-        # MIL model for the BigLunge fine-tune / inference phase.
-        # DAPT for this model_type uses TorchVisionResNet2DClassifier instead
-        # — callers route that via main.py (see the mil_resnet50 branch there),
-        # not here, because the DAPT architecture is a plain 2D classifier.
+        # MIL model for the BigLunge fine-tune / inference phase with ResNet50 backbone. DAPT for this model_type uses ResNet50_2DClassifier
         model = MILResNet50Classifier(
             num_classes=3, mil_mode=mil_mode,
             trans_blocks=mil_trans_blocks, trans_dropout=mil_trans_dropout,
+            use_advanced_fpn=use_advanced_fpn,
+            use_det_seg=use_det_seg,
+            fpn_channels=fpn_channels,
+            tfpn_enabled=tfpn_enabled,
+            tfpn_heads=tfpn_heads,
+            tfpn_layers=tfpn_layers,
+            tfpn_levels=tfpn_levels,
         )
         if checkpoint_path and os.path.exists(checkpoint_path):
             state_dict = torch.load(checkpoint_path, map_location="cpu")
@@ -95,6 +117,13 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
                 num_classes=3, mil_mode=mil_mode,
                 radimagenet_ckpt=checkpoint_path,
                 trans_blocks=mil_trans_blocks, trans_dropout=mil_trans_dropout,
+                use_advanced_fpn=use_advanced_fpn,
+                use_det_seg=use_det_seg,
+                fpn_channels=fpn_channels,
+                tfpn_enabled=tfpn_enabled,
+                tfpn_heads=tfpn_heads,
+                tfpn_layers=tfpn_layers,
+                tfpn_levels=tfpn_levels,
             )
             return model
 
@@ -103,6 +132,13 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
         model = MILSwinTinyClassifier(
             num_classes=3, mil_mode=mil_mode,
             trans_blocks=mil_trans_blocks, trans_dropout=mil_trans_dropout,
+            use_advanced_fpn=use_advanced_fpn,
+            use_det_seg=use_det_seg,
+            fpn_channels=fpn_channels,
+            tfpn_enabled=tfpn_enabled,
+            tfpn_heads=tfpn_heads,
+            tfpn_layers=tfpn_layers,
+            tfpn_levels=tfpn_levels,
         )
         if os.path.exists(checkpoint_path):
             state_dict = torch.load(checkpoint_path, map_location="cpu")
@@ -119,8 +155,41 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
                 matched = len(state_dict) - len(unexpected)
                 print(f"[*] Matched {matched}/{len(state_dict)} keys (missing={len(missing)}).")
         return model
+    if model_type.lower() == "mil_swinv2_base":
+        model = MILSwinV2BaseClassifier(
+            num_classes=3,
+            mil_mode=mil_mode,
+            trans_blocks=mil_trans_blocks,
+            trans_dropout=mil_trans_dropout,
+            use_advanced_fpn=use_advanced_fpn,
+            use_det_seg=use_det_seg,
+            fpn_channels=fpn_channels,
+            tfpn_enabled=tfpn_enabled,
+            tfpn_heads=tfpn_heads,
+            tfpn_layers=tfpn_layers,
+            tfpn_levels=tfpn_levels,
+        )
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            state_dict = torch.load(checkpoint_path, map_location="cpu")
+            if isinstance(state_dict, dict) and "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
+            probe_keys = list(state_dict.keys())
+            is_dapt_ckpt = any(k.startswith("swin.") for k in probe_keys)
+            if is_dapt_ckpt:
+                print(f"[*] Loading DAPT SwinV2-Base backbone into MIL-SwinV2 model from {checkpoint_path}")
+                model.load_backbone_from_dapt(state_dict)
+            else:
+                print(f"[*] Loading MIL-SwinV2 checkpoint from {checkpoint_path}")
+                missing, unexpected = model.load_state_dict(state_dict, strict=False)
+                matched = len(state_dict) - len(unexpected)
+                print(f"[*] Matched {matched}/{len(state_dict)} keys (missing={len(missing)}).")
+        return model
     if model_type.lower() == "efficientnet_b0_2d":
-        model = EfficientNet2DClassifier(num_classes=3)
+        model = EfficientNet2DClassifier(
+            num_classes=3,
+            use_advanced_fpn=use_advanced_fpn,
+            use_det_seg=use_det_seg,
+        )
         if checkpoint_path and os.path.exists(checkpoint_path):
             print(f"[*] Loading 2D checkpoint from {checkpoint_path}")
             state_dict = torch.load(checkpoint_path, map_location="cpu")
@@ -131,7 +200,11 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
             print(f"[*] Matched {matched}/{len(state_dict)} keys.")
         return model
     if model_type.lower() == "densenet121_2d":
-        model = DenseNet2DClassifier(num_classes=3)
+        model = DenseNet2DClassifier(
+            num_classes=3,
+            use_advanced_fpn=use_advanced_fpn,
+            use_det_seg=use_det_seg,
+        )
         if checkpoint_path and os.path.exists(checkpoint_path):
             print(f"[*] Loading 2D checkpoint from {checkpoint_path}")
             state_dict = torch.load(checkpoint_path, map_location="cpu")
@@ -142,7 +215,17 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
             print(f"[*] Matched {matched}/{len(state_dict)} keys.")
         return model
     if model_type.lower() == "resnet50_2d":
-        model = TorchVisionResNet2DClassifier(num_classes=3, model_name="resnet50")
+        model = TorchVisionResNet2DClassifier(
+            num_classes=3,
+            model_name="resnet50",
+            use_advanced_fpn=use_advanced_fpn,
+            use_det_seg=use_det_seg,
+            fpn_channels=fpn_channels,
+            tfpn_enabled=tfpn_enabled,
+            tfpn_heads=tfpn_heads,
+            tfpn_layers=tfpn_layers,
+            tfpn_levels=tfpn_levels,
+        )
         if checkpoint_path and os.path.exists(checkpoint_path):
             print(f"[*] Loading 2D checkpoint from {checkpoint_path}")
             state_dict = torch.load(checkpoint_path, map_location="cpu")
@@ -168,14 +251,47 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
             keys = list(probe.keys()) if isinstance(probe, dict) else []
             is_ms_rin = any(k.startswith("backbone.") and k.split(".", 2)[1].isdigit() for k in keys)
             if is_ms_rin:
-                model = RadImageNetResNet502DClassifier(num_classes=3, in_channels=in_channels, radimagenet_ckpt=rin_path)
+                model = RadImageNetResNet502DClassifier(
+                    num_classes=3,
+                    in_channels=in_channels,
+                    radimagenet_ckpt=rin_path,
+                    use_advanced_fpn=use_advanced_fpn,
+                    use_det_seg=use_det_seg,
+                    fpn_channels=fpn_channels,
+                    tfpn_enabled=tfpn_enabled,
+                    tfpn_heads=tfpn_heads,
+                    tfpn_layers=tfpn_layers,
+                    tfpn_levels=tfpn_levels,
+                )
                 loaded_via_constructor = True
             else:
-                model = RadImageNetResNet502DClassifier(num_classes=3, in_channels=in_channels, radimagenet_ckpt="")
+                model = RadImageNetResNet502DClassifier(
+                    num_classes=3,
+                    in_channels=in_channels,
+                    radimagenet_ckpt="",
+                    use_advanced_fpn=use_advanced_fpn,
+                    use_det_seg=use_det_seg,
+                    fpn_channels=fpn_channels,
+                    tfpn_enabled=tfpn_enabled,
+                    tfpn_heads=tfpn_heads,
+                    tfpn_layers=tfpn_layers,
+                    tfpn_levels=tfpn_levels,
+                )
                 sd_for_after_build = probe
         else:
             print(f"[!] resnet50_2d_rin: checkpoint not found at {rin_path}; backbone is random-initialized.")
-            model = RadImageNetResNet502DClassifier(num_classes=3, in_channels=in_channels, radimagenet_ckpt="")
+            model = RadImageNetResNet502DClassifier(
+                num_classes=3,
+                in_channels=in_channels,
+                radimagenet_ckpt="",
+                use_advanced_fpn=use_advanced_fpn,
+                use_det_seg=use_det_seg,
+                fpn_channels=fpn_channels,
+                tfpn_enabled=tfpn_enabled,
+                tfpn_heads=tfpn_heads,
+                tfpn_layers=tfpn_layers,
+                tfpn_levels=tfpn_levels,
+            )
         if not loaded_via_constructor and sd_for_after_build is not None:
             print(f"[*] Loading SCLC checkpoint into resnet50_2d_rin from {rin_path}")
             missing, unexpected = model.load_state_dict(sd_for_after_build, strict=False)
@@ -194,14 +310,32 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
             keys = list(probe.keys()) if isinstance(probe, dict) else []
             is_ms_rin = any(k.startswith("backbone.0.") for k in keys)
             if is_ms_rin:
-                model = RadImageNetDenseNet1212DClassifier(num_classes=3, in_channels=in_channels, radimagenet_ckpt=rin_path)
+                model = RadImageNetDenseNet1212DClassifier(
+                    num_classes=3,
+                    in_channels=in_channels,
+                    radimagenet_ckpt=rin_path,
+                    use_advanced_fpn=use_advanced_fpn,
+                    use_det_seg=use_det_seg,
+                )
                 loaded_via_constructor = True
             else:
-                model = RadImageNetDenseNet1212DClassifier(num_classes=3, in_channels=in_channels, radimagenet_ckpt="")
+                model = RadImageNetDenseNet1212DClassifier(
+                    num_classes=3,
+                    in_channels=in_channels,
+                    radimagenet_ckpt="",
+                    use_advanced_fpn=use_advanced_fpn,
+                    use_det_seg=use_det_seg,
+                )
                 sd_for_after_build = probe
         else:
             print(f"[!] densenet121_2d_rin: checkpoint not found at {rin_path}; backbone is random-initialized.")
-            model = RadImageNetDenseNet1212DClassifier(num_classes=3, in_channels=in_channels, radimagenet_ckpt="")
+            model = RadImageNetDenseNet1212DClassifier(
+                num_classes=3,
+                in_channels=in_channels,
+                radimagenet_ckpt="",
+                use_advanced_fpn=use_advanced_fpn,
+                use_det_seg=use_det_seg,
+            )
         if not loaded_via_constructor and sd_for_after_build is not None:
             print(f"[*] Loading SCLC checkpoint into densenet121_2d_rin from {rin_path}")
             missing, unexpected = model.load_state_dict(sd_for_after_build, strict=False)
@@ -226,9 +360,28 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
                 is_radimagenet = True
 
         if is_radimagenet:
-            model = SwinTiny2DClassifier(num_classes=3, radimagenet_ckpt=checkpoint_path)
+            model = SwinTiny2DClassifier(
+                num_classes=3,
+                radimagenet_ckpt=checkpoint_path,
+                use_advanced_fpn=use_advanced_fpn,
+                use_det_seg=use_det_seg,
+                fpn_channels=fpn_channels,
+                tfpn_enabled=tfpn_enabled,
+                tfpn_heads=tfpn_heads,
+                tfpn_layers=tfpn_layers,
+                tfpn_levels=tfpn_levels,
+            )
         else:
-            model = SwinTiny2DClassifier(num_classes=3)
+            model = SwinTiny2DClassifier(
+                num_classes=3,
+                use_advanced_fpn=use_advanced_fpn,
+                use_det_seg=use_det_seg,
+                fpn_channels=fpn_channels,
+                tfpn_enabled=tfpn_enabled,
+                tfpn_heads=tfpn_heads,
+                tfpn_layers=tfpn_layers,
+                tfpn_levels=tfpn_levels,
+            )
             if checkpoint_path and os.path.exists(checkpoint_path):
                 print(f"[*] Loading SCLC checkpoint from {checkpoint_path}")
                 state_dict = torch.load(checkpoint_path, map_location="cpu")
@@ -238,8 +391,38 @@ def get_sclc_model(checkpoint_path: str = "", model_type: str = "swin_unetr", in
                 matched = len(state_dict) - len(unexpected)
                 print(f"[*] Matched {matched}/{len(state_dict)} keys.")
         return model
+    if model_type.lower() == "swinv2_base_2d":
+        model = SwinV2Base2DClassifier(
+            num_classes=3,
+            use_advanced_fpn=use_advanced_fpn,
+            use_det_seg=use_det_seg,
+            fpn_channels=fpn_channels,
+            tfpn_enabled=tfpn_enabled,
+            tfpn_heads=tfpn_heads,
+            tfpn_layers=tfpn_layers,
+            tfpn_levels=tfpn_levels,
+        )
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            print(f"[*] Loading SwinV2-Base checkpoint from {checkpoint_path}")
+            state_dict = torch.load(checkpoint_path, map_location="cpu")
+            if isinstance(state_dict, dict) and "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
+            missing, unexpected = model.load_state_dict(state_dict, strict=False)
+            matched = len(state_dict) - len(unexpected)
+            print(f"[*] Matched {matched}/{len(state_dict)} keys.")
+        return model
     if model_type.lower() == "swin_unetr":
-        model = SwinUNETRClassifier(in_channels=in_channels, num_classes=3)
+        model = SwinUNETRClassifier(
+            in_channels=in_channels,
+            num_classes=3,
+            use_advanced_fpn=use_advanced_fpn,
+            use_det_seg=use_det_seg,
+            fpn_channels=fpn_channels,
+            tfpn_enabled=tfpn_enabled,
+            tfpn_heads=tfpn_heads,
+            tfpn_layers=tfpn_layers,
+            tfpn_levels=tfpn_levels,
+        )
         if checkpoint_path:
             if os.path.exists(checkpoint_path):
                 print(f"[*] Loading pretrained SwinUNETR weights from {checkpoint_path}")

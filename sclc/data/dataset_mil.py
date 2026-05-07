@@ -68,6 +68,8 @@ def create_dataset_whole_slice(
     cache_workers: int = 4,
     strong_augs: bool = False,
     clear_cache: bool = False,
+    include_mask: bool = False,
+    include_bbox: bool = False,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
     """Per-slice whole-slice datasets for DAPT.
 
@@ -83,9 +85,10 @@ def create_dataset_whole_slice(
     else:
         raise ValueError(f"Unknown dataset_type for whole-slice DAPT: '{dataset_type}'.")
 
+    _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
     cache_root = os.path.join(
         os.path.expanduser("~"), ".cache", cache_name,
-        f"img{img_size}_mp{int(min_tumor_pixels)}{'_testing' if testing else ''}",
+        f"img{img_size}_mp{int(min_tumor_pixels)}{_mask_tag}{'_testing' if testing else ''}",
     )
     if clear_cache and os.path.isdir(cache_root):
         import shutil as _shutil
@@ -116,9 +119,18 @@ def create_dataset_whole_slice(
     for split in ("train", "val", "test"):
         data_list = all_splits[split]
         transforms = (
-            get_train_transforms_whole_slice(img_size=img_size, strong_augs=strong_augs)
+            get_train_transforms_whole_slice(
+                img_size=img_size,
+                strong_augs=strong_augs,
+                include_mask=include_mask,
+                include_bbox=include_bbox,
+            )
             if split == "train"
-            else get_val_transforms_whole_slice(img_size=img_size)
+            else get_val_transforms_whole_slice(
+                img_size=img_size,
+                include_mask=include_mask,
+                include_bbox=include_bbox,
+            )
         )
 
         if cache_dir is None:
@@ -142,6 +154,8 @@ def create_dataset_whole_slice(
             "min_tumor_pixels": int(min_tumor_pixels),
             "max_slices_per_volume": max_slices_per_volume,
             "split": split,
+            "include_mask": bool(include_mask),
+            "include_bbox": bool(include_bbox),
         }
 
         cached_meta = None
@@ -212,10 +226,13 @@ def get_biglunge_mil_data_list(
     data_path: str,
     csv_path: str,
     lung_mask_suffix: str = "_label_lungs.nii.gz",
+    tumor_mask_suffix: str = "_label_tc.nii.gz",
     val_frac: float = 0.15,
     test_frac: float = 0.15,
     seed: int = 42,
     testing: bool = False,
+    cv_fold: int = -1,
+    cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """BigLunge data list for MIL. One entry per patient.
 
@@ -229,6 +246,7 @@ def get_biglunge_mil_data_list(
     splits = get_biglunge_data_list(
         data_path=data_path, csv_path=csv_path,
         val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
+        cv_fold=cv_fold, cv_folds=cv_folds,
     )
 
     # Truncated-lung-mask exclusions live in data/exclusions.py so the 3D
@@ -259,6 +277,7 @@ def get_biglunge_mil_data_list(
             if not os.path.isfile(lung_mask):
                 dropped_no_mask += 1
                 continue
+            tumor_mask = str(data_root / pid / f"{pid}{tumor_mask_suffix}")
             entry: Dict[str, Any] = {
                 "image": e["image"],
                 "lung_mask": lung_mask,
@@ -267,6 +286,8 @@ def get_biglunge_mil_data_list(
                 # volume_id mirrors image path so validate_epoch_mil can log it
                 "volume_id": e["image"],
             }
+            if os.path.isfile(tumor_mask):
+                entry["tumor_mask"] = tumor_mask
             kept.append(entry)
             seen_patients.add(pid)
 
@@ -293,6 +314,7 @@ def create_dataset_mil_bag(
     img_size: int = 384,
     bag_size: int = 16,
     lung_mask_suffix: str = "_label_lungs.nii.gz",
+    tumor_mask_suffix: str = "_label_tc.nii.gz",
     cache_dir: Optional[str] = None,
     val_frac: float = 0.15,
     test_frac: float = 0.15,
@@ -302,6 +324,10 @@ def create_dataset_mil_bag(
     cache_workers: int = 4,
     strong_augs: bool = False,
     clear_cache: bool = False,
+    include_mask: bool = False,
+    include_bbox: bool = False,
+    cv_fold: int = -1,
+    cv_folds: int = 5,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
     """Create train/val/test MIL-bag PersistentDatasets for BigLunge.
 
@@ -315,9 +341,11 @@ def create_dataset_mil_bag(
         raise ValueError("csv_path is required for dataset_type='big_lunge'.")
 
     cache_name = "monai_biglunge_mil"
+    _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
+    _fold_tag = f"_fold{cv_fold}" if cv_fold >= 0 else ""
     cache_root = os.path.join(
         os.path.expanduser("~"), ".cache", cache_name,
-        f"img{img_size}_bag{int(bag_size)}{'_testing' if testing else ''}",
+        f"img{img_size}_bag{int(bag_size)}{_mask_tag}{_fold_tag}{'_testing' if testing else ''}",
     )
     if clear_cache and os.path.isdir(cache_root):
         import shutil as _shutil
@@ -328,16 +356,29 @@ def create_dataset_mil_bag(
     all_splits = get_biglunge_mil_data_list(
         data_path=data_path, csv_path=csv_path,
         lung_mask_suffix=lung_mask_suffix,
+        tumor_mask_suffix=tumor_mask_suffix,
         val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
+        cv_fold=cv_fold, cv_folds=cv_folds,
     )
 
     datasets: List[PersistentDataset] = []
     for split in ("train", "val", "test"):
         data_list = all_splits[split]
         transforms = (
-            get_train_transforms_mil_bag(img_size=img_size, bag_size=bag_size, strong_augs=strong_augs)
+            get_train_transforms_mil_bag(
+                img_size=img_size,
+                bag_size=bag_size,
+                strong_augs=strong_augs,
+                include_mask=include_mask,
+                include_bbox=include_bbox,
+            )
             if split == "train"
-            else get_val_transforms_mil_bag(img_size=img_size, bag_size=bag_size)
+            else get_val_transforms_mil_bag(
+                img_size=img_size,
+                bag_size=bag_size,
+                include_mask=include_mask,
+                include_bbox=include_bbox,
+            )
         )
 
         if cache_dir is None:
@@ -360,6 +401,8 @@ def create_dataset_mil_bag(
             "bag_size": int(bag_size),
             "lung_mask_suffix": lung_mask_suffix,
             "split": split,
+            "include_mask": bool(include_mask),
+            "include_bbox": bool(include_bbox),
         }
 
         cached_meta = None

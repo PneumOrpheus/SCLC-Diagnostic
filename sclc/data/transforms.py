@@ -245,6 +245,118 @@ class ExtractSubVolumed(MapTransform):
                 
         return d
 
+
+class BBoxFromMaskd(MapTransform):
+    """Compute axis-aligned bounding boxes from a binary mask.
+
+    Writes ``bbox_key`` and ``has_key`` into the sample dict. For 2D masks
+    the box is (xmin, ymin, xmax, ymax); for 3D, (xmin, ymin, zmin, xmax,
+    ymax, zmax). Coordinates are normalized to [0, 1] so downstream heads can
+    remain resolution-agnostic.
+    """
+
+    def __init__(
+        self,
+        keys: KeysCollection,
+        source_key: str = "mask",
+        bbox_key: str = "bbox",
+        has_key: str = "has_bbox",
+        allow_missing_keys: bool = False,
+    ) -> None:
+        super().__init__(keys, allow_missing_keys)
+        self.source_key = source_key
+        self.bbox_key = bbox_key
+        self.has_key = has_key
+
+    @staticmethod
+    def _normalize(vals, shape):
+        norm = []
+        for v, dim in zip(vals, shape):
+            denom = max(float(dim - 1), 1.0)
+            norm.append(float(v) / denom)
+        return norm
+
+    def _bbox_single(self, mask: np.ndarray):
+        # Strip single leading channel dim for both (1,H,W) and (1,H,W,D).
+        # Without this, (1,H,W) after SqueezeDimd has ndim=3 and falls into the
+        # 3D branch below, producing a 6-element bbox for a 2D slice.
+        if mask.ndim >= 3 and mask.shape[0] == 1:
+            mask = mask[0]
+        elif mask.ndim > 3:
+            mask = mask.any(axis=0)
+        binary = mask > 0.5
+        if not binary.any():
+            return None
+        idx = np.argwhere(binary)
+        mins = idx.min(axis=0)
+        maxs = idx.max(axis=0)
+
+        if binary.ndim == 2:
+            y_min, x_min = mins
+            y_max, x_max = maxs
+            bbox = [x_min, y_min, x_max, y_max]
+            bbox = self._normalize(bbox, (binary.shape[1], binary.shape[0], binary.shape[1], binary.shape[0]))
+            return bbox
+        # 3D: (H, W, D)
+        y_min, x_min, z_min = mins
+        y_max, x_max, z_max = maxs
+        bbox = [x_min, y_min, z_min, x_max, y_max, z_max]
+        bbox = self._normalize(
+            bbox,
+            (
+                binary.shape[1],
+                binary.shape[0],
+                binary.shape[2],
+                binary.shape[1],
+                binary.shape[0],
+                binary.shape[2],
+            ),
+        )
+        return bbox
+
+    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
+        d: Dict[Hashable, Any] = dict(data)
+        if self.source_key not in d:
+            if not self.allow_missing_keys:
+                raise KeyError(f"BBoxFromMaskd: '{self.source_key}' not found on sample.")
+            return d
+
+        mask = d.get(self.source_key)
+        if mask is None:
+            d[self.bbox_key] = None
+            d[self.has_key] = False
+            return d
+
+        if isinstance(mask, torch.Tensor):
+            arr = mask.detach().cpu().numpy()
+        else:
+            arr = np.asarray(mask)
+
+        # Bag case: (N, 1, H, W)
+        if arr.ndim == 4 and arr.shape[0] > 1 and arr.shape[1] == 1:
+            bboxes = []
+            has = []
+            for i in range(arr.shape[0]):
+                bbox = self._bbox_single(arr[i])
+                if bbox is None:
+                    bboxes.append([0.0, 0.0, 0.0, 0.0])
+                    has.append(False)
+                else:
+                    bboxes.append(bbox)
+                    has.append(True)
+            d[self.bbox_key] = np.asarray(bboxes, dtype=np.float32)
+            d[self.has_key] = np.asarray(has, dtype=bool)
+            return d
+
+        bbox = self._bbox_single(arr)
+        if bbox is None:
+            d[self.bbox_key] = None
+            d[self.has_key] = False
+        else:
+            d[self.bbox_key] = np.asarray(bbox, dtype=np.float32)
+            d[self.has_key] = True
+        return d
+
 class CropAroundTumord(MapTransform):
     """Crop a fixed-size 3D patch centered on the LARGEST connected
     component of the tumor mask.
@@ -494,6 +606,7 @@ def get_train_transforms_3d(
     depth_size: int = 64,
     use_lung_crop: bool = False,
     strong_augs: bool = False,
+    include_bbox: bool = False,
 ) -> Compose:
     load_keys = ["image", "mask"]
 
@@ -540,6 +653,7 @@ def get_train_transforms_3d(
         *(_aug_block_3d(val_keys=val_keys, strong_augs=strong_augs)),
 
         NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
+        *([BBoxFromMaskd(keys=["mask"], source_key="mask", bbox_key="bbox", has_key="has_bbox", allow_missing_keys=True)] if include_bbox else []),
         ToTensord(keys=["image", "mask"], allow_missing_keys=True),
     ]
     return Compose(transforms)
@@ -549,6 +663,7 @@ def get_val_transforms_3d(
     img_size: int = 224,
     depth_size: int = 64,
     use_lung_crop: bool = False,
+    include_bbox: bool = False,
 ) -> Compose:
     load_keys = ["image", "mask"]
 
@@ -596,9 +711,24 @@ def get_val_transforms_3d(
         ),
 
         NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
+        *([BBoxFromMaskd(keys=["mask"], source_key="mask", bbox_key="bbox", has_key="has_bbox", allow_missing_keys=True)] if include_bbox else []),
         ToTensord(keys=["image", "mask"], allow_missing_keys=True),
     ]
     return Compose(transforms)
+
+
+class PopKeysd(MapTransform):
+    """Remove one or more keys from a sample dict, silently skipping absent keys.
+
+    Drop-in replacement for ``DeleteItemsd`` when the key may not be present
+    (``DeleteItemsd`` has no ``allow_missing_keys`` in older MONAI versions).
+    """
+
+    def __call__(self, data: dict) -> dict:
+        d = dict(data)
+        for k in self.keys:
+            d.pop(k, None)
+        return d
 
 
 class SliceSelectd(MapTransform):
@@ -636,6 +766,8 @@ def _build_2d_pipeline(
     train: bool,
     strong_augs: bool = False,
     crop_size: int = 96,
+    include_mask: bool = False,
+    include_bbox: bool = False,
 ) -> list:
     """Shared 2D pipeline: load CT + tumor mask, spacing, pick the tumor slice
     specified by ``slice_idx`` on the sample, crop in-plane around the 2D tumor
@@ -658,6 +790,11 @@ def _build_2d_pipeline(
     the last deterministic transform, and all augs here are ``Rand*``.
     """
     load_keys = ["image", "tumor_mask"]
+    keep_mask = bool(include_mask or include_bbox)
+    # Keys and interpolation modes for spatial transforms that must stay
+    # aligned with the image (flip, affine, crop, resize).
+    _aug_keys = ["image"] + (["tumor_mask"] if keep_mask else [])
+    _aug_spatial_modes = ["bilinear"] + (["nearest"] if keep_mask else [])
     transforms: list = [
         LoadNiftiWithRGBSupportd(keys=load_keys, allow_missing_keys=True),
         EnsureChannelFirstd(keys=load_keys, channel_dim="no_channel", allow_missing_keys=True),
@@ -671,36 +808,41 @@ def _build_2d_pipeline(
         # Pick the single axial slice of interest (volume stays 4D with Z=1 so
         # the downstream 3D-style tumor crop can reuse CropAroundTumord).
         SliceSelectd(keys=load_keys, slice_key="slice_idx", allow_missing_keys=True),
-        # In-plane fixed-size crop centered on the tumor
+        # Crop image AND mask jointly to the same tumor-centered region so
+        # bbox coordinates computed later are in the cropped-image frame.
         CropAroundTumord(
-            keys=["image"],
+            keys=["image"] + (["tumor_mask"] if keep_mask else []),
             source_key="tumor_mask",
             patch_size=(int(crop_size), int(crop_size), 1),
             allow_missing_keys=True,
         ),
         ScaleIntensityRanged(keys=["image"], a_min=-1024, a_max=3071, b_min=0, b_max=1, clip=True),
+        # Resize image AND mask jointly so spatial dims remain in sync.
         Resized(
-            keys=["image"],
+            keys=["image"] + (["tumor_mask"] if keep_mask else []),
             spatial_size=(img_size, img_size, 1),
-            mode=["trilinear"],
+            mode=["trilinear"] + (["nearest"] if keep_mask else []),
         ),
-        # Drop the pseudo-Z axis and the mask. Downstream is (C=1, H, W).
-        SqueezeDimd(keys=["image"], dim=-1),
-        DeleteItemsd(keys=["tumor_mask"]),
+        # Drop the pseudo-Z axis; keep mask only if requested.
+        SqueezeDimd(keys=["image"] + (["tumor_mask"] if keep_mask else []), dim=-1),
     ]
+
+    if not keep_mask:
+        transforms.append(DeleteItemsd(keys=["tumor_mask"]))
 
     if train and not strong_augs:
         transforms += [
-            RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
-            RandFlipd(keys=["image"], prob=0.5, spatial_axis=1),
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=0, allow_missing_keys=True),
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=1, allow_missing_keys=True),
             RandAffined(
-                keys=["image"],
+                keys=_aug_keys,
                 prob=0.5,
                 rotate_range=(0.26,),          # ~15 deg in-plane
                 translate_range=(8, 8),
                 scale_range=(0.1, 0.1),
-                mode="bilinear",
+                mode=_aug_spatial_modes,
                 padding_mode="zeros",
+                allow_missing_keys=True,
             ),
             RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
             RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
@@ -708,16 +850,17 @@ def _build_2d_pipeline(
         ]
     elif train and strong_augs:
         transforms += [
-            RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
-            RandFlipd(keys=["image"], prob=0.5, spatial_axis=1),
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=0, allow_missing_keys=True),
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=1, allow_missing_keys=True),
             RandAffined(
-                keys=["image"],
+                keys=_aug_keys,
                 prob=0.8,                      # was 0.5
                 rotate_range=(0.35,),          # ~20 deg in-plane (was ~15)
                 translate_range=(12, 12),      # was (8, 8)
                 scale_range=(0.15, 0.15),      # was (0.10, 0.10)
-                mode="bilinear",
+                mode=_aug_spatial_modes,
                 padding_mode="zeros",
+                allow_missing_keys=True,
             ),
             RandScaleIntensityd(keys=["image"], factors=0.15, prob=0.7),
             RandShiftIntensityd(keys=["image"], offsets=0.15, prob=0.7),
@@ -732,21 +875,49 @@ def _build_2d_pipeline(
             ),
         ]
 
+    # BBoxFromMaskd after augmentation so the bbox reflects the augmented, spatially-aligned mask
+    if include_bbox:
+        transforms.append(
+            BBoxFromMaskd(keys=["tumor_mask"], source_key="tumor_mask", bbox_key="bbox", has_key="has_bbox", allow_missing_keys=True)
+        )
+
     transforms += [
         NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
-        ToTensord(keys=["image"]),
+        ToTensord(keys=["image"] + (["tumor_mask"] if keep_mask else []), allow_missing_keys=True),
     ]
     return transforms
 
 
-def get_train_transforms_2d(img_size: int = 224, strong_augs: bool = False, crop_size: int = 96) -> Compose:
+def get_train_transforms_2d(
+    img_size: int = 224,
+    strong_augs: bool = False,
+    crop_size: int = 96,
+    include_mask: bool = False,
+    include_bbox: bool = False,
+) -> Compose:
     return Compose(_build_2d_pipeline(
-        img_size=img_size, train=True, strong_augs=strong_augs, crop_size=crop_size,
+        img_size=img_size,
+        train=True,
+        strong_augs=strong_augs,
+        crop_size=crop_size,
+        include_mask=include_mask,
+        include_bbox=include_bbox,
     ))
 
 
-def get_val_transforms_2d(img_size: int = 224, crop_size: int = 96) -> Compose:
-    return Compose(_build_2d_pipeline(img_size=img_size, train=False, crop_size=crop_size))
+def get_val_transforms_2d(
+    img_size: int = 224,
+    crop_size: int = 96,
+    include_mask: bool = False,
+    include_bbox: bool = False,
+) -> Compose:
+    return Compose(_build_2d_pipeline(
+        img_size=img_size,
+        train=False,
+        crop_size=crop_size,
+        include_mask=include_mask,
+        include_bbox=include_bbox,
+    ))
 
 
 # =============================================================================
@@ -924,16 +1095,22 @@ def _build_whole_slice_pipeline(
     img_size: int,
     train: bool,
     strong_augs: bool = False,
+    include_mask: bool = False,
+    include_bbox: bool = False,
 ) -> list:
     """Whole-slice per-slice pipeline for DAPT.
 
     Load CT (tumor mask is referenced in the sample dict but not loaded —
     ``slice_idx`` already encodes which axial slice to pick). Spacing to
-    1.0×1.0×2.0 mm. Select the single tumor slice via ``SliceSelectd``. HU
+    1.0 x 1.0 x 2.0 mm. Select the single tumor slice via ``SliceSelectd``. HU
     window, resize XY to ``img_size`` (no in-plane crop), squeeze Z, augment,
     normalize. Output: ``(C=1, img_size, img_size)``.
     """
-    load_keys = ["image"]
+    keep_mask = bool(include_mask or include_bbox)
+    load_keys = ["image"] + (["tumor_mask"] if keep_mask else [])
+    _spacing_modes = ["bilinear"] + (["nearest"] if keep_mask else [])
+    _aug_keys = ["image"] + (["tumor_mask"] if keep_mask else [])
+    _aug_spatial_modes = ["bilinear"] + (["nearest"] if keep_mask else [])
     transforms: list = [
         LoadNiftiWithRGBSupportd(keys=load_keys, allow_missing_keys=True),
         EnsureChannelFirstd(keys=load_keys, channel_dim="no_channel", allow_missing_keys=True),
@@ -941,31 +1118,36 @@ def _build_whole_slice_pipeline(
         Spacingd(
             keys=load_keys,
             pixdim=(1.0, 1.0, 2.0),
-            mode=["bilinear"],
+            mode=_spacing_modes,
             allow_missing_keys=True,
         ),
         SliceSelectd(keys=load_keys, slice_key="slice_idx", allow_missing_keys=True),
         ScaleIntensityRanged(keys=["image"], a_min=-1024, a_max=3071, b_min=0, b_max=1, clip=True),
+        # Resize image AND mask jointly so spatial dims stay in sync.
         Resized(
-            keys=["image"],
+            keys=["image"] + (["tumor_mask"] if keep_mask else []),
             spatial_size=(img_size, img_size, 1),
-            mode=["trilinear"],
+            mode=["trilinear"] + (["nearest"] if keep_mask else []),
         ),
-        SqueezeDimd(keys=["image"], dim=-1),
+        SqueezeDimd(keys=["image"] + (["tumor_mask"] if keep_mask else []), dim=-1),
     ]
+
+    if not keep_mask:
+        transforms.append(DeleteItemsd(keys=["tumor_mask"]))
 
     if train and not strong_augs:
         transforms += [
-            RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
-            RandFlipd(keys=["image"], prob=0.5, spatial_axis=1),
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=0, allow_missing_keys=True),
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=1, allow_missing_keys=True),
             RandAffined(
-                keys=["image"],
+                keys=_aug_keys,
                 prob=0.5,
                 rotate_range=(0.26,),
                 translate_range=(8, 8),
                 scale_range=(0.1, 0.1),
-                mode="bilinear",
+                mode=_aug_spatial_modes,
                 padding_mode="zeros",
+                allow_missing_keys=True,
             ),
             RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
             RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
@@ -973,16 +1155,17 @@ def _build_whole_slice_pipeline(
         ]
     elif train and strong_augs:
         transforms += [
-            RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
-            RandFlipd(keys=["image"], prob=0.5, spatial_axis=1),
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=0, allow_missing_keys=True),
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=1, allow_missing_keys=True),
             RandAffined(
-                keys=["image"],
+                keys=_aug_keys,
                 prob=0.8,
                 rotate_range=(0.35,),
                 translate_range=(12, 12),
                 scale_range=(0.15, 0.15),
-                mode="bilinear",
+                mode=_aug_spatial_modes,
                 padding_mode="zeros",
+                allow_missing_keys=True,
             ),
             RandScaleIntensityd(keys=["image"], factors=0.15, prob=0.7),
             RandShiftIntensityd(keys=["image"], offsets=0.15, prob=0.7),
@@ -997,19 +1180,45 @@ def _build_whole_slice_pipeline(
             ),
         ]
 
+    # BBoxFromMaskd AFTER augmentation so the bbox is in the augmented frame.
+    if include_bbox:
+        transforms.append(
+            BBoxFromMaskd(keys=["tumor_mask"], source_key="tumor_mask", bbox_key="bbox", has_key="has_bbox", allow_missing_keys=True)
+        )
+
     transforms += [
         NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
-        ToTensord(keys=["image"]),
+        ToTensord(keys=["image"] + (["tumor_mask"] if keep_mask else []), allow_missing_keys=True),
     ]
     return transforms
 
 
-def get_train_transforms_whole_slice(img_size: int = 384, strong_augs: bool = False) -> Compose:
-    return Compose(_build_whole_slice_pipeline(img_size=img_size, train=True, strong_augs=strong_augs))
+def get_train_transforms_whole_slice(
+    img_size: int = 384,
+    strong_augs: bool = False,
+    include_mask: bool = False,
+    include_bbox: bool = False,
+) -> Compose:
+    return Compose(_build_whole_slice_pipeline(
+        img_size=img_size,
+        train=True,
+        strong_augs=strong_augs,
+        include_mask=include_mask,
+        include_bbox=include_bbox,
+    ))
 
 
-def get_val_transforms_whole_slice(img_size: int = 384) -> Compose:
-    return Compose(_build_whole_slice_pipeline(img_size=img_size, train=False))
+def get_val_transforms_whole_slice(
+    img_size: int = 384,
+    include_mask: bool = False,
+    include_bbox: bool = False,
+) -> Compose:
+    return Compose(_build_whole_slice_pipeline(
+        img_size=img_size,
+        train=False,
+        include_mask=include_mask,
+        include_bbox=include_bbox,
+    ))
 
 
 def _build_mil_bag_pipeline(
@@ -1017,17 +1226,26 @@ def _build_mil_bag_pipeline(
     bag_size: int,
     train: bool,
     strong_augs: bool = False,
+    include_mask: bool = False,
+    include_bbox: bool = False,
 ) -> list:
     """MIL bag pipeline.
 
-    Load CT + lung mask. Spacing to 1.0×1.0×2.0 mm (both via the same
+    Load CT + lung mask. Spacing to 1.0 x 1.0 x 2.0 mm (both via the same
     Spacingd so the Z grids stay aligned). Scale intensity. Resize XY to
     ``img_size`` (keep Z). Pick ``bag_size`` evenly-spaced slices from the
     lung mask's axial extent. Augment in-plane only (never across the bag
     axis — instances in one bag must stay registered). Permute to
     (N, 1, H, W). Per-instance normalize. Output: ``(N, 1, H, W)``.
     """
-    load_keys = ["image", "lung_mask"]
+    keep_mask = bool(include_mask or include_bbox)
+    load_keys = ["image", "lung_mask"] + (["tumor_mask"] if keep_mask else [])
+    # Per-key interpolation modes: image=bilinear, masks=nearest. Extend for
+    # tumor_mask when keep_mask=True so mode list length matches load_keys.
+    _spacing_modes = ["bilinear", "nearest"] + (["nearest"] if keep_mask else [])
+    _resize_modes  = ["trilinear", "nearest"] + (["nearest"] if keep_mask else [])
+    _aug_keys = ["image"] + (["tumor_mask"] if keep_mask else [])
+    _aug_spatial_modes = ["bilinear"] + (["nearest"] if keep_mask else [])
     transforms: list = [
         LoadNiftiWithRGBSupportd(keys=load_keys, allow_missing_keys=True),
         EnsureChannelFirstd(keys=load_keys, channel_dim="no_channel", allow_missing_keys=True),
@@ -1035,18 +1253,18 @@ def _build_mil_bag_pipeline(
         Spacingd(
             keys=load_keys,
             pixdim=(1.0, 1.0, 2.0),
-            mode=["bilinear", "nearest"],
+            mode=_spacing_modes,
             allow_missing_keys=True,
         ),
         ScaleIntensityRanged(keys=["image"], a_min=-1024, a_max=3071, b_min=0, b_max=1, clip=True),
         Resized(
             keys=load_keys,
             spatial_size=(img_size, img_size, -1),
-            mode=["trilinear", "nearest"],
+            mode=_resize_modes,
             allow_missing_keys=True,
         ),
         LungAxialBagSelectd(
-            keys=["image"],
+            keys=["image"] + (["tumor_mask"] if keep_mask else []),
             source_key="lung_mask",
             num_slices=bag_size,
             jitter=train,
@@ -1059,16 +1277,17 @@ def _build_mil_bag_pipeline(
 
     if train and not strong_augs:
         transforms += [
-            RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),  # H
-            RandFlipd(keys=["image"], prob=0.5, spatial_axis=1),  # W
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=0, allow_missing_keys=True),  # H
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=1, allow_missing_keys=True),  # W
             RandAffined(
-                keys=["image"],
+                keys=_aug_keys,
                 prob=0.5,
                 rotate_range=(0.0, 0.0, 0.26),   # in-plane (Z-axis) rotation only
                 translate_range=(8, 8, 0),
                 scale_range=(0.1, 0.1, 0.0),
-                mode="bilinear",
+                mode=_aug_spatial_modes,
                 padding_mode="zeros",
+                allow_missing_keys=True,
             ),
             RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
             RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
@@ -1076,16 +1295,17 @@ def _build_mil_bag_pipeline(
         ]
     elif train and strong_augs:
         transforms += [
-            RandFlipd(keys=["image"], prob=0.5, spatial_axis=0),
-            RandFlipd(keys=["image"], prob=0.5, spatial_axis=1),
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=0, allow_missing_keys=True),
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=1, allow_missing_keys=True),
             RandAffined(
-                keys=["image"],
+                keys=_aug_keys,
                 prob=0.8,
                 rotate_range=(0.0, 0.0, 0.35),
                 translate_range=(12, 12, 0),
                 scale_range=(0.15, 0.15, 0.0),
-                mode="bilinear",
+                mode=_aug_spatial_modes,
                 padding_mode="zeros",
+                allow_missing_keys=True,
             ),
             RandScaleIntensityd(keys=["image"], factors=0.15, prob=0.7),
             RandShiftIntensityd(keys=["image"], offsets=0.15, prob=0.7),
@@ -1096,20 +1316,46 @@ def _build_mil_bag_pipeline(
         # Permute BEFORE normalize so channel_wise=True normalizes each
         # instance independently. If we normalized first (on (1,H,W,N)),
         # a single bright slice would skew the whole bag's stats.
-        BagAsBatchDimd(keys=["image"]),
+        BagAsBatchDimd(keys=["image"] + (["tumor_mask"] if keep_mask else [])),
         NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
-        ToTensord(keys=["image"]),
     ]
+    if include_bbox:
+        transforms.append(
+            BBoxFromMaskd(keys=["tumor_mask"], source_key="tumor_mask", bbox_key="bbox", has_key="has_bbox", allow_missing_keys=True)
+        )
+    if not keep_mask:
+        transforms.append(PopKeysd(keys=["tumor_mask"]))
+    transforms.append(ToTensord(keys=["image"] + (["tumor_mask"] if keep_mask else []), allow_missing_keys=True))
     return transforms
 
 
-def get_train_transforms_mil_bag(img_size: int = 384, bag_size: int = 16, strong_augs: bool = False) -> Compose:
+def get_train_transforms_mil_bag(
+    img_size: int = 384,
+    bag_size: int = 16,
+    strong_augs: bool = False,
+    include_mask: bool = False,
+    include_bbox: bool = False,
+) -> Compose:
     return Compose(_build_mil_bag_pipeline(
-        img_size=img_size, bag_size=bag_size, train=True, strong_augs=strong_augs,
+        img_size=img_size,
+        bag_size=bag_size,
+        train=True,
+        strong_augs=strong_augs,
+        include_mask=include_mask,
+        include_bbox=include_bbox,
     ))
 
 
-def get_val_transforms_mil_bag(img_size: int = 384, bag_size: int = 16) -> Compose:
+def get_val_transforms_mil_bag(
+    img_size: int = 384,
+    bag_size: int = 16,
+    include_mask: bool = False,
+    include_bbox: bool = False,
+) -> Compose:
     return Compose(_build_mil_bag_pipeline(
-        img_size=img_size, bag_size=bag_size, train=False,
+        img_size=img_size,
+        bag_size=bag_size,
+        train=False,
+        include_mask=include_mask,
+        include_bbox=include_bbox,
     ))
