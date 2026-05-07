@@ -14,9 +14,9 @@ Three model families share one entrypoint (`main.py`) and one config format (`co
 
 | Index | Class | Lung-PET-CT-Dx letter | BigLunge `MorphologicalGroup` |
 |---|---|---|---|
-| 0 | Adenocarcinoma (ADC) | `A` | `Adenokarsinom` / `Adenocarcinoma` |
-| 1 | Small Cell Carcinoma (SCLC) | `B` | `Småcelletkarsinom` / `Small cell carcinoma` |
-| 2 | Squamous Cell Carcinoma (SCC) | `G` | `Plateepitelkarsinom` / `Squamous cell carcinoma` |
+| 0 | Adenocarcinoma (ADC) | `A` | `Adenocarcinoma` |
+| 1 | Small Cell Carcinoma (SCLC) | `B` | `Small cell carcinoma` |
+| 2 | Squamous Cell Carcinoma (SCC) | `G` |  `Squamous cell carcinoma` |
 
 Large Cell (`E` / `Storcellet`) and other morphological groups are filtered out.
 
