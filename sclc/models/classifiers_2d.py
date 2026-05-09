@@ -13,31 +13,71 @@ from .advanced_fpn import AdvancedFPNNeck, MultiTaskHead
 
 
 class EfficientNet2DClassifier(nn.Module):
-    """2D classifier: one axial slice -> EfficientNet-B0 (ImageNet-pretrained).
+    """2D EfficientNet-B0 (ImageNet-pretrained) for single-slice classification.
 
-    The slice is fed single-channel. MONAI's EfficientNetBN re-initializes the
-    stem conv *randomly* when ``in_channels != 3`` — it does not average the
-    pretrained RGB weights. We fix that here by copying the mean of the
-    pretrained 3-channel stem into our 1-channel stem, the standard grayscale-
-    transfer trick (same thing TorchVisionResNet2DClassifier._adapt_stem does).
-    Without this the frozen-backbone linear probe operates on a random stem,
-    and even the full-DAPT run shows a 10-epoch Adeno-only cold start before
-    the stem gradient catches up.
+    Non-FPN mode uses MONAI's EfficientNetBN.  MONAI re-initialises the stem
+    conv randomly for in_channels != 3, so we copy the channel-mean of the
+    pretrained RGB stem into the 1-channel stem (grayscale-transfer trick).
+
+    FPN mode switches to timm's EfficientNet-B0 (``efficientnet_b0``) with
+    ``features_only=True`` so we can extract a four-level pyramid at strides
+    4/8/16/32.  timm automatically averages the pretrained RGB patch_embed to
+    1-channel when ``in_chans=1`` is passed alongside ``pretrained=True``,
+    matching what the other FPN classifiers do.  Features are already NCHW —
+    no permute needed.
     """
 
-    def __init__(self, num_classes: int = 3, use_advanced_fpn: bool = False, use_det_seg: bool = False, **_unused):
+    def __init__(
+        self,
+        num_classes: int = 3,
+        use_advanced_fpn: bool = False,
+        use_det_seg: bool = False,
+        fpn_channels: int = 256,
+        tfpn_enabled: bool = True,
+        tfpn_heads: int = 4,
+        tfpn_layers: int = 1,
+        tfpn_pool: tuple = (14, 14),
+        tfpn_levels: int = 1,
+        **_unused,
+    ):
         super().__init__()
-        self.efficientnet = EfficientNetBN(
-            "efficientnet-b0",
-            pretrained=True,
-            spatial_dims=2,
-            in_channels=1,
-            num_classes=num_classes,
-        )
-        self._init_1ch_stem_from_rgb()
+        self._use_advanced_fpn = bool(use_advanced_fpn or use_det_seg)
         self._use_det_seg = bool(use_det_seg)
-        if use_advanced_fpn or use_det_seg:
-            print("[!] EfficientNet2DClassifier: advanced FPN not supported; using baseline head.")
+
+        if not self._use_advanced_fpn:
+            self.efficientnet = EfficientNetBN(
+                "efficientnet-b0",
+                pretrained=True,
+                spatial_dims=2,
+                in_channels=1,
+                num_classes=num_classes,
+            )
+            self._init_1ch_stem_from_rgb()
+        else:
+            self.backbone = timm.create_model(
+                "efficientnet_b0",
+                pretrained=True,
+                features_only=True,
+                out_indices=(1, 2, 3, 4),
+                in_chans=1,
+            )
+            self.fpn = AdvancedFPNNeck(
+                num_levels=4,
+                out_channels=fpn_channels,
+                spatial_dims=2,
+                use_tfpn=bool(tfpn_enabled),
+                tfpn_heads=tfpn_heads,
+                tfpn_layers=tfpn_layers,
+                tfpn_pool=tfpn_pool,
+                tfpn_levels=tfpn_levels,
+            )
+            self.head = MultiTaskHead(
+                in_channels=fpn_channels,
+                num_classes=num_classes,
+                spatial_dims=2,
+                use_seg=bool(use_det_seg),
+                use_det=bool(use_det_seg),
+            )
 
     def _init_1ch_stem_from_rgb(self) -> None:
         ref = EfficientNetBN(
@@ -50,46 +90,101 @@ class EfficientNet2DClassifier(nn.Module):
         del ref
 
     def forward(self, x, return_segmentation=False, return_detection: bool = False):
-        # The 2D pipeline outputs (B, 1, H, W).
-        # Fallback to catch accidental depth dimensions:
         if x.ndim == 5:
-            # e.g., (B, 1, H, W, 1) -> (B, 1, H, W)
             if x.shape[-1] == 1:
                 x = x.squeeze(-1)
-            # e.g., (B, 1, 1, H, W) -> (B, 1, H, W)
             elif x.shape[2] == 1:
                 x = x.squeeze(2)
-        
-        cls_logits = self.efficientnet(x)
-        if return_segmentation:
-            seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+
+        if not self._use_advanced_fpn:
+            cls_logits = self.efficientnet(x)
+            if return_segmentation:
+                seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+                if return_detection:
+                    box_pred = torch.zeros((x.shape[0], 4), device=x.device)
+                    return cls_logits, seg_logits, box_pred
+                return cls_logits, seg_logits
             if return_detection:
                 box_pred = torch.zeros((x.shape[0], 4), device=x.device)
+                return cls_logits, None, box_pred
+            return cls_logits
+
+        feats = self.backbone(x)  # list of 4 NCHW tensors (strides 4,8,16,32)
+        fused, _ = self.fpn(feats)
+        cls_logits, seg_logits, box_pred = self.head(fused, x.shape)
+        if return_segmentation or return_detection:
+            if return_segmentation and seg_logits is None:
+                seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+            if return_detection and box_pred is None:
+                box_pred = torch.zeros((x.shape[0], 4), device=x.device)
+            if return_detection:
                 return cls_logits, seg_logits, box_pred
             return cls_logits, seg_logits
-        if return_detection:
-            box_pred = torch.zeros((x.shape[0], 4), device=x.device)
-            return cls_logits, None, box_pred
         return cls_logits
 
 
 class DenseNet2DClassifier(nn.Module):
-    """2D DenseNet121 (ImageNet-pretrained) for single-slice classification.
-    MONAI's DenseNet121 builds the classification head when ``out_channels``
-    equals the number of classes.
+    """2D DenseNet-121 (ImageNet-pretrained) for single-slice classification.
+
+    Non-FPN mode uses MONAI's DenseNet121 (handles 1-channel input natively).
+
+    FPN mode switches to timm's ``densenet121`` with ``features_only=True``
+    to extract a four-level pyramid.  timm averages the pretrained RGB stem
+    to 1-channel when ``in_chans=1, pretrained=True``.  DenseNet features are
+    already NCHW.  Note that DenseNet's dense connections make each stage
+    output wider than typical ResNet stages; LazyConv2d in AdvancedFPNNeck
+    handles the variable widths without manual specification.
     """
 
-    def __init__(self, num_classes: int = 3, use_advanced_fpn: bool = False, use_det_seg: bool = False, **_unused):
+    def __init__(
+        self,
+        num_classes: int = 3,
+        use_advanced_fpn: bool = False,
+        use_det_seg: bool = False,
+        fpn_channels: int = 256,
+        tfpn_enabled: bool = True,
+        tfpn_heads: int = 4,
+        tfpn_layers: int = 1,
+        tfpn_pool: tuple = (14, 14),
+        tfpn_levels: int = 1,
+        **_unused,
+    ):
         super().__init__()
-        self.densenet = DenseNet121(
-            spatial_dims=2,
-            in_channels=1,
-            out_channels=num_classes,
-            pretrained=True,
-        )
+        self._use_advanced_fpn = bool(use_advanced_fpn or use_det_seg)
         self._use_det_seg = bool(use_det_seg)
-        if use_advanced_fpn or use_det_seg:
-            print("[!] DenseNet2DClassifier: advanced FPN not supported; using baseline head.")
+
+        if not self._use_advanced_fpn:
+            self.densenet = DenseNet121(
+                spatial_dims=2,
+                in_channels=1,
+                out_channels=num_classes,
+                pretrained=True,
+            )
+        else:
+            self.backbone = timm.create_model(
+                "densenet121",
+                pretrained=True,
+                features_only=True,
+                out_indices=(1, 2, 3, 4),
+                in_chans=1,
+            )
+            self.fpn = AdvancedFPNNeck(
+                num_levels=4,
+                out_channels=fpn_channels,
+                spatial_dims=2,
+                use_tfpn=bool(tfpn_enabled),
+                tfpn_heads=tfpn_heads,
+                tfpn_layers=tfpn_layers,
+                tfpn_pool=tfpn_pool,
+                tfpn_levels=tfpn_levels,
+            )
+            self.head = MultiTaskHead(
+                in_channels=fpn_channels,
+                num_classes=num_classes,
+                spatial_dims=2,
+                use_seg=bool(use_det_seg),
+                use_det=bool(use_det_seg),
+            )
 
     def forward(self, x, return_segmentation=False, return_detection: bool = False):
         if x.ndim == 5:
@@ -97,16 +192,31 @@ class DenseNet2DClassifier(nn.Module):
                 x = x.squeeze(-1)
             elif x.shape[2] == 1:
                 x = x.squeeze(2)
-        cls_logits = self.densenet(x)
-        if return_segmentation:
-            seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+
+        if not self._use_advanced_fpn:
+            cls_logits = self.densenet(x)
+            if return_segmentation:
+                seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+                if return_detection:
+                    box_pred = torch.zeros((x.shape[0], 4), device=x.device)
+                    return cls_logits, seg_logits, box_pred
+                return cls_logits, seg_logits
             if return_detection:
                 box_pred = torch.zeros((x.shape[0], 4), device=x.device)
+                return cls_logits, None, box_pred
+            return cls_logits
+
+        feats = self.backbone(x)  # list of 4 NCHW tensors (strides 4,8,16,32)
+        fused, _ = self.fpn(feats)
+        cls_logits, seg_logits, box_pred = self.head(fused, x.shape)
+        if return_segmentation or return_detection:
+            if return_segmentation and seg_logits is None:
+                seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+            if return_detection and box_pred is None:
+                box_pred = torch.zeros((x.shape[0], 4), device=x.device)
+            if return_detection:
                 return cls_logits, seg_logits, box_pred
             return cls_logits, seg_logits
-        if return_detection:
-            box_pred = torch.zeros((x.shape[0], 4), device=x.device)
-            return cls_logits, None, box_pred
         return cls_logits
 
 
@@ -345,6 +455,87 @@ class SwinV2Base2DClassifier(nn.Module):
             if return_detection:
                 box_pred = torch.zeros((x.shape[0], 4), device=x.device)
                 return cls_logits, None, box_pred
+            return cls_logits
+
+        feats = self.swin(x)
+        # timm SwinV2 features_only returns NHWC; FPN expects NCHW
+        feats_nchw = []
+        for f, info in zip(feats, self.swin.feature_info):
+            expected_c = info["num_chs"]
+            if f.ndim == 4 and f.shape[-1] == expected_c and f.shape[1] != expected_c:
+                f = f.permute(0, 3, 1, 2).contiguous()
+            feats_nchw.append(f)
+        fused, _ = self.fpn(feats_nchw)
+        cls_logits, seg_logits, box_pred = self.head(fused, x.shape)
+        if return_segmentation or return_detection:
+            if return_segmentation and seg_logits is None:
+                seg_logits = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+            if return_detection and box_pred is None:
+                box_pred = torch.zeros((x.shape[0], 4), device=x.device)
+            if return_detection:
+                return cls_logits, seg_logits, box_pred
+            return cls_logits, seg_logits
+        return cls_logits
+
+
+class SwinV2Tiny2DClassifier(nn.Module):
+    """2D SwinV2-Tiny (swinv2_tiny_window8_256.ms_in1k) backbone,
+    ImageNet-pretrained via timm, 1-channel CT slice classification.
+
+    Smaller counterpart to SwinV2Base2DClassifier (~28M vs ~88M params).
+    Stage channels: [96, 192, 384, 768]. BACKBONE_NUM_FEATURES = 768.
+    Input must be 256×256 (window8 constraint). No RadImageNet required.
+    timm adapts the 3-channel stem to 1-channel automatically via in_chans=1.
+    """
+
+    def __init__(
+        self,
+        num_classes: int = 3,
+        use_advanced_fpn: bool = False,
+        use_det_seg: bool = False,
+        fpn_channels: int = 256,
+        tfpn_enabled: bool = True,
+        tfpn_heads: int = 4,
+        tfpn_layers: int = 1,
+        tfpn_pool: tuple = (14, 14),
+        tfpn_levels: int = 1,
+    ):
+        super().__init__()
+        self._use_advanced_fpn = bool(use_advanced_fpn or use_det_seg)
+        self._use_det_seg = bool(use_det_seg)
+
+        if not self._use_advanced_fpn:
+            self.swin = timm.create_model(
+                "swinv2_tiny_window8_256.ms_in1k",
+                pretrained=True, num_classes=num_classes, in_chans=1,
+            )
+        else:
+            self.swin = timm.create_model(
+                "swinv2_tiny_window8_256.ms_in1k",
+                pretrained=True, features_only=True, out_indices=(0, 1, 2, 3), in_chans=1,
+            )
+            self.fpn = AdvancedFPNNeck(
+                num_levels=4, out_channels=fpn_channels, spatial_dims=2,
+                use_tfpn=bool(tfpn_enabled), tfpn_heads=tfpn_heads,
+                tfpn_layers=tfpn_layers, tfpn_pool=tfpn_pool, tfpn_levels=tfpn_levels,
+            )
+            self.head = MultiTaskHead(
+                in_channels=fpn_channels, num_classes=num_classes, spatial_dims=2,
+                use_seg=bool(use_det_seg), use_det=bool(use_det_seg),
+            )
+
+    def forward(self, x, return_segmentation=False, return_detection: bool = False):
+        if x.ndim == 5:
+            x = x.squeeze(-1) if x.shape[-1] == 1 else x.squeeze(2)
+        if not self._use_advanced_fpn:
+            cls_logits = self.swin(x)
+            if return_segmentation:
+                seg = torch.zeros((x.shape[0], 1, *x.shape[2:]), device=x.device)
+                if return_detection:
+                    return cls_logits, seg, torch.zeros((x.shape[0], 4), device=x.device)
+                return cls_logits, seg
+            if return_detection:
+                return cls_logits, None, torch.zeros((x.shape[0], 4), device=x.device)
             return cls_logits
 
         feats = self.swin(x)

@@ -9,12 +9,13 @@ from .classifiers_2d import (
     TorchVisionResNet2DClassifier,
     SwinTiny2DClassifier,
     SwinV2Base2DClassifier,
+    SwinV2Tiny2DClassifier,
 )
 from .classifiers_rin import (
     RadImageNetResNet502DClassifier,
     RadImageNetDenseNet1212DClassifier,
 )
-from .classifiers_mil import MILResNet50Classifier, MILSwinTinyClassifier, MILSwinV2BaseClassifier
+from .classifiers_mil import MILResNet50Classifier, MILSwinTinyClassifier, MILSwinV2BaseClassifier, MILSwinV2TinyClassifier
 
 
 TWO_D_MODEL_TYPES = (
@@ -23,6 +24,7 @@ TWO_D_MODEL_TYPES = (
     "resnet50_2d",
     "swin_tiny_2d",
     "swinv2_base_2d",
+    "swinv2_tiny_2d",
     "resnet50_2d_rin",
     "densenet121_2d_rin",
 )
@@ -30,6 +32,7 @@ MIL_MODEL_TYPES = (
     "mil_resnet50",
     "mil_swin_tiny",
     "mil_swinv2_base",
+    "mil_swinv2_tiny",
 )
 
 
@@ -180,6 +183,35 @@ def get_sclc_model(
                 model.load_backbone_from_dapt(state_dict)
             else:
                 print(f"[*] Loading MIL-SwinV2 checkpoint from {checkpoint_path}")
+                missing, unexpected = model.load_state_dict(state_dict, strict=False)
+                matched = len(state_dict) - len(unexpected)
+                print(f"[*] Matched {matched}/{len(state_dict)} keys (missing={len(missing)}).")
+        return model
+    if model_type.lower() == "mil_swinv2_tiny":
+        model = MILSwinV2TinyClassifier(
+            num_classes=3,
+            mil_mode=mil_mode,
+            trans_blocks=mil_trans_blocks,
+            trans_dropout=mil_trans_dropout,
+            use_advanced_fpn=use_advanced_fpn,
+            use_det_seg=use_det_seg,
+            fpn_channels=fpn_channels,
+            tfpn_enabled=tfpn_enabled,
+            tfpn_heads=tfpn_heads,
+            tfpn_layers=tfpn_layers,
+            tfpn_levels=tfpn_levels,
+        )
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            state_dict = torch.load(checkpoint_path, map_location="cpu")
+            if isinstance(state_dict, dict) and "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
+            probe_keys = list(state_dict.keys())
+            is_dapt_ckpt = any(k.startswith("swin.") for k in probe_keys)
+            if is_dapt_ckpt:
+                print(f"[*] Loading DAPT SwinV2-Tiny backbone into MIL-SwinV2Tiny model from {checkpoint_path}")
+                model.load_backbone_from_dapt(state_dict)
+            else:
+                print(f"[*] Loading MIL-SwinV2Tiny checkpoint from {checkpoint_path}")
                 missing, unexpected = model.load_state_dict(state_dict, strict=False)
                 matched = len(state_dict) - len(unexpected)
                 print(f"[*] Matched {matched}/{len(state_dict)} keys (missing={len(missing)}).")
@@ -404,6 +436,26 @@ def get_sclc_model(
         )
         if checkpoint_path and os.path.exists(checkpoint_path):
             print(f"[*] Loading SwinV2-Base checkpoint from {checkpoint_path}")
+            state_dict = torch.load(checkpoint_path, map_location="cpu")
+            if isinstance(state_dict, dict) and "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
+            missing, unexpected = model.load_state_dict(state_dict, strict=False)
+            matched = len(state_dict) - len(unexpected)
+            print(f"[*] Matched {matched}/{len(state_dict)} keys.")
+        return model
+    if model_type.lower() == "swinv2_tiny_2d":
+        model = SwinV2Tiny2DClassifier(
+            num_classes=3,
+            use_advanced_fpn=use_advanced_fpn,
+            use_det_seg=use_det_seg,
+            fpn_channels=fpn_channels,
+            tfpn_enabled=tfpn_enabled,
+            tfpn_heads=tfpn_heads,
+            tfpn_layers=tfpn_layers,
+            tfpn_levels=tfpn_levels,
+        )
+        if checkpoint_path and os.path.exists(checkpoint_path):
+            print(f"[*] Loading SwinV2-Tiny checkpoint from {checkpoint_path}")
             state_dict = torch.load(checkpoint_path, map_location="cpu")
             if isinstance(state_dict, dict) and "state_dict" in state_dict:
                 state_dict = state_dict["state_dict"]

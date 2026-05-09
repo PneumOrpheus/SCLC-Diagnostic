@@ -1359,3 +1359,123 @@ def get_val_transforms_mil_bag(
         include_mask=include_mask,
         include_bbox=include_bbox,
     ))
+
+
+# -----------------------------------------------------------------------------
+# MIL bag DAPT pipeline (Lung-PET-CT-Dx — no lung mask available)
+# -----------------------------------------------------------------------------
+
+
+def _build_mil_bag_dapt_pipeline(
+    img_size: int,
+    bag_size: int,
+    train: bool,
+    strong_augs: bool = False,
+    include_mask: bool = False,
+    include_bbox: bool = False,
+) -> list:
+    """MIL bag pipeline for DAPT (Lung-PET-CT-Dx).
+
+    Mirrors ``_build_mil_bag_pipeline`` but Lung-PET-CT-Dx has no lung mask.
+    ``LungAxialBagSelectd`` uses the tumour mask (key ``mask``) for Z-extent
+    when available, falling back to the full CT Z-extent when it is absent.
+    No ``lung_mask`` key is loaded or deleted.
+    """
+    keep_mask = bool(include_mask or include_bbox)
+    _aug_keys = ["image"] + (["mask"] if keep_mask else [])
+    _aug_spatial_modes = ["bilinear"] + (["nearest"] if keep_mask else [])
+    transforms: list = [
+        # Always load + preprocess mask so LungAxialBagSelectd receives a
+        # tensor (not a raw file-path string) for z-extent selection.
+        # allow_missing_keys=True handles patients without a mask file.
+        LoadNiftiWithRGBSupportd(keys=["image", "mask"], allow_missing_keys=True),
+        EnsureChannelFirstd(keys=["image", "mask"], channel_dim="no_channel", allow_missing_keys=True),
+        Orientationd(keys=["image", "mask"], axcodes="RAS", allow_missing_keys=True),
+        Spacingd(
+            keys=["image", "mask"],
+            pixdim=(1.0, 1.0, 2.0),
+            mode=["bilinear", "nearest"],
+            allow_missing_keys=True,
+        ),
+        ScaleIntensityRanged(keys=["image"], a_min=-1024, a_max=3071, b_min=0, b_max=1, clip=True),
+        Resized(
+            keys=["image", "mask"],
+            spatial_size=(img_size, img_size, -1),
+            mode=["trilinear", "nearest"],
+            allow_missing_keys=True,
+        ),
+        # Use tumour mask for Z-extent; falls back to full CT extent when absent.
+        LungAxialBagSelectd(
+            keys=["image"] + (["mask"] if keep_mask else []),
+            source_key="mask",
+            num_slices=bag_size,
+            jitter=train,
+            allow_missing_keys=True,
+        ),
+    ]
+    if not keep_mask:
+        # Mask was loaded only for z-extent selection — drop it now.
+        transforms.append(PopKeysd(keys=["mask"]))
+
+    if train and not strong_augs:
+        transforms += [
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=0, allow_missing_keys=True),
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=1, allow_missing_keys=True),
+            RandAffined(
+                keys=_aug_keys, prob=0.5,
+                rotate_range=(0.0, 0.0, 0.26), translate_range=(8, 8, 0), scale_range=(0.1, 0.1, 0.0),
+                mode=_aug_spatial_modes, padding_mode="zeros", allow_missing_keys=True,
+            ),
+            RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
+            RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
+            RandGaussianNoised(keys=["image"], prob=0.3, mean=0.0, std=0.01),
+        ]
+    elif train and strong_augs:
+        transforms += [
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=0, allow_missing_keys=True),
+            RandFlipd(keys=_aug_keys, prob=0.5, spatial_axis=1, allow_missing_keys=True),
+            RandAffined(
+                keys=_aug_keys, prob=0.8,
+                rotate_range=(0.0, 0.0, 0.35), translate_range=(12, 12, 0), scale_range=(0.15, 0.15, 0.0),
+                mode=_aug_spatial_modes, padding_mode="zeros", allow_missing_keys=True,
+            ),
+            RandScaleIntensityd(keys=["image"], factors=0.15, prob=0.7),
+            RandShiftIntensityd(keys=["image"], offsets=0.15, prob=0.7),
+            RandGaussianNoised(keys=["image"], prob=0.3, mean=0.0, std=0.02),
+        ]
+
+    transforms += [
+        BagAsBatchDimd(keys=["image"] + (["mask"] if keep_mask else [])),
+        NormalizeIntensityd(keys=["image"], nonzero=True, channel_wise=True),
+    ]
+    if include_bbox:
+        transforms.append(
+            BBoxFromMaskd(keys=["mask"], source_key="mask", bbox_key="bbox", has_key="has_bbox", allow_missing_keys=True)
+        )
+    transforms.append(ToTensord(keys=["image"] + (["mask"] if keep_mask else []), allow_missing_keys=True))
+    return transforms
+
+
+def get_train_transforms_mil_bag_dapt(
+    img_size: int = 256,
+    bag_size: int = 16,
+    strong_augs: bool = False,
+    include_mask: bool = False,
+    include_bbox: bool = False,
+) -> Compose:
+    return Compose(_build_mil_bag_dapt_pipeline(
+        img_size=img_size, bag_size=bag_size, train=True,
+        strong_augs=strong_augs, include_mask=include_mask, include_bbox=include_bbox,
+    ))
+
+
+def get_val_transforms_mil_bag_dapt(
+    img_size: int = 256,
+    bag_size: int = 16,
+    include_mask: bool = False,
+    include_bbox: bool = False,
+) -> Compose:
+    return Compose(_build_mil_bag_dapt_pipeline(
+        img_size=img_size, bag_size=bag_size, train=False,
+        include_mask=include_mask, include_bbox=include_bbox,
+    ))

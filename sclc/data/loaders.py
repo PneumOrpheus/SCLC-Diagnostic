@@ -56,8 +56,17 @@ def get_lung_pet_ct_dx_data_list(
     seed: int = 42,
     testing: bool = False,
     max_scans_per_patient: int = 2,
+    cv_fold: int = -1,
+    cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Build {split: data_list} dict with patient-level splitting for Lung-PET-CT-Dx."""
+    """Build {split: data_list} dict with patient-level splitting for Lung-PET-CT-Dx.
+
+    When ``cv_fold >= 0`` uses stratified k-fold CV (StratifiedKFold with
+    ``n_splits=cv_folds``): fold ``cv_fold`` becomes the test set and the
+    remaining folds are further split into train/val with an inner stratified
+    split that keeps val_frac of the total as validation.  Mirrors the
+    behaviour of ``get_biglunge_data_list``.
+    """
     if not os.path.isdir(data_path):
         raise ValueError(f"Data path '{data_path}' does not exist or is not a directory.")
 
@@ -90,24 +99,40 @@ def get_lung_pet_ct_dx_data_list(
                 f"hits {len(matched)} keys ({matched}). Refusing to silently pick one."
             )
 
-    val_test_frac = val_frac + test_frac
-    if val_test_frac > 0:
-        train_ids, temp_ids, train_labels, temp_labels = train_test_split(
-            valid_patients, patient_labels, test_size=val_test_frac, random_state=seed, stratify=patient_labels
+    from sklearn.model_selection import StratifiedKFold
+
+    if cv_fold >= 0:
+        # Stratified k-fold: fold cv_fold → test; rest → inner train/val split.
+        skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
+        all_folds = list(skf.split(valid_patients, patient_labels))
+        train_val_idx, test_idx = all_folds[cv_fold]
+        test_ids = [valid_patients[i] for i in test_idx]
+        train_val_patients = [valid_patients[i] for i in train_val_idx]
+        train_val_labels = [patient_labels[i] for i in train_val_idx]
+        val_frac_inner = min(val_frac / (1.0 - 1.0 / cv_folds), 0.49)
+        train_ids, val_ids, _, _ = train_test_split(
+            train_val_patients, train_val_labels,
+            test_size=val_frac_inner, random_state=seed, stratify=train_val_labels,
         )
-        
-        # Split temp into val and test
-        if test_frac > 0 and val_frac > 0:
-            test_ratio = test_frac / val_test_frac
-            val_ids, test_ids, val_labels, test_labels = train_test_split(
-                temp_ids, temp_labels, test_size=test_ratio, random_state=seed, stratify=temp_labels
-            )
-        elif test_frac > 0:
-            val_ids, test_ids = [], temp_ids
-        else:
-            val_ids, test_ids = temp_ids, []
+        print(f"[lung_pet_ct_dx CV fold {cv_fold}/{cv_folds}] "
+              f"train={len(train_ids)}, val={len(val_ids)}, test={len(test_ids)}")
     else:
-        train_ids, val_ids, test_ids = valid_patients, [], []
+        val_test_frac = val_frac + test_frac
+        if val_test_frac > 0:
+            train_ids, temp_ids, train_labels, temp_labels = train_test_split(
+                valid_patients, patient_labels, test_size=val_test_frac, random_state=seed, stratify=patient_labels
+            )
+            if test_frac > 0 and val_frac > 0:
+                test_ratio = test_frac / val_test_frac
+                val_ids, test_ids, val_labels, test_labels = train_test_split(
+                    temp_ids, temp_labels, test_size=test_ratio, random_state=seed, stratify=temp_labels
+                )
+            elif test_frac > 0:
+                val_ids, test_ids = [], temp_ids
+            else:
+                val_ids, test_ids = temp_ids, []
+        else:
+            train_ids, val_ids, test_ids = valid_patients, [], []
 
     split_patients = {
         "train": set(train_ids),

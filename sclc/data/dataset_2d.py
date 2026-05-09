@@ -305,6 +305,8 @@ def get_lung_pet_ct_dx_2d_data_list(
     max_scans_per_patient: int = 2,
     min_tumor_pixels: int = 1,
     max_slices_per_volume: Optional[int] = None,
+    cv_fold: int = -1,
+    cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Lung-PET-CT-Dx 2D data list: one entry per tumor slice. The per-series
     ``_mask.nii.gz`` already sits in each volume entry as ``mask`` — rename it
@@ -313,6 +315,7 @@ def get_lung_pet_ct_dx_2d_data_list(
     volumes = get_lung_pet_ct_dx_data_list(
         data_path=data_path, val_frac=val_frac, test_frac=test_frac, seed=seed,
         testing=testing, max_scans_per_patient=max_scans_per_patient,
+        cv_fold=cv_fold, cv_folds=cv_folds,
     )
 
     # Attach patient_id (derived from the Lung-PET-CT-Dx folder name) so the

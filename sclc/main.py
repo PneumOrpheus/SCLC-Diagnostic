@@ -22,15 +22,15 @@ except ImportError:  # PyYAML is only needed when --config is used
     yaml = None
 
 from sclc.models import (
-    get_sclc_model, get_pipeline, TorchVisionResNet2DClassifier, SwinTiny2DClassifier,
-    MILResNet50Classifier, MILSwinTinyClassifier,
+    get_sclc_model, get_pipeline, MILResNet50Classifier, MILSwinTinyClassifier, MILSwinV2BaseClassifier,
+    MILSwinV2TinyClassifier,
 )
 from sclc.training.train_3d import simple_collate_fn, train_epoch, validate_epoch
 from sclc.training.train_2d import simple_collate_fn_2d, train_epoch_2d, validate_epoch_2d
 from sclc.training.train_mil import simple_collate_fn_mil, train_epoch_mil, validate_epoch_mil
 from sclc.data.loaders import create_dataset
 from sclc.data.dataset_2d import create_dataset_2d
-from sclc.data.dataset_mil import create_dataset_mil_bag, create_dataset_whole_slice
+from sclc.data.dataset_mil import create_dataset_mil_bag, create_dataset_mil_bag_dapt, create_dataset_whole_slice
 from sclc.logger import create_logger
 
 
@@ -396,8 +396,8 @@ def parse_args():
     parser.add_argument("--model-type", type=str, default="swin_unetr",
                         choices=["swin_unetr",
                                  "efficientnet_b0_2d", "densenet121_2d", "resnet50_2d",
-                                 "swin_tiny_2d", "resnet50_2d_rin", "densenet121_2d_rin",
-                                 "mil_resnet50", "mil_swin_tiny"],
+                                 "swin_tiny_2d", "swinv2_base_2d", "swinv2_tiny_2d", "resnet50_2d_rin", "densenet121_2d_rin",
+                                 "mil_resnet50", "mil_swin_tiny", "mil_swinv2_base", "mil_swinv2_tiny"],
                         help="Model architecture to use. '_2d' uses the per-slice 2D pipeline; "
                              "'_2d_rin' uses the RadImageNet-pretrained 2D variants "
                              "(ResNet50 / DenseNet121); 'mil_resnet50' / 'mil_swin_tiny' use the "
@@ -611,24 +611,19 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
                 cv_folds=n_folds,
             )
             collate_fn = simple_collate_fn_mil
-        else:  # dapt
-            max_slices = args.max_slices_per_volume if args.max_slices_per_volume and args.max_slices_per_volume > 0 else None
-            train_ds, val_ds, test_ds = create_dataset_whole_slice(
+        else:  # dapt — bag-level dataset on Lung-PET-CT-Dx
+            train_ds, val_ds, test_ds = create_dataset_mil_bag_dapt(
                 data_path=data_path,
-                csv_path=csv_path,
-                dataset_type=dataset_type,
                 img_size=args.img_size_mil,
-                tumor_mask_suffix=args.tumor_mask_suffix,
-                max_slices_per_volume=max_slices,
-                min_tumor_pixels=int(getattr(args, "min_tumor_pixels", 100)),
+                bag_size=args.bag_size,
                 testing=args.testing,
                 cache_workers=args.cache_workers,
                 strong_augs=bool(getattr(args, "strong_augs", False)),
                 clear_cache=bool(getattr(args, "clear_cache", False)),
-                include_mask=include_mask,
-                include_bbox=include_bbox,
+                cv_fold=cv_fold,
+                cv_folds=n_folds,
             )
-            collate_fn = simple_collate_fn_2d
+            collate_fn = simple_collate_fn_mil
     elif pipeline == "2d":
         max_slices = args.max_slices_per_volume if args.max_slices_per_volume and args.max_slices_per_volume > 0 else None
         train_ds, val_ds, test_ds = create_dataset_2d(
@@ -1128,10 +1123,8 @@ def main():
         # ImageNet-pretrained Swin-Tiny.
         args.initial_checkpoint = "/home/hansstem/RadImageNet_swin/rin_swintf.pth"
     if not args.initial_checkpoint and args.model_type == "mil_swin_tiny":
-        # mil_swin_tiny: same RadImageNet-pretrained Swin-Tiny init as
-        # swin_tiny_2d. The DAPT phase routes the checkpoint through
-        # SwinTiny2DClassifier (per-slice classifier); the FT phase rebuilds
-        # as MILSwinTinyClassifier and the backbone weights transfer over.
+        # mil_swin_tiny: same RadImageNet-pretrained Swin-Tiny init as swin_tiny_2d.
+        # MILSwinTinyClassifier loads this directly in its constructor.
         args.initial_checkpoint = "/home/hansstem/RadImageNet_swin/rin_swintf.pth"
     if not args.initial_checkpoint and args.model_type == "resnet50_2d_rin":
         args.initial_checkpoint = "/home/data/RadImageNet/ResNet50/ResNet50.pt"
@@ -1202,7 +1195,8 @@ def main():
     # fine-tune / inference runs as bag-level MIL.
     pipeline = get_pipeline(args.model_type)
     if pipeline == "mil":
-        dapt_train_fn, dapt_validate_fn = train_epoch_2d, validate_epoch_2d
+        # DAPT now uses bag-level dataset → bag-level train/validate loops.
+        dapt_train_fn, dapt_validate_fn = train_epoch_mil, validate_epoch_mil
         ft_train_fn, ft_validate_fn = train_epoch_mil, validate_epoch_mil
     elif pipeline == "2d":
         dapt_train_fn, dapt_validate_fn = train_epoch_2d, validate_epoch_2d
@@ -1212,73 +1206,29 @@ def main():
         ft_train_fn, ft_validate_fn = train_epoch, validate_epoch
     logger.info(f"Pipeline: {pipeline} (model_type={args.model_type})")
 
-    # Model construction. For MIL in modes that include DAPT we construct a
-    # plain 2D ResNet50 classifier; the fine-tune / inference path then builds
-    # MILResNet50Classifier and transfers the DAPT backbone weights into it.
-    # For all other model_types, get_sclc_model is the single entry point.
-    if pipeline == "mil" and args.mode in ("full", "dapt"):
-        # MIL DAPT phase reuses the matching 2D classifier; the MIL wrapper is
-        # rebuilt at fine-tune time and inherits the DAPT backbone weights.
-        # Per-model_type DAPT architectures:
-        #   mil_resnet50  -> TorchVisionResNet2DClassifier (ImageNet ResNet-50)
-        #   mil_swin_tiny -> SwinTiny2DClassifier (RadImageNet Swin-Tiny)
-        if args.model_type == "mil_swin_tiny":
-            # SwinTiny2DClassifier knows how to interpret a RadImageNet
-            # checkpoint and do the MS->timm key remap + 1-ch stem average,
-            # so we hand the initial_checkpoint straight to its constructor
-            # rather than trying to strict-load it post-hoc.
-            rin_init = args.initial_checkpoint or ""
-            model = SwinTiny2DClassifier(
-                num_classes=3,
-                radimagenet_ckpt=rin_init,
-                use_advanced_fpn=bool(getattr(args, "use_advanced_fpn", False)),
-                use_det_seg=use_det_seg,
-                fpn_channels=args.fpn_channels,
-                tfpn_enabled=tfpn_enabled,
-                tfpn_heads=args.tfpn_heads,
-                tfpn_layers=args.tfpn_layers,
-                tfpn_levels=args.tfpn_levels,
-            ).to(device)
-            logger.info("[MIL] DAPT phase: using SwinTiny2DClassifier (will switch to MIL-Swin for finetune).")
-        else:  # mil_resnet50
-            model = TorchVisionResNet2DClassifier(
-                num_classes=3,
-                model_name="resnet50",
-                use_advanced_fpn=bool(getattr(args, "use_advanced_fpn", False)),
-                use_det_seg=use_det_seg,
-                fpn_channels=args.fpn_channels,
-                tfpn_enabled=tfpn_enabled,
-                tfpn_heads=args.tfpn_heads,
-                tfpn_layers=args.tfpn_layers,
-                tfpn_levels=args.tfpn_levels,
-            ).to(device)
-            if args.initial_checkpoint and os.path.exists(args.initial_checkpoint):
-                sd = torch.load(args.initial_checkpoint, map_location=device)
-                if isinstance(sd, dict) and "state_dict" in sd:
-                    sd = sd["state_dict"]
-                missing, unexpected = model.load_state_dict(sd, strict=False)
-                logger.info(
-                    f"[MIL DAPT] Loaded initial checkpoint {args.initial_checkpoint} "
-                    f"(missing={len(missing)}, unexpected={len(unexpected)})"
-                )
-            logger.info("[MIL] DAPT phase: using TorchVisionResNet2DClassifier (will switch to MIL for finetune).")
-    else:
-        model = get_sclc_model(
-            args.initial_checkpoint,
-            model_type=args.model_type,
-            in_channels=1,
-            depth_size=args.depth_size,
-            mil_mode=args.mil_mode,
-            mil_trans_blocks=args.mil_trans_blocks,
-            mil_trans_dropout=args.mil_trans_dropout,
-            use_advanced_fpn=bool(getattr(args, "use_advanced_fpn", False)),
-            use_det_seg=use_det_seg,
-            fpn_channels=args.fpn_channels,
-            tfpn_enabled=tfpn_enabled,
-            tfpn_heads=args.tfpn_heads,
-            tfpn_layers=args.tfpn_layers,
-            tfpn_levels=args.tfpn_levels,
-        ).to(device)
+    # Model construction. get_sclc_model handles all pipelines including MIL.
+    # For MIL, the model is built as a full MIL model from the start; DAPT
+    # uses bag-level training via create_dataset_mil_bag_dapt so no 2D
+    # classifier intermediary is needed.
+    # Save construction kwargs so CV folds can rebuild a fresh model without
+    # trying to clone UninitializedParameter tensors (LazyConv FPN laterals).
+    _model_kwargs = dict(
+        checkpoint_path=args.initial_checkpoint,
+        model_type=args.model_type,
+        in_channels=1,
+        depth_size=args.depth_size,
+        mil_mode=args.mil_mode,
+        mil_trans_blocks=args.mil_trans_blocks,
+        mil_trans_dropout=args.mil_trans_dropout,
+        use_advanced_fpn=bool(getattr(args, "use_advanced_fpn", False)),
+        use_det_seg=use_det_seg,
+        fpn_channels=args.fpn_channels,
+        tfpn_enabled=tfpn_enabled,
+        tfpn_heads=args.tfpn_heads,
+        tfpn_layers=args.tfpn_layers,
+        tfpn_levels=args.tfpn_levels,
+    )
+    model = get_sclc_model(**_model_kwargs).to(device)
     # LazyConv lateral projections in AdvancedFPNNeck are UninitializedParameter
     # until the first forward pass; skip the count rather than crash.
     if any(isinstance(p, torch.nn.parameter.UninitializedParameter)
@@ -1292,198 +1242,129 @@ def main():
         print(f"Initialized {args.model_type} Classifier. Total Params: {num_params:,}")
 
     current_checkpoint = args.initial_checkpoint
-    
-    # --- PHASE 1: DAPT ---
-    if args.mode in ["full", "dapt"]:
-        logger.info(f"Setting up DAPT Datasets from: {args.dapt_dataset}")
-        train_loader, val_loader, dapt_test_loader = create_dataloaders(
-            args, "lung_pet_ct_dx", args.dapt_dataset,
-            depth_size=args.depth_size, phase="dapt",
+
+    n_folds = int(getattr(args, "cv_folds", 1))
+    fold_test_results: List[Dict[str, Any]] = []
+    best_dapt_ckpt = None  # set inside fold loop; used by --mode dapt reporting
+
+    for fold_idx in range(n_folds):
+        cv_fold = fold_idx if n_folds > 1 else -1
+
+        if fold_idx > 0:
+            # Rebuild from scratch rather than cloning state_dict: models with
+            # AdvancedFPN have UninitializedParameter (LazyConv laterals) that
+            # cannot be cloned before a forward pass materialises them.
+            model = get_sclc_model(**_model_kwargs).to(device)
+            logger.info(f"[CV fold {fold_idx+1}/{n_folds}] Rebuilt model from initial checkpoint.")
+
+        if n_folds > 1:
+            logger.info(f"\n{'='*60}\nCV Fold {fold_idx+1}/{n_folds}\n{'='*60}")
+
+        fold_ckpt_dir = (
+            os.path.join(args.checkpoint_dir, f"fold_{fold_idx}")
+            if n_folds > 1 else args.checkpoint_dir
         )
 
-        # Linear-probe DAPT: freeze backbone for the entire run, use a higher
-        # head LR, tag checkpoint as dapt_lp. This is the "ImageNet features
-        # only" control that the thesis needs to separate "pretraining value"
-        # from "DAPT adaptation value" in the transfer-learning story.
-        dapt_phase_name = "dapt_lp" if args.linear_probe else "dapt"
-        dapt_lr = args.linear_probe_lr if args.linear_probe else args.dapt_lr
-        dapt_freeze_epochs = args.dapt_epochs + 1 if args.linear_probe else 0
-        if args.linear_probe:
-            logger.info(
-                f"[linear-probe] Backbone frozen for all {args.dapt_epochs} epochs. "
-                f"Head LR = {dapt_lr:.1e} (overrides --dapt-lr={args.dapt_lr:.1e})."
+        # --- PHASE 1: DAPT ---
+        if args.mode in ["full", "dapt"]:
+            logger.info(f"Setting up DAPT Datasets from: {args.dapt_dataset}")
+            train_loader, val_loader, dapt_test_loader = create_dataloaders(
+                args, "lung_pet_ct_dx", args.dapt_dataset,
+                depth_size=args.depth_size, phase="dapt",
+                cv_fold=cv_fold,
             )
 
-        best_dapt_ckpt = run_training_phase(
-            model, train_loader, val_loader, device,
-            args.dapt_epochs, dapt_lr, args.dapt_weight_decay, args.checkpoint_dir, logger,
-            dapt_phase_name, scaler=scaler,
-            use_segmentation=dapt_use_seg and not args.linear_probe,
-            use_det_seg=use_det_seg and not args.linear_probe,
-            accumulation_steps=args.accumulation_steps,
-            model_type=args.model_type,
-            monitor_window=args.monitor_rolling_window,
-            seg_loss_weight=args.seg_loss_weight,
-            bbox_loss_weight=args.bbox_loss_weight,
-            warmup_epochs=args.dapt_warmup_epochs,
-            warmup_start_lr=args.warmup_start_lr,
-            freeze_backbone_epochs=dapt_freeze_epochs,
-            mixup_alpha=args.mixup_alpha,
-            train_fn=dapt_train_fn, validate_fn=dapt_validate_fn,
-            metrics_path=metrics_path,
-        )
-        current_checkpoint = best_dapt_ckpt
-
-        # DAPT test-set inference: evaluate the best-by-val DAPT checkpoint on
-        # the held-out DAPT test split before we ever touch BigLunge. Gives a
-        # clean read of DAPT generalization (independent of fine-tune
-        # perturbations) for both --mode full and --mode dapt.
-        logger.info(f"\n{'='*60}\nRunning DAPT Test Set Inference\n{'='*60}")
-        if best_dapt_ckpt and os.path.isfile(best_dapt_ckpt):
-            model.load_state_dict(torch.load(best_dapt_ckpt, map_location=device))
-            logger.info(f"Loaded best DAPT checkpoint for DAPT test inference: {best_dapt_ckpt}")
-        else:
-            logger.warning(
-                "No best DAPT checkpoint on disk — running DAPT test inference on last-epoch weights."
-            )
-        _run_test_inference(
-            model=model,
-            test_loader=dapt_test_loader,
-            device=device,
-            logger=logger,
-            validate_fn=dapt_validate_fn,
-            metrics_path=metrics_path,
-            output_dir=args.output_dir,
-            model_type=args.model_type,
-            phase="dapt_test",
-            prob_file_suffix="dapt",
-        )
-
-    # --- PHASE 2: FINETUNE ---
-    if args.mode in ["full", "finetune"]:
-        # For the MIL pipeline, the fine-tune model architecture differs from
-        # the DAPT one. Rebuild as MILResNet50Classifier and transfer the
-        # DAPT backbone weights. Triggered when (a) we just finished DAPT in
-        # full mode, or (b) we're in finetune mode and --model-checkpoint
-        # points at a DAPT ResNet50 state_dict.
-        is_already_mil = isinstance(model, (MILResNet50Classifier, MILSwinTinyClassifier))
-        if pipeline == "mil" and not is_already_mil:
-            dapt_state_dict = None
-            # Full mode: prefer the BEST DAPT checkpoint (saved by the monitor
-            # loop at the peak-val epoch) over the last-epoch in-memory state.
-            # Fall back to in-memory only if no checkpoint was saved (e.g.,
-            # val metrics never improved).
-            if args.mode == "full":
-                if best_dapt_ckpt and os.path.isfile(best_dapt_ckpt):
-                    dapt_state_dict = torch.load(best_dapt_ckpt, map_location=device)
-                    logger.info(f"[MIL] Will transfer DAPT backbone from {best_dapt_ckpt}")
-                else:
-                    dapt_state_dict = model.state_dict()
-                    logger.info("[MIL] No DAPT best-checkpoint on disk; transferring from in-memory DAPT weights.")
-            elif args.mode == "finetune" and args.model_checkpoint and os.path.isfile(args.model_checkpoint):
-                sd = torch.load(args.model_checkpoint, map_location=device)
-                if isinstance(sd, dict) and "state_dict" in sd:
-                    sd = sd["state_dict"]
-                dapt_state_dict = sd
-
-            # Dispatch on model_type for the MIL wrapper architecture and the
-            # DAPT-side state_dict key prefix. mil_resnet50 came from a
-            # TorchVisionResNet2DClassifier (keys: 'backbone.features.*');
-            # mil_swin_tiny came from a SwinTiny2DClassifier (keys: 'swin.*').
-            if args.model_type == "mil_swin_tiny":
-                model = MILSwinTinyClassifier(
-                    num_classes=3,
-                    mil_mode=args.mil_mode,
-                    trans_blocks=args.mil_trans_blocks,
-                    trans_dropout=args.mil_trans_dropout,
-                ).to(device)
-                rebuilt_name = "MILSwinTinyClassifier"
-                dapt_prefix = "swin."
-            else:  # mil_resnet50
-                model = MILResNet50Classifier(
-                    num_classes=3,
-                    mil_mode=args.mil_mode,
-                    trans_blocks=args.mil_trans_blocks,
-                    trans_dropout=args.mil_trans_dropout,
-                ).to(device)
-                rebuilt_name = "MILResNet50Classifier"
-                dapt_prefix = "backbone.features."
-
-            if dapt_state_dict is not None:
-                # If the state dict is a MIL checkpoint, do a strict-ish load.
-                # If it's a DAPT-side classifier checkpoint (keys prefixed by
-                # the relevant DAPT wrapper), transfer only the backbone.
-                if any(k.startswith(dapt_prefix) for k in dapt_state_dict.keys()):
-                    model.load_backbone_from_dapt(dapt_state_dict, logger=logger)
-                else:
-                    missing, unexpected = model.load_state_dict(dapt_state_dict, strict=False)
-                    logger.info(
-                        f"[MIL] Loaded MIL-style checkpoint (missing={len(missing)}, "
-                        f"unexpected={len(unexpected)})."
-                    )
-            if any(isinstance(p, torch.nn.parameter.UninitializedParameter)
-                   for p in model.parameters()):
+            # Linear-probe DAPT: freeze backbone for the entire run, use a higher
+            # head LR, tag checkpoint as dapt_lp.
+            dapt_phase_name = "dapt_lp" if args.linear_probe else "dapt"
+            dapt_lr = args.linear_probe_lr if args.linear_probe else args.dapt_lr
+            dapt_freeze_epochs = args.dapt_epochs + 1 if args.linear_probe else 0
+            if args.linear_probe:
                 logger.info(
-                    f"[MIL] Rebuilt as {rebuilt_name} (mil_mode={args.mil_mode}). "
-                    "FPN LazyConv params will materialize on first forward pass."
+                    f"[linear-probe] Backbone frozen for all {args.dapt_epochs} epochs. "
+                    f"Head LR = {dapt_lr:.1e} (overrides --dapt-lr={args.dapt_lr:.1e})."
+                )
+
+            best_dapt_ckpt = run_training_phase(
+                model, train_loader, val_loader, device,
+                args.dapt_epochs, dapt_lr, args.dapt_weight_decay, fold_ckpt_dir, logger,
+                dapt_phase_name, scaler=scaler,
+                use_segmentation=dapt_use_seg and not args.linear_probe,
+                use_det_seg=use_det_seg and not args.linear_probe,
+                accumulation_steps=args.accumulation_steps,
+                model_type=args.model_type,
+                monitor_window=args.monitor_rolling_window,
+                seg_loss_weight=args.seg_loss_weight,
+                bbox_loss_weight=args.bbox_loss_weight,
+                warmup_epochs=args.dapt_warmup_epochs,
+                warmup_start_lr=args.warmup_start_lr,
+                freeze_backbone_epochs=dapt_freeze_epochs,
+                mixup_alpha=args.mixup_alpha,
+                bag_dropout=float(getattr(args, "bag_dropout", 0.0)),
+                train_fn=dapt_train_fn, validate_fn=dapt_validate_fn,
+                metrics_path=metrics_path,
+            )
+            current_checkpoint = best_dapt_ckpt
+
+            # DAPT test-set inference: clean read of DAPT generalization before
+            # BigLunge fine-tune perturbations.
+            logger.info(f"\n{'='*60}\nRunning DAPT Test Set Inference\n{'='*60}")
+            if best_dapt_ckpt and os.path.isfile(best_dapt_ckpt):
+                model.load_state_dict(torch.load(best_dapt_ckpt, map_location=device))
+                logger.info(f"Loaded best DAPT checkpoint for DAPT test inference: {best_dapt_ckpt}")
+            else:
+                logger.warning(
+                    "No best DAPT checkpoint on disk — running DAPT test inference on last-epoch weights."
+                )
+            dapt_test_phase = f"dapt_test_fold_{fold_idx}" if n_folds > 1 else "dapt_test"
+            _run_test_inference(
+                model=model,
+                test_loader=dapt_test_loader,
+                device=device,
+                logger=logger,
+                validate_fn=dapt_validate_fn,
+                metrics_path=metrics_path,
+                output_dir=args.output_dir,
+                model_type=args.model_type,
+                phase=dapt_test_phase,
+                prob_file_suffix=f"dapt_fold{fold_idx}" if n_folds > 1 else "dapt",
+            )
+
+        # --- PHASE 2: FINETUNE ---
+        if args.mode in ["full", "finetune"]:
+            is_already_mil = isinstance(
+                model, (MILResNet50Classifier, MILSwinTinyClassifier, MILSwinV2BaseClassifier, MILSwinV2TinyClassifier)
+            )
+            if pipeline == "mil" and not is_already_mil:
+                # Should not be reached with the current factory (get_sclc_model
+                # always builds a MIL model for mil_* types), but kept as a
+                # safety net in case a checkpoint from an older run is loaded.
+                logger.warning(
+                    "[MIL] Model is not a MIL type before finetune — this is unexpected. "
+                    "Proceeding with current model weights."
                 )
             else:
-                num_params = sum(p.numel() for p in model.parameters())
-                trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
-                logger.info(
-                    f"[MIL] Rebuilt as {rebuilt_name} (mil_mode={args.mil_mode}). "
-                    f"Total params: {num_params:,} (trainable: {trainable:,})"
-                )
-        else:
-            if args.mode == "finetune" and args.model_checkpoint:
-                sd = torch.load(args.model_checkpoint, map_location=device)
-                if isinstance(sd, dict) and "state_dict" in sd:
-                    sd = sd["state_dict"]
-                # MIL classifier built by get_sclc_model in finetune mode:
-                # route a DAPT-side state_dict through the model's MIL-aware
-                # backbone transfer (each MIL class knows its own DAPT prefix).
-                if isinstance(model, MILResNet50Classifier) and any(
-                    k.startswith("backbone.features.") for k in sd.keys()
-                ):
-                    model.load_backbone_from_dapt(sd, logger=logger)
-                elif isinstance(model, MILSwinTinyClassifier) and any(
-                    k.startswith("swin.") for k in sd.keys()
-                ):
-                    model.load_backbone_from_dapt(sd, logger=logger)
+                if args.mode == "finetune" and args.model_checkpoint:
+                    sd = torch.load(args.model_checkpoint, map_location=device)
+                    if isinstance(sd, dict) and "state_dict" in sd:
+                        sd = sd["state_dict"]
+                    # Route DAPT-side checkpoints through backbone transfer.
+                    if isinstance(model, MILResNet50Classifier) and any(
+                        k.startswith("backbone.features.") for k in sd.keys()
+                    ):
+                        model.load_backbone_from_dapt(sd, logger=logger)
+                    elif isinstance(model, (MILSwinTinyClassifier, MILSwinV2BaseClassifier, MILSwinV2TinyClassifier)) and any(
+                        k.startswith("swin.") for k in sd.keys()
+                    ):
+                        model.load_backbone_from_dapt(sd, logger=logger)
+                    else:
+                        model.load_state_dict(sd)
+                    logger.info(f"Loaded model checkpoint for fine-tuning: {args.model_checkpoint}")
+                elif current_checkpoint and current_checkpoint != args.initial_checkpoint and os.path.isfile(current_checkpoint):
+                    model.load_state_dict(torch.load(current_checkpoint, map_location=device))
+                    logger.info(f"Loaded DAPT checkpoint for fine-tuning: {current_checkpoint}")
                 else:
-                    model.load_state_dict(sd)
-                logger.info(f"Loaded model checkpoint for fine-tuning: {args.model_checkpoint}")
-            elif current_checkpoint and current_checkpoint != args.initial_checkpoint and os.path.isfile(current_checkpoint):
-                # DAPT produced a checkpoint in full mode — load it.
-                model.load_state_dict(torch.load(current_checkpoint, map_location=device))
-                logger.info(f"Loaded DAPT checkpoint for fine-tuning: {current_checkpoint}")
-            else:
-                # No DAPT checkpoint — fine-tune from in-memory weights.
-                # In --mode finetune without --model-checkpoint this means the
-                # model still has the initial backbone weights (e.g. BTCV) loaded
-                # by get_sclc_model(), which is a valid starting point.
-                logger.info("Fine-tuning from initial in-memory weights (no DAPT checkpoint).")
-
-        # Capture pre-finetune model state so it can be restored between CV folds.
-        finetune_start_state = {k: v.clone() for k, v in model.state_dict().items()}
-
-        n_folds = int(getattr(args, "cv_folds", 1))
-        fold_test_results: List[Dict[str, Any]] = []
-
-        for fold_idx in range(n_folds):
-            cv_fold = fold_idx if n_folds > 1 else -1
-
-            if fold_idx > 0:
-                model.load_state_dict(finetune_start_state)
-                logger.info(f"[CV fold {fold_idx+1}/{n_folds}] Reset model to pre-finetune state.")
-
-            if n_folds > 1:
-                logger.info(f"\n{'='*60}\nCV Fold {fold_idx+1}/{n_folds}\n{'='*60}")
-
-            fold_ckpt_dir = (
-                os.path.join(args.checkpoint_dir, f"fold_{fold_idx}")
-                if n_folds > 1 else args.checkpoint_dir
-            )
+                    logger.info("Fine-tuning from initial in-memory weights (no DAPT checkpoint).")
 
             logger.info(f"Setting up FineTuning Datasets from: {args.finetune_dataset}")
             train_loader, val_loader, test_loader = create_dataloaders(
@@ -1514,19 +1395,18 @@ def main():
                 metrics_path=metrics_path,
             )
 
-            # Per-fold inference (only in full mode; finetune mode skips this).
             if args.mode == "full":
                 if best_finetune_ckpt and os.path.isfile(best_finetune_ckpt):
                     model.load_state_dict(torch.load(best_finetune_ckpt, map_location=device))
                     logger.info("Loaded best FineTune checkpoint for inference.")
-                elif 'best_dapt_ckpt' in locals() and best_dapt_ckpt:
-                    if not isinstance(model, (MILResNet50Classifier, MILSwinTinyClassifier)):
+                elif best_dapt_ckpt and os.path.isfile(best_dapt_ckpt):
+                    if not isinstance(model, (MILResNet50Classifier, MILSwinTinyClassifier, MILSwinV2BaseClassifier, MILSwinV2TinyClassifier)):
                         model.load_state_dict(torch.load(best_dapt_ckpt, map_location=device))
                         logger.info("Loaded best DAPT checkpoint for final inference (no finetune ckpt).")
                     else:
                         logger.warning(
-                            "[MIL] No fine-tune checkpoint; MIL model retains DAPT-backbone transfer + "
-                            "random attention head. Test metrics will be uninformative."
+                            "[MIL] No fine-tune checkpoint; MIL model retains DAPT weights. "
+                            "Test metrics reflect DAPT-only adaptation."
                         )
 
                 test_phase = f"test_fold_{fold_idx}" if n_folds > 1 else "test"
@@ -1545,9 +1425,9 @@ def main():
                 if n_folds > 1:
                     fold_test_results.append(fold_metrics)
 
-        # Aggregate CV metrics into a single 'test' row after all folds.
-        if n_folds > 1 and fold_test_results and args.mode == "full":
-            _save_cv_aggregate_metrics(fold_test_results, metrics_path, args.model_type, n_folds, logger)
+    # Aggregate CV metrics into a single 'test' row after all folds.
+    if n_folds > 1 and fold_test_results and args.mode == "full":
+        _save_cv_aggregate_metrics(fold_test_results, metrics_path, args.model_type, n_folds, logger)
 
     # --- PHASE 3: INFERENCE (standalone --mode inference only) ---
     if args.mode == "inference":
@@ -1557,15 +1437,13 @@ def main():
             sd = torch.load(args.model_checkpoint, map_location=device)
             if isinstance(sd, dict) and "state_dict" in sd:
                 sd = sd["state_dict"]
-            # MIL model built above via get_sclc_model with initial_checkpoint
-            # (for inference mode pipeline=='mil' takes the get_sclc_model
-            # branch). --model-checkpoint may still point at either a MIL
-            # checkpoint or a DAPT-only backbone.
+            # Route DAPT-side checkpoints through backbone transfer; load
+            # full MIL checkpoints with strict=False.
             if isinstance(model, MILResNet50Classifier) and any(
                 k.startswith("backbone.features.") for k in sd.keys()
             ):
                 model.load_backbone_from_dapt(sd, logger=logger)
-            elif isinstance(model, MILSwinTinyClassifier) and any(
+            elif isinstance(model, (MILSwinTinyClassifier, MILSwinV2BaseClassifier)) and any(
                 k.startswith("swin.") for k in sd.keys()
             ):
                 model.load_backbone_from_dapt(sd, logger=logger)
