@@ -18,6 +18,9 @@ results/output/
 results/runs/
 results/thesis/_archive/
 
+# Notebook-generated figures and caches
+data_pipeline/notebooks/output/
+
 # Internal-only docs
 CLAUDE.md
 .claude/
