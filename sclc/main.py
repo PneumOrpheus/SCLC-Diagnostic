@@ -444,10 +444,13 @@ def parse_args():
                         help="Head-only LR for --linear-probe. A fresh linear head converges faster on a "
                              "frozen backbone than the full-model DAPT LR.")
     parser.add_argument("--cv-folds", type=int, default=1,
-                        help="Number of stratified CV folds for the BigLunge finetune phase. "
+                        help="Number of stratified CV folds applied to BOTH the DAPT and "
+                             "finetune phases. The fold loop is the outermost loop: each fold "
+                             "gets a fresh model, a fresh DAPT split on Lung-PET-CT-Dx, and a "
+                             "fresh finetune split on BigLunge, ensuring full independence. "
                              "1 (default) uses the original fixed 70/15/15 split. "
-                             "5 runs 5-fold CV and writes per-fold metrics (test_fold_k) "
-                             "plus an averaged 'test' row.")
+                             "5 runs 5-fold CV and writes per-fold metrics (test_fold_k / "
+                             "dapt_test_fold_k) plus an averaged 'test' row.")
     parser.add_argument("--finetune-freeze-backbone-epochs", type=int, default=0,
                         help="LP-FT recipe: freeze the backbone for the first N fine-tune epochs (head trains "
                              "alone), then unfreeze and apply differential LR. 0 disables (full diff-LR from "
