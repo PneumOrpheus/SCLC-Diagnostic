@@ -670,6 +670,46 @@ class MILSwinV2BaseClassifier(nn.Module):
             )
         return matched, missing, unexpected
 
+    def load_backbone_from_checkpoint(self, state_dict, logger=None):
+        """Transfer backbone weights from any supported checkpoint format.
+
+        Tries three source-key prefixes in order of preference:
+          ``swin.``    — 2D DAPT classifier (SwinV2Base2DClassifier)
+          ``backbone.``— FPN MIL checkpoint (same class, FPN mode)
+          ``mil.net.`` — non-FPN MIL checkpoint (same class, non-FPN mode)
+
+        The prefix with the most matching keys wins. Only backbone weights are
+        loaded; FPN / attention-pool layers keep their current init.
+        """
+        target = self.backbone if self._use_advanced_fpn else self.mil.net
+        target_sd = target.state_dict()
+        best_prefix, best_mapped = "", {}
+        for prefix in ("swin.", "backbone.", "mil.net."):
+            mapped: dict = {}
+            for k, v in state_dict.items():
+                if not k.startswith(prefix):
+                    continue
+                new_k = k[len(prefix):]
+                if new_k in ("head.weight", "head.bias"):
+                    continue
+                if new_k in target_sd:
+                    mapped[new_k] = v
+            if len(mapped) > len(best_mapped):
+                best_prefix, best_mapped = prefix, mapped
+        if not best_mapped:
+            if logger is not None:
+                logger.warning("[MIL-SwinV2] load_backbone_from_checkpoint: no matching keys found.")
+            return 0, list(target_sd.keys()), []
+        missing, unexpected = target.load_state_dict(best_mapped, strict=False)
+        matched = len(target_sd) - len(missing)
+        if logger is not None:
+            logger.info(
+                f"[MIL-SwinV2] Transferred backbone (prefix='{best_prefix}'): "
+                f"matched {matched}/{len(target_sd)} target keys "
+                f"(missing={len(missing)}, unexpected={len(unexpected)})"
+            )
+        return matched, missing, unexpected
+
     def forward(self, x, return_segmentation: bool = False):
         if x.ndim != 5:
             raise ValueError(
@@ -731,11 +771,10 @@ class MILSwinV2BaseClassifier(nn.Module):
 
 
 class MILSwinV2TinyClassifier(nn.Module):
-    """MIL bag classifier with a SwinV2-Tiny backbone (swinv2_tiny_window8_256).
+    """MIL bag classifier with a SwinV2-CR-Tiny backbone (swinv2_cr_tiny_ns_224).
 
-    Shares architecture with ``MILSwinV2BaseClassifier`` but uses the smaller
-    Tiny variant (~28 M params). Timm ImageNet pretrained weights are loaded
-    with ``in_chans=1``. Expected forward input: ``(B, N, 1, H, W)``.
+    CR variant uses cosine-ratio attention and outputs NCHW natively. ~28M
+    params. Input resolution 224×224. Expected forward input: ``(B, N, 1, H, W)``.
     """
 
     BACKBONE_NUM_FEATURES = 768
@@ -762,7 +801,7 @@ class MILSwinV2TinyClassifier(nn.Module):
         self._last_attention = None
         if not self._use_advanced_fpn:
             swin = timm.create_model(
-                "swinv2_tiny_window8_256.ms_in1k",
+                "swinv2_cr_tiny_ns_224.sw_in1k",
                 pretrained=pretrained_backbone,
                 num_classes=0,
                 in_chans=1,
@@ -780,7 +819,7 @@ class MILSwinV2TinyClassifier(nn.Module):
             if mil_mode not in ("att", "att_trans"):
                 print(f"[MIL-SwinV2Tiny] mil_mode={mil_mode} ignored in advanced FPN mode; using attention pooling.")
             self.backbone = timm.create_model(
-                "swinv2_tiny_window8_256.ms_in1k",
+                "swinv2_cr_tiny_ns_224.sw_in1k",
                 pretrained=pretrained_backbone,
                 features_only=True,
                 out_indices=(0, 1, 2, 3),
@@ -830,6 +869,46 @@ class MILSwinV2TinyClassifier(nn.Module):
                 f"[MIL-SwinV2Tiny] Loaded DAPT backbone: matched {matched}/{len(target_sd)} target keys "
                 f"(source contributed {len(mapped)} entries, missing={len(missing)}, "
                 f"unexpected={len(unexpected)})"
+            )
+        return matched, missing, unexpected
+
+    def load_backbone_from_checkpoint(self, state_dict, logger=None):
+        """Transfer backbone weights from any supported checkpoint format.
+
+        Tries three source-key prefixes in order of preference:
+          ``swin.``    — 2D DAPT classifier (SwinV2Tiny2DClassifier)
+          ``backbone.``— FPN MIL checkpoint (same class, FPN mode)
+          ``mil.net.`` — non-FPN MIL checkpoint (same class, non-FPN mode)
+
+        The prefix with the most matching keys wins. Only backbone weights are
+        loaded; FPN / attention-pool layers keep their current init.
+        """
+        target = self.backbone if self._use_advanced_fpn else self.mil.net
+        target_sd = target.state_dict()
+        best_prefix, best_mapped = "", {}
+        for prefix in ("swin.", "backbone.", "mil.net."):
+            mapped: dict = {}
+            for k, v in state_dict.items():
+                if not k.startswith(prefix):
+                    continue
+                new_k = k[len(prefix):]
+                if new_k in ("head.weight", "head.bias"):
+                    continue
+                if new_k in target_sd:
+                    mapped[new_k] = v
+            if len(mapped) > len(best_mapped):
+                best_prefix, best_mapped = prefix, mapped
+        if not best_mapped:
+            if logger is not None:
+                logger.warning("[MIL-SwinV2Tiny] load_backbone_from_checkpoint: no matching keys found.")
+            return 0, list(target_sd.keys()), []
+        missing, unexpected = target.load_state_dict(best_mapped, strict=False)
+        matched = len(target_sd) - len(missing)
+        if logger is not None:
+            logger.info(
+                f"[MIL-SwinV2Tiny] Transferred backbone (prefix='{best_prefix}'): "
+                f"matched {matched}/{len(target_sd)} target keys "
+                f"(missing={len(missing)}, unexpected={len(unexpected)})"
             )
         return matched, missing, unexpected
 

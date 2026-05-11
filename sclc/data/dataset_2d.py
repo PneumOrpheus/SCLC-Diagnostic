@@ -418,7 +418,7 @@ def create_dataset_2d(
     _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
     _fold_tag = f"_fold{cv_fold}" if cv_fold >= 0 else ""
     cache_root = os.path.join(
-        os.path.expanduser("~"), ".cache", cache_name,
+        "/home/data/.cache", cache_name,
         f"img{img_size}_crop{int(crop_size)}_mp{int(min_tumor_pixels)}{_mask_tag}{_fold_tag}{'_testing' if testing else ''}",
     )
     if clear_cache and os.path.isdir(cache_root):

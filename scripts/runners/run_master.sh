@@ -6,8 +6,8 @@
 # runs and generates paired-comparison ablation figures.
 #
 # Non-RadImageNet models (excludes *_rin variants):
-#   2D:  efficientnet_b0_2d, resnet50_2d, densenet121_2d, swinv2_base_2d
-#   MIL: mil_resnet50, mil_swinv2_base
+#   2D:  efficientnet_b0_2d, resnet50_2d, densenet121_2d, swinv2_tiny_2d
+#   MIL: mil_swinv2_tiny
 #   3D:  swin_unetr
 #
 # Output layout (both trees are isolated; original results/ is never touched):
@@ -51,9 +51,12 @@ FPN_FLAGS="--use-advanced-fpn --use-det-seg \
   --fpn-channels 256 --tfpn-heads 4 --tfpn-layers 1 --tfpn-levels 1"
 
 # ---- Cross-validation -------------------------------------------------------
-# 5-fold stratified CV on the BigLunge finetune split. Each fold writes a
-# test_fold_k row in metrics.jsonl; an averaged 'test' row is written after
-# all folds complete. Set to 1 to revert to the original fixed 70/15/15 split.
+# 5-fold stratified CV applied to BOTH the DAPT (Lung-PET-CT-Dx) and finetune
+# (BigLunge) phases. The fold loop is outermost: each fold gets a fresh model,
+# a fresh DAPT split, and a fresh finetune split (full independence). Each fold
+# writes dapt_test_fold_k and test_fold_k rows in metrics.jsonl; an averaged
+# 'test' row is written after all folds complete.
+# Set to 1 to revert to the original fixed 70/15/15 split.
 CV_FLAGS="--cv-folds 5"
 
 # ---- Model lists (no *_rin variants) ----------------------------------------
@@ -62,13 +65,10 @@ declare -a MODELS_2D=(
     "resnet50_2d         configs/experiments/2d_resnet50.yaml"
     "densenet121_2d      configs/experiments/2d_densenet121.yaml"
     "swinv2_tiny_2d      configs/experiments/2d_swinv2_tiny.yaml"
-    "swinv2_base_2d      configs/experiments/2d_swinv2_base.yaml"
 )
 
 declare -a MODELS_MIL=(
-    "mil_resnet50      configs/experiments/mil_resnet50.yaml"
     "mil_swinv2_tiny   configs/experiments/mil_swinv2_tiny.yaml"
-    "mil_swinv2_base   configs/experiments/mil_swinv2_base.yaml"
 )
 
 declare -a MODELS_3D=(
@@ -165,14 +165,20 @@ done
 echo "=== PHASE 2/5: FPN MIL (${#MODELS_MIL[@]} models) ===" | tee -a "$SUMMARY"
 echo "" | tee -a "$SUMMARY"
 
+# Skip redundant DAPT: MIL DAPT cache key is identical between baseline and FPN
+# (no det/seg masks involved). Transfer backbone from the baseline DAPT checkpoint
+# for each fold instead of re-running 30 epochs × 5 folds per model.
 for entry in "${MODELS_MIL[@]}"; do
     read -r NAME CONFIG <<< "$entry"
+    DAPT_PATTERN="${BASE_CKPT}/fold_{fold}/mil/${NAME}/model_dapt_best.pth"
     # shellcheck disable=SC2086
     run_step "fpn_${NAME}" \
         "$PY" -m sclc.main \
             --config "$CONFIG" \
             --output-dir "$FPN_OUTPUT" \
             --checkpoint-dir "$FPN_CKPT" \
+            --mode finetune \
+            --dapt-backbone-pattern "$DAPT_PATTERN" \
             $FPN_FLAGS $CV_FLAGS
 done
 

@@ -562,6 +562,18 @@ def parse_args():
     parser.add_argument("--lung-mask-suffix", type=str, default="_label_lungs.nii.gz",
                         help="Per-patient lung-chamber mask suffix used by the BigLunge MIL bag builder "
                              "(e.g. patient_081613/patient_081613_label_lungs.nii.gz).")
+    parser.add_argument(
+        "--dapt-backbone-pattern",
+        type=str,
+        default="",
+        help="Path pattern to a per-fold DAPT checkpoint whose backbone weights are transferred "
+             "into the MIL model before fine-tuning, skipping a redundant DAPT run. Use "
+             "'{fold}' as a placeholder for the zero-based fold index "
+             "(e.g. '/home/data/trained_models_base/fold_{fold}/mil/mil_swinv2_base/model_dapt_best.pth'). "
+             "Only effective when --mode finetune; ignored otherwise. "
+             "If the resolved path does not exist, a warning is logged and training continues from "
+             "initial weights."
+    )
 
     # Two-pass parse: peek at --config first, apply it as defaults, then the
     # real parse lets CLI flags override config values. This keeps a single
@@ -1070,6 +1082,12 @@ def run_training_phase(
             best_raw_macro_f1 = raw_macro_f1
             best_raw_ckpt = os.path.join(ckpt_save_dir, f"{stamp_day_month}_{phase_prefix}_pbest_raw.pth")
             torch.save(model.state_dict(), best_raw_ckpt)
+            # Stable alias so other scripts can reference this checkpoint without
+            # knowing the date-stamped filename (e.g. --dapt-backbone-pattern).
+            stable_alias = os.path.join(ckpt_save_dir, f"model_{phase_prefix}_best.pth")
+            if os.path.lexists(stable_alias):
+                os.remove(stable_alias)
+            os.symlink(os.path.basename(best_raw_ckpt), stable_alias)
             logger.info(
                 f"[*] New raw-best @ ep{epoch}: {monitor_level}_macro_f1={raw_macro_f1:.4f} -> {best_raw_ckpt}"
             )
@@ -1347,7 +1365,22 @@ def main():
                     "Proceeding with current model weights."
                 )
             else:
-                if args.mode == "finetune" and args.model_checkpoint:
+                dapt_backbone_pattern = getattr(args, "dapt_backbone_pattern", "")
+                if dapt_backbone_pattern and args.mode == "finetune":
+                    dapt_ckpt = dapt_backbone_pattern.format(fold=fold_idx)
+                    if os.path.isfile(dapt_ckpt):
+                        sd = torch.load(dapt_ckpt, map_location=device)
+                        if isinstance(sd, dict) and "state_dict" in sd:
+                            sd = sd["state_dict"]
+                        if hasattr(model, "load_backbone_from_checkpoint"):
+                            model.load_backbone_from_checkpoint(sd, logger=logger)
+                        logger.info(f"[CV fold {fold_idx}] Transferred backbone from: {dapt_ckpt}")
+                    else:
+                        logger.warning(
+                            f"[CV fold {fold_idx}] --dapt-backbone-pattern: no checkpoint at "
+                            f"'{dapt_ckpt}'; fine-tuning from initial weights."
+                        )
+                elif args.mode == "finetune" and args.model_checkpoint:
                     sd = torch.load(args.model_checkpoint, map_location=device)
                     if isinstance(sd, dict) and "state_dict" in sd:
                         sd = sd["state_dict"]

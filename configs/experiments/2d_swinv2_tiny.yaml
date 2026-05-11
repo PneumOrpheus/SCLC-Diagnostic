@@ -1,10 +1,10 @@
 experiment:
   name: 2d_swinv2_tiny
   notes: >-
-    2D SwinV2-Tiny (swinv2_tiny_window8_256.ms_in1k) with ImageNet pretrained
+    2D SwinV2-CR-Tiny (swinv2_cr_tiny_ns_224.sw_in1k) with ImageNet pretrained
     weights from timm (~28M params, 4 stages with [96,192,384,768] channels).
-    timm adapts the 3-channel stem to 1-channel automatically at load time.
-    Input resolution must be 256 (window8 constraint). DAPT on Lung-PET-CT-Dx,
+    CR variant uses cosine-ratio attention and outputs NCHW natively; no window
+    size constraint. Input resolution 224. DAPT on Lung-PET-CT-Dx,
     fine-tune on BigLunge.
 
 model_type: swinv2_tiny_2d
@@ -49,7 +49,7 @@ system:
   clear_cache: false
 
 pipeline_2d:
-  img_size_2d: 256
+  img_size_2d: 224
   max_slices_per_volume: 8
   tumor_mask_suffix: _label_tc.nii.gz
   min_tumor_pixels: 1
