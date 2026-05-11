@@ -424,7 +424,7 @@ def create_dataset(
         _fold_tag = f"_fold{cv_fold}" if cv_fold >= 0 else ""
         test_suffix = "_testing" if testing else ""
         run_cache_root = os.path.join(
-            os.path.expanduser("~"), ".cache", cache_name,
+            "/home/data/.cache", cache_name,
             f"{mode_key}_img{img_size}_d{depth_size}{_fold_tag}{test_suffix}",
         )
     else:
