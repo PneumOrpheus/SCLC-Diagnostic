@@ -479,12 +479,13 @@ class SwinV2Base2DClassifier(nn.Module):
 
 
 class SwinV2Tiny2DClassifier(nn.Module):
-    """2D SwinV2-CR-Tiny (swinv2_cr_tiny_ns_224.sw_in1k) backbone,
+    """2D SwinV2-Tiny (swinv2_tiny_window8_256.ms_in1k) backbone,
     ImageNet-pretrained via timm, 1-channel CT slice classification.
 
-    CR variant uses cosine-ratio attention and outputs NCHW natively (no
-    permute needed). ~28M params. Stage channels: [96, 192, 384, 768].
-    Input resolution 224×224. timm adapts the 3-channel stem via in_chans=1.
+    Smaller SwinV2_2DClassifier, less prone to violently overfit.
+    Stage channels: [96, 192, 384, 768]. BACKBONE_NUM_FEATURES = 768.
+    Input must be 256x256 (window8 constraint).
+    timm adapts the 3-channel stem to 1-channel automatically via in_chans=1.
     """
 
     def __init__(
@@ -505,12 +506,12 @@ class SwinV2Tiny2DClassifier(nn.Module):
 
         if not self._use_advanced_fpn:
             self.swin = timm.create_model(
-                "swinv2_cr_tiny_ns_224.sw_in1k",
+                "swinv2_tiny_window8_256.ms_in1k",
                 pretrained=True, num_classes=num_classes, in_chans=1,
             )
         else:
             self.swin = timm.create_model(
-                "swinv2_cr_tiny_ns_224.sw_in1k",
+                "swinv2_tiny_window8_256.ms_in1k",
                 pretrained=True, features_only=True, out_indices=(0, 1, 2, 3), in_chans=1,
             )
             self.fpn = AdvancedFPNNeck(

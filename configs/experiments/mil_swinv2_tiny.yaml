@@ -1,12 +1,11 @@
 experiment:
   name: mil_swinv2_tiny
   notes: >-
-    MIL SwinV2-CR-Tiny (swinv2_cr_tiny_ns_224.sw_in1k, ImageNet pretrained via
+    MIL SwinV2-Tiny (swinv2_tiny_window8_256.ms_in1k, ImageNet pretrained via
     timm, 1-channel stem averaged from RGB). DAPT on Lung-PET-CT-Dx as
     whole-slice per-slice classification using SwinV2Tiny2DClassifier
     (model_type swinv2_tiny_2d). Fine-tune on BigLunge as attention-MIL over
-    bags of N whole-slice 224x224 images. ~28M params. CR variant outputs
-    NCHW natively; no window-size resolution constraint.
+    bags of N whole-slice 256x256 images. ~28M params. Input must be 256x256 (window8 constraint).
 
 model_type: mil_swinv2_tiny
 mode: full
@@ -56,7 +55,7 @@ system:
 
 pipeline_mil:
   # SwinV2-Tiny uses window=8 over 256-input; img_size_mil MUST stay at 256.
-  img_size_mil: 224
+  img_size_mil: 256
   bag_size: 16
   mil_mode: att
   mil_trans_blocks: 4

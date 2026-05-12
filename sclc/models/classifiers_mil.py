@@ -771,10 +771,10 @@ class MILSwinV2BaseClassifier(nn.Module):
 
 
 class MILSwinV2TinyClassifier(nn.Module):
-    """MIL bag classifier with a SwinV2-CR-Tiny backbone (swinv2_cr_tiny_ns_224).
+    """MIL bag classifier with a SwinV2-Tiny backbone (swinv2_tiny_window8_256).
 
-    CR variant uses cosine-ratio attention and outputs NCHW natively. ~28M
-    params. Input resolution 224×224. Expected forward input: ``(B, N, 1, H, W)``.
+    Input must be 256x256 (window8 constraint).
+    Expected forward input: ``(B, N, 1, H, W)``.
     """
 
     BACKBONE_NUM_FEATURES = 768
@@ -801,7 +801,7 @@ class MILSwinV2TinyClassifier(nn.Module):
         self._last_attention = None
         if not self._use_advanced_fpn:
             swin = timm.create_model(
-                "swinv2_cr_tiny_ns_224.sw_in1k",
+                "swinv2_tiny_window8_256.ms_in1k",
                 pretrained=pretrained_backbone,
                 num_classes=0,
                 in_chans=1,
@@ -819,7 +819,7 @@ class MILSwinV2TinyClassifier(nn.Module):
             if mil_mode not in ("att", "att_trans"):
                 print(f"[MIL-SwinV2Tiny] mil_mode={mil_mode} ignored in advanced FPN mode; using attention pooling.")
             self.backbone = timm.create_model(
-                "swinv2_cr_tiny_ns_224.sw_in1k",
+                "swinv2_tiny_window8_256.ms_in1k",
                 pretrained=pretrained_backbone,
                 features_only=True,
                 out_indices=(0, 1, 2, 3),
