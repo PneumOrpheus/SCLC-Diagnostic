@@ -90,13 +90,13 @@ def create_dataset_whole_slice(
     else:
         raise ValueError(f"Unknown dataset_type for whole-slice DAPT: '{dataset_type}'.")
 
+    # Cache path is SHARED across CV folds (see loaders.py for rationale).
     _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
-    _fold_tag = f"_fold{cv_fold}" if cv_fold >= 0 else ""
     cache_root = os.path.join(
         "/home/data/.cache", cache_name,
-        f"img{img_size}_mp{int(min_tumor_pixels)}{_mask_tag}{_fold_tag}{'_testing' if testing else ''}",
+        f"img{img_size}_mp{int(min_tumor_pixels)}{_mask_tag}{'_testing' if testing else ''}",
     )
-    if clear_cache and os.path.isdir(cache_root):
+    if clear_cache and cv_fold <= 0 and os.path.isdir(cache_root):
         import shutil as _shutil
         print(f"[--clear-cache] Removing {cache_root}")
         _shutil.rmtree(cache_root)
@@ -147,8 +147,9 @@ def create_dataset_whole_slice(
         os.makedirs(current_cache_dir, exist_ok=True)
         print(f"[whole-slice] PersistentDataset cache_dir='{current_cache_dir}'")
 
-        valid_data_file = os.path.join(current_cache_dir, "valid_data.json")
-        meta_file = os.path.join(current_cache_dir, "meta.json")
+        _fold_suffix = f"_fold{cv_fold}" if cv_fold >= 0 else ""
+        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}.json")
+        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}.json")
         current_meta = {
             "pipeline": "whole_slice",
             "dataset_type": dataset_type,
@@ -350,13 +351,13 @@ def create_dataset_mil_bag(
         raise ValueError("csv_path is required for dataset_type='big_lunge'.")
 
     cache_name = "monai_biglunge_mil"
+    # Cache path is SHARED across CV folds (see loaders.py for rationale).
     _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
-    _fold_tag = f"_fold{cv_fold}" if cv_fold >= 0 else ""
     cache_root = os.path.join(
         "/home/data/.cache", cache_name,
-        f"img{img_size}_bag{int(bag_size)}{_mask_tag}{_fold_tag}{'_testing' if testing else ''}",
+        f"img{img_size}_bag{int(bag_size)}{_mask_tag}{'_testing' if testing else ''}",
     )
-    if clear_cache and os.path.isdir(cache_root):
+    if clear_cache and cv_fold <= 0 and os.path.isdir(cache_root):
         import shutil as _shutil
         print(f"[--clear-cache] Removing {cache_root}")
         _shutil.rmtree(cache_root)
@@ -397,8 +398,9 @@ def create_dataset_mil_bag(
         os.makedirs(current_cache_dir, exist_ok=True)
         print(f"[MIL bag] PersistentDataset cache_dir='{current_cache_dir}'")
 
-        valid_data_file = os.path.join(current_cache_dir, "valid_data.json")
-        meta_file = os.path.join(current_cache_dir, "meta.json")
+        _fold_suffix = f"_fold{cv_fold}" if cv_fold >= 0 else ""
+        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}.json")
+        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}.json")
         current_meta = {
             "pipeline": "mil_bag",
             "dataset_type": dataset_type,
@@ -558,12 +560,12 @@ def create_dataset_mil_bag_dapt(
     and fall back to the full CT when no mask is present.
     """
     cache_name = "monai_lung_pet_ct_mil_dapt"
-    _fold_tag = f"_fold{cv_fold}" if cv_fold >= 0 else ""
+    # Cache path is SHARED across CV folds (see loaders.py for rationale).
     cache_root = os.path.join(
         "/home/data/.cache", cache_name,
-        f"img{img_size}_bag{int(bag_size)}{_fold_tag}{'_testing' if testing else ''}",
+        f"img{img_size}_bag{int(bag_size)}{'_testing' if testing else ''}",
     )
-    if clear_cache and os.path.isdir(cache_root):
+    if clear_cache and cv_fold <= 0 and os.path.isdir(cache_root):
         import shutil as _shutil
         print(f"[--clear-cache] Removing {cache_root}")
         _shutil.rmtree(cache_root)
@@ -596,8 +598,9 @@ def create_dataset_mil_bag_dapt(
         os.makedirs(current_cache_dir, exist_ok=True)
         print(f"[MIL bag DAPT] PersistentDataset cache_dir='{current_cache_dir}'")
 
-        valid_data_file = os.path.join(current_cache_dir, "valid_data.json")
-        meta_file = os.path.join(current_cache_dir, "meta.json")
+        _fold_suffix = f"_fold{cv_fold}" if cv_fold >= 0 else ""
+        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}.json")
+        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}.json")
         current_meta = {
             "pipeline": "mil_bag_dapt",
             "dataset_type": "lung_pet_ct_dx",

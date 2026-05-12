@@ -415,21 +415,24 @@ def create_dataset(
         raise ValueError(f"Unknown dataset_type: {dataset_type}")
 
     # Run-specific cache parent (the parameterized path that holds train/
-    # val/test subdirs for THIS img_size/depth_size combo). When
-    # clear_cache=True we rmtree this once before the per-split loop, so
-    # only the cache that this run will rebuild gets wiped — sibling
-    # configs with different img_size/depth_size stay intact.
+    # val/test subdirs for THIS img_size/depth_size combo). The path is
+    # SHARED across CV folds because a patient's deterministic preprocessing
+    # output is identical regardless of which fold they land in;
+    # PersistentDataset keys .pt files by content hash and dedupes
+    # automatically. Per-fold patient lists / metadata live in fold-tagged
+    # valid_data_fold{N}.json / meta_fold{N}.json files inside each split.
     if cache_dir is None:
         mode_key = "3d" if use_3d else "2d"
-        _fold_tag = f"_fold{cv_fold}" if cv_fold >= 0 else ""
         test_suffix = "_testing" if testing else ""
         run_cache_root = os.path.join(
             "/home/data/.cache", cache_name,
-            f"{mode_key}_img{img_size}_d{depth_size}{_fold_tag}{test_suffix}",
+            f"{mode_key}_img{img_size}_d{depth_size}{test_suffix}",
         )
     else:
         run_cache_root = cache_dir
-    if clear_cache and os.path.isdir(run_cache_root):
+    # Only wipe on the first fold of a CV run (or non-CV) — otherwise
+    # sequential fold runs would clobber each other's shared cache.
+    if clear_cache and cv_fold <= 0 and os.path.isdir(run_cache_root):
         import shutil as _shutil
         print(f"[--clear-cache] Removing {run_cache_root}")
         _shutil.rmtree(run_cache_root)
@@ -469,8 +472,9 @@ def create_dataset(
         os.makedirs(current_cache_dir, exist_ok=True)
         print(f"PersistentDataset cache_dir='{current_cache_dir}'")
 
-        valid_data_file = os.path.join(current_cache_dir, "valid_data.json")
-        meta_file = os.path.join(current_cache_dir, "meta.json")
+        _fold_suffix = f"_fold{cv_fold}" if cv_fold >= 0 else ""
+        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}.json")
+        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}.json")
         import json
 
         # Cache key covers everything that can change the split or preprocessing shape.

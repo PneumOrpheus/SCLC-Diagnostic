@@ -412,16 +412,16 @@ def create_dataset_2d(
     else:
         raise ValueError(f"Unknown dataset_type for 2D: '{dataset_type}'.")
 
-    # Cache is keyed on (img_size, crop_size, min_tumor_pixels, mask/bbox flags,
-    # fold index). Different values live in separate directories so switching
-    # between configs doesn't invalidate the prior cache.
+    # Cache is keyed on (img_size, crop_size, min_tumor_pixels, mask/bbox
+    # flags). Path is SHARED across CV folds — see loaders.py for the
+    # rationale (PersistentDataset content-hashing makes per-fold dirs
+    # redundant; per-fold state lives in fold-tagged meta files).
     _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
-    _fold_tag = f"_fold{cv_fold}" if cv_fold >= 0 else ""
     cache_root = os.path.join(
         "/home/data/.cache", cache_name,
-        f"img{img_size}_crop{int(crop_size)}_mp{int(min_tumor_pixels)}{_mask_tag}{_fold_tag}{'_testing' if testing else ''}",
+        f"img{img_size}_crop{int(crop_size)}_mp{int(min_tumor_pixels)}{_mask_tag}{'_testing' if testing else ''}",
     )
-    if clear_cache and os.path.isdir(cache_root):
+    if clear_cache and cv_fold <= 0 and os.path.isdir(cache_root):
         import shutil as _shutil
         print(f"[--clear-cache] Removing {cache_root}")
         _shutil.rmtree(cache_root)
@@ -474,8 +474,9 @@ def create_dataset_2d(
         os.makedirs(current_cache_dir, exist_ok=True)
         print(f"[2D] PersistentDataset cache_dir='{current_cache_dir}'")
 
-        valid_data_file = os.path.join(current_cache_dir, "valid_data.json")
-        meta_file = os.path.join(current_cache_dir, "meta.json")
+        _fold_suffix = f"_fold{cv_fold}" if cv_fold >= 0 else ""
+        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}.json")
+        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}.json")
         current_meta = {
             "pipeline": "2d",
             "dataset_type": dataset_type,
