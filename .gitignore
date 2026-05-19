@@ -20,6 +20,13 @@ results/thesis/_archive/
 
 # Notebook-generated figures and caches
 data_pipeline/notebooks/output/
+# Regenerable visualization outputs (built from checkpoints by sclc.grad_cam)
+results/grad_cam/
+
+# Ad-hoc reference uploads at repo root (uploaded papers, dataset manifests, etc.).
+# Root-anchored so the tracked thesis PDFs under results/figures/ stay tracked.
+/*.pdf
+/*.xlsx
 
 # Internal-only docs
 CLAUDE.md
