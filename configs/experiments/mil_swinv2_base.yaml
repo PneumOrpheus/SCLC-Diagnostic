@@ -1,0 +1,69 @@
+experiment:
+  name: mil_swinv2_base
+  notes: >-
+    MIL SwinV2-Base (swinv2_base_window8_256.ms_in1k, ImageNet pretrained via
+    timm, 1-channel stem averaged from RGB). DAPT on Lung-PET-CT-Dx as
+    whole-slice per-slice classification using SwinV2Base2DClassifier
+    (model_type swinv2_base_2d). Fine-tune on BigLunge as attention-MIL over
+    bags of N whole-slice 256×256 images. Counterpart to mil_resnet50 and the
+    prior mil_swin_tiny — same MIL pipeline, SwinV2-Base backbone (~88M params).
+    Input must be 256×256 (window8 constraint for SwinV2).
+
+model_type: mil_swinv2_base
+mode: full
+
+data:
+  dapt_dataset: /home/data/Lung-PET-CT-Dx-Clean
+  finetune_dataset: /home/data/TrainingData
+  finetune_csv: /home/data/TrainingData/patients_parameters.csv
+
+checkpoints:
+  initial_checkpoint: ""
+  model_checkpoint: ""
+  checkpoint_dir: /home/data/trained_models
+  output_dir: results/output
+
+training:
+  # DAPT: per-slice whole-slice classification with SwinV2Base2DClassifier.
+  # LR scaled down vs Swin-Tiny (5e-5) due to larger model capacity.
+  dapt_epochs: 30
+  dapt_lr: 3.0e-5
+  dapt_warmup_epochs: 5
+  dapt_weight_decay: 5.0e-2
+  # Fine-tune: bag-level MIL on BigLunge.
+  finetune_epochs: 40
+  finetune_lr: 3.0e-4
+  finetune_warmup_epochs: 3
+  warmup_start_lr: 1.0e-6
+  finetune_backbone_lr_scale: 0.1
+  finetune_freeze_backbone_epochs: 2
+  weight_decay: 5.0e-2
+  # SwinV2-Base is ~3x larger than Swin-Tiny; reduce bag_size to fit GPU.
+  # Effective batch size = batch_size * accumulation_steps = 2 * 4 = 8 bags.
+  batch_size: 2
+  accumulation_steps: 4
+  monitor_rolling_window: 3
+  seg_loss_weight: 0.0
+  mixup_alpha: 0.2
+  strong_augs: true
+  bag_dropout: 0.0
+
+system:
+  num_workers: 4
+  cache_workers: 4
+  seed: 42
+  disable_amp: false
+  testing: false
+  clear_cache: false
+
+pipeline_mil:
+  # SwinV2-Base uses window=8 over 256-input; img_size_mil MUST stay at 256.
+  img_size_mil: 256
+  bag_size: 16
+  mil_mode: att
+  mil_trans_blocks: 4
+  mil_trans_dropout: 0.0
+  lung_mask_suffix: _label_lungs.nii.gz
+  min_tumor_pixels: 100
+  max_slices_per_volume: 8
+  tumor_mask_suffix: _label_tc.nii.gz

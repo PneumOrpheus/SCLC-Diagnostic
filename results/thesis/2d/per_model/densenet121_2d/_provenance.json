@@ -1,40 +1,40 @@
 {
   "model_type": "densenet121_2d",
   "pipeline": "2d",
-  "generated_at": "2026-04-29T08:53:29",
-  "metrics_jsonl_source": "output/2d/densenet121_2d/metrics.jsonl",
+  "generated_at": "2026-05-03T11:47:51",
+  "metrics_jsonl_source": "results/output/2d/densenet121_2d/metrics.jsonl",
   "canonical_dapt_run": {
-    "n_epochs": 25,
-    "first_timestamp": "2026-04-29T08:07:02",
-    "last_timestamp": "2026-04-29T08:12:38",
+    "n_epochs": 30,
+    "first_timestamp": "2026-05-03T11:05:09",
+    "last_timestamp": "2026-05-03T11:11:15",
     "first_epoch": 1,
-    "last_epoch": 25,
-    "peak_val_macro_f1_raw": 0.7931697931697932,
+    "last_epoch": 30,
+    "peak_val_macro_f1_raw": 0.7403508771929824,
     "peak_val_macro_f1_raw_epoch": 15,
-    "peak_val_macro_f1_rolling": 0.6982611456295666,
-    "peak_val_macro_f1_rolling_epoch": 15
+    "peak_val_macro_f1_rolling": 0.7085128241494586,
+    "peak_val_macro_f1_rolling_epoch": 27
   },
   "canonical_finetune_run": {
-    "n_epochs": 22,
-    "first_timestamp": "2026-04-29T08:12:53",
-    "last_timestamp": "2026-04-29T08:15:49",
+    "n_epochs": 11,
+    "first_timestamp": "2026-05-03T11:11:26",
+    "last_timestamp": "2026-05-03T11:12:35",
     "first_epoch": 1,
-    "last_epoch": 22,
-    "peak_val_macro_f1_raw": 0.4563566701497736,
-    "peak_val_macro_f1_raw_epoch": 10,
-    "peak_val_macro_f1_rolling": 0.4404475548491776,
-    "peak_val_macro_f1_rolling_epoch": 12
+    "last_epoch": 11,
+    "peak_val_macro_f1_raw": 0.28027644869750135,
+    "peak_val_macro_f1_raw_epoch": 1,
+    "peak_val_macro_f1_rolling": 0.28027644869750135,
+    "peak_val_macro_f1_rolling_epoch": 1
   },
-  "dapt_test_timestamp": "2026-04-29T08:12:43",
-  "biglunge_test_timestamp": "2026-04-29T08:15:54",
+  "dapt_test_timestamp": "2026-05-03T11:11:19",
+  "biglunge_test_timestamp": "2026-05-03T11:12:39",
   "inference_probs_sources": {
-    "dapt_test": "/home/hansstem/SCLC-Classification/output/2d/densenet121_2d/densenet121_2d_2026-04-29_08-12-43_dapt_inference_probabilities.json",
-    "biglunge_test": "/home/hansstem/SCLC-Classification/output/2d/densenet121_2d/densenet121_2d_2026-04-29_08-15-54_inference_probabilities.json"
+    "dapt_test": "/home/rhoversa/SCLC-Diagnostic/results/output/2d/densenet121_2d/densenet121_2d_2026-05-03_11-11-19_dapt_inference_probabilities.json",
+    "biglunge_test": "/home/rhoversa/SCLC-Diagnostic/results/output/2d/densenet121_2d/densenet121_2d_2026-05-03_11-12-39_inference_probabilities.json"
   },
   "checkpoints": {
-    "dapt_pbest_raw": "/home/data/trained_models/2d/densenet121_2d/Apr_29_04_dapt_pbest_raw.pth",
-    "dapt_pbest_roll": "/home/data/trained_models/2d/densenet121_2d/Apr_29_04_dapt_pbest_roll.pth",
-    "finetune_pbest_raw": "/home/data/trained_models/2d/densenet121_2d/Apr_29_04_finetune_pbest_raw.pth",
-    "finetune_pbest_roll": "/home/data/trained_models/2d/densenet121_2d/Apr_29_04_finetune_pbest_roll.pth"
+    "dapt_pbest_raw": "/home/data/trained_models/2d/densenet121_2d/May_03_05_dapt_pbest_raw.pth",
+    "dapt_pbest_roll": "/home/data/trained_models/2d/densenet121_2d/May_03_05_dapt_pbest_roll.pth",
+    "finetune_pbest_raw": "/home/data/trained_models/2d/densenet121_2d/May_03_05_finetune_pbest_raw.pth",
+    "finetune_pbest_roll": "/home/data/trained_models/2d/densenet121_2d/May_03_05_finetune_pbest_roll.pth"
   }
 }

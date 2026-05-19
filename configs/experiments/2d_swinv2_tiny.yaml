@@ -1,0 +1,55 @@
+experiment:
+  name: 2d_swinv2_tiny
+  notes: >-
+    2D SwinV2-Tiny (swinv2_tiny_window8_256.ms_in1k) with ImageNet pretrained
+    weights from timm (~28M params, 4 stages with [96,192,384,768] channels).
+    timm adapts the 3-channel stem to 1-channel automatically at load time.
+    Input resolution must be 256 (window8 constraint). DAPT on Lung-PET-CT-Dx,
+    fine-tune on BigLunge.
+
+model_type: swinv2_tiny_2d
+mode: full
+
+data:
+  dapt_dataset: /home/data/Lung-PET-CT-Dx-Clean
+  finetune_dataset: /home/data/TrainingData
+  finetune_csv: /home/data/TrainingData/patients_parameters.csv
+
+checkpoints:
+  initial_checkpoint: ""
+  model_checkpoint: ""
+  checkpoint_dir: /home/data/trained_models
+  output_dir: results/output
+
+training:
+  dapt_epochs: 30
+  dapt_lr: 5.0e-5
+  dapt_warmup_epochs: 5
+  dapt_weight_decay: 5.0e-2
+  finetune_epochs: 40
+  finetune_lr: 2.0e-5
+  finetune_warmup_epochs: 3
+  warmup_start_lr: 1.0e-6
+  finetune_backbone_lr_scale: 0.1
+  finetune_freeze_backbone_epochs: 5
+  weight_decay: 5.0e-2
+  batch_size: 16
+  accumulation_steps: 4
+  monitor_rolling_window: 3
+  seg_loss_weight: 0.0
+  strong_augs: true
+  mixup_alpha: 0.2
+
+system:
+  num_workers: 4
+  cache_workers: 4
+  seed: 42
+  disable_amp: false
+  testing: false
+  clear_cache: false
+
+pipeline_2d:
+  img_size_2d: 256
+  max_slices_per_volume: 8
+  tumor_mask_suffix: _label_tc.nii.gz
+  min_tumor_pixels: 1

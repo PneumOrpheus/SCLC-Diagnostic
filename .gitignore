@@ -18,6 +18,8 @@ results/output/
 results/runs/
 results/thesis/_archive/
 
+# Notebook-generated figures and caches
+data_pipeline/notebooks/output/
 # Regenerable visualization outputs (built from checkpoints by sclc.grad_cam)
 results/grad_cam/
 

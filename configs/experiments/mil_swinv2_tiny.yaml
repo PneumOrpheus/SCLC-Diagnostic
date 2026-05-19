@@ -1,0 +1,66 @@
+experiment:
+  name: mil_swinv2_tiny
+  notes: >-
+    MIL SwinV2-Tiny (swinv2_tiny_window8_256.ms_in1k, ImageNet pretrained via
+    timm, 1-channel stem averaged from RGB). DAPT on Lung-PET-CT-Dx as
+    whole-slice per-slice classification using SwinV2Tiny2DClassifier
+    (model_type swinv2_tiny_2d). Fine-tune on BigLunge as attention-MIL over
+    bags of N whole-slice 256x256 images. ~28M params. Input must be 256x256 (window8 constraint).
+
+model_type: mil_swinv2_tiny
+mode: full
+
+data:
+  dapt_dataset: /home/data/Lung-PET-CT-Dx-Clean
+  finetune_dataset: /home/data/TrainingData
+  finetune_csv: /home/data/TrainingData/patients_parameters.csv
+
+checkpoints:
+  initial_checkpoint: ""
+  model_checkpoint: ""
+  checkpoint_dir: /home/data/trained_models
+  output_dir: results/output
+
+training:
+  # DAPT: per-slice whole-slice classification with SwinV2Tiny2DClassifier.
+  dapt_epochs: 30
+  dapt_lr: 5.0e-5
+  dapt_warmup_epochs: 5
+  dapt_weight_decay: 5.0e-2
+  # Fine-tune: bag-level MIL on BigLunge.
+  finetune_epochs: 40
+  finetune_lr: 5.0e-4
+  finetune_warmup_epochs: 3
+  warmup_start_lr: 1.0e-6
+  finetune_backbone_lr_scale: 0.1
+  finetune_freeze_backbone_epochs: 2
+  weight_decay: 5.0e-2
+  # Tiny model fits more bags per GPU than Base; match mil_swinv2_base for
+  # fair comparison. Effective batch = batch_size * accumulation_steps = 8.
+  batch_size: 2
+  accumulation_steps: 4
+  monitor_rolling_window: 3
+  seg_loss_weight: 0.0
+  mixup_alpha: 0.2
+  strong_augs: true
+  bag_dropout: 0.0
+
+system:
+  num_workers: 4
+  cache_workers: 4
+  seed: 42
+  disable_amp: false
+  testing: false
+  clear_cache: false
+
+pipeline_mil:
+  # SwinV2-Tiny uses window=8 over 256-input; img_size_mil MUST stay at 256.
+  img_size_mil: 256
+  bag_size: 16
+  mil_mode: att
+  mil_trans_blocks: 4
+  mil_trans_dropout: 0.0
+  lung_mask_suffix: _label_lungs.nii.gz
+  min_tumor_pixels: 100
+  max_slices_per_volume: 8
+  tumor_mask_suffix: _label_tc.nii.gz

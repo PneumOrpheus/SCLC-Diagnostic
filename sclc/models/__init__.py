@@ -18,12 +18,14 @@ from .classifiers_2d import (
     DenseNet2DClassifier,
     TorchVisionResNet2DClassifier,
     SwinTiny2DClassifier,
+    SwinV2Base2DClassifier,
+    SwinV2Tiny2DClassifier,
 )
 from .classifiers_rin import (
     RadImageNetResNet502DClassifier,
     RadImageNetDenseNet1212DClassifier,
 )
-from .classifiers_mil import MILResNet50Classifier, MILSwinTinyClassifier
+from .classifiers_mil import MILResNet50Classifier, MILSwinTinyClassifier, MILSwinV2BaseClassifier, MILSwinV2TinyClassifier
 
 __all__ = [
     "get_sclc_model",
@@ -37,8 +39,12 @@ __all__ = [
     "DenseNet2DClassifier",
     "TorchVisionResNet2DClassifier",
     "SwinTiny2DClassifier",
+    "SwinV2Base2DClassifier",
+    "SwinV2Tiny2DClassifier",
     "RadImageNetResNet502DClassifier",
     "RadImageNetDenseNet1212DClassifier",
     "MILResNet50Classifier",
     "MILSwinTinyClassifier",
+    "MILSwinV2BaseClassifier",
+    "MILSwinV2TinyClassifier",
 ]

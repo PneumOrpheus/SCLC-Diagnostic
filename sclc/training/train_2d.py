@@ -9,13 +9,17 @@ Key differences from the 3D/2.5D ``training/train.py`` loop:
   comparable to the 3D and 2.5D pipelines.
 """
 import time
+import warnings
 from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
+from monai.losses import DiceLoss
 
 from sklearn.metrics import balanced_accuracy_score, f1_score
+
+warnings.filterwarnings("ignore", message="y_pred contains classes not in y_true", category=UserWarning)
 
 from sclc.training.bootstrap import bootstrap_ci, per_class_f1_ci
 from sclc.training.train_3d import (
@@ -24,6 +28,7 @@ from sclc.training.train_3d import (
     NUM_CLASSES,
     _compute_classification_metrics,
 )
+from sclc.training.bbox_utils import bbox_loss_2d
 
 
 def _macro_f1(yt, yp):
@@ -82,18 +87,56 @@ def _get_class_weight_tensor(loader, device, logger=None) -> Optional[torch.Tens
 
 
 def simple_collate_fn_2d(batch):
-    """Collate per-slice samples. Emits a 3-tuple so downstream code can tell
-    the 2D batches apart from the 2/3/4-tuple 3D/2.5D ones.
+    """Collate per-slice samples.
 
     Returns
     -------
-    images : (B, 1, H, W) float tensor
-    labels : (B,) long tensor
-    meta   : list[dict] with ``volume_id``, ``patient_id`` (if present) and
-             ``slice_idx`` for patient-level aggregation in validate.
+    images   : (B, 1, H, W) float tensor
+    labels   : (B,) long tensor
+    masks    : (B, 1, H, W) float tensor or None
+    has_mask : (B,) bool tensor or None
+    bboxes   : (B, 4) float tensor or None
+    has_bbox : (B,) bool tensor or None
+    meta     : list[dict] with ``volume_id``, ``patient_id`` (if present) and
+               ``slice_idx`` for patient-level aggregation in validate.
     """
     images = torch.stack([item["image"] for item in batch], dim=0)
     labels = torch.tensor([int(item["scan_label"]) for item in batch], dtype=torch.long)
+
+    masks = None
+    has_mask = None
+    if any("tumor_mask" in item for item in batch):
+        masks_list = []
+        has_mask_list = []
+        for item in batch:
+            mask = item.get("tumor_mask")
+            if mask is None:
+                mask = torch.zeros_like(item["image"])
+                has_mask_list.append(False)
+            else:
+                has_mask_list.append(bool(mask.sum() > 0))
+            masks_list.append(mask)
+        masks = torch.stack(masks_list, dim=0)
+        has_mask = torch.tensor(has_mask_list, dtype=torch.bool)
+
+    bboxes = None
+    has_bbox = None
+    if any("bbox" in item for item in batch):
+        bbox_list = []
+        has_bbox_list = []
+        for item in batch:
+            bbox = item.get("bbox")
+            if bbox is None:
+                bbox_t = torch.zeros(4, dtype=torch.float32)
+                hb = False
+            else:
+                bbox_t = bbox if torch.is_tensor(bbox) else torch.as_tensor(bbox, dtype=torch.float32)
+                hb = bool(item.get("has_bbox", True))
+            bbox_list.append(bbox_t)
+            has_bbox_list.append(hb)
+        bboxes = torch.stack(bbox_list, dim=0)
+        has_bbox = torch.tensor(has_bbox_list, dtype=torch.bool)
+
     meta: List[Dict[str, Any]] = []
     for item in batch:
         meta.append({
@@ -101,7 +144,7 @@ def simple_collate_fn_2d(batch):
             "patient_id": item.get("patient_id"),
             "slice_idx": int(item.get("slice_idx", -1)),
         })
-    return images, labels, meta
+    return images, labels, masks, has_mask, bboxes, has_bbox, meta
 
 
 def _mixup_batch(x: torch.Tensor, y: torch.Tensor, alpha: float):
@@ -140,31 +183,105 @@ def train_epoch_2d(
     scaler=None,
     accumulation_steps: int = 1,
     mixup_alpha: float = 0.0,
+    use_det_seg: bool = False,
+    seg_loss_weight: float = 0.1,
+    bbox_loss_weight: float = 0.1,
     **_unused,  # keep a shared signature with train_epoch so run_training_phase can swap them
 ):
     model.train()
     start_time = time.time()
     run_loss = AverageMeter()
+    run_cls_loss = AverageMeter()
+    run_seg_loss = AverageMeter()
+    run_box_loss = AverageMeter()
     all_preds: List[int] = []
     all_targets: List[int] = []
 
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    dice_loss_fn = DiceLoss(sigmoid=True)
     optimizer.zero_grad()
-    mixup_active = float(mixup_alpha) > 0.0
+    use_det_seg = bool(use_det_seg)
+    seg_loss_weight = max(0.0, float(seg_loss_weight))
+    bbox_loss_weight = max(0.0, float(bbox_loss_weight))
+    mixup_active = float(mixup_alpha) > 0.0 and not use_det_seg
     if mixup_active and epoch == 1:
         logger.info(f"[2D] MixUp active with alpha={mixup_alpha:.3f} (Beta({mixup_alpha},{mixup_alpha}))")
+    elif float(mixup_alpha) > 0.0 and use_det_seg and epoch == 1:
+        logger.info(
+            f"[2D] MixUp requested (alpha={mixup_alpha:.3f}) but suppressed because "
+            f"use_det_seg=True (image/mask alignment would break)."
+        )
 
     for idx, batch_data in enumerate(loader):
-        data, target, _ = batch_data
+        if len(batch_data) >= 7:
+            data, target, masks, has_mask, bboxes, has_bbox, _ = batch_data
+        else:
+            data, target, _ = batch_data
+            masks = has_mask = bboxes = has_bbox = None
         data, target = data.to(device), target.to(device)
-        data_mix, y_a, y_b, lam = _mixup_batch(data, target, alpha=float(mixup_alpha))
+        masks = masks.to(device) if masks is not None else None
+        bboxes = bboxes.to(device) if bboxes is not None else None
+
+        if mixup_active:
+            data_mix, y_a, y_b, lam = _mixup_batch(data, target, alpha=float(mixup_alpha))
+        else:
+            data_mix, y_a, y_b, lam = data, target, target, 1.0
 
         with torch.amp.autocast(enabled=(scaler is not None), device_type="cuda"):
-            logits = model(data_mix, return_segmentation=False)
-            if mixup_active:
-                loss = lam * criterion(logits, y_a) + (1.0 - lam) * criterion(logits, y_b)
+            if use_det_seg:
+                outputs = model(data_mix, return_segmentation=True, return_detection=True)
+                if isinstance(outputs, tuple):
+                    if len(outputs) == 3:
+                        logits, seg_logits, box_pred = outputs
+                    else:
+                        logits, seg_logits = outputs
+                        box_pred = None
+                else:
+                    logits, seg_logits, box_pred = outputs, None, None
+                cls_loss = criterion(logits, y_a)
+                loss = cls_loss
+
+                seg_loss_val = 0.0
+                if (
+                    seg_logits is not None
+                    and seg_logits.requires_grad
+                    and masks is not None
+                    and has_mask is not None
+                    and has_mask.any()
+                ):
+                    valid_mask_indices = has_mask.to(device)
+                    seg_logits_valid = seg_logits[valid_mask_indices]
+                    masks_valid = masks[valid_mask_indices].float()
+                    bce_seg = nn.functional.binary_cross_entropy_with_logits(seg_logits_valid, masks_valid)
+                    dice_seg = dice_loss_fn(seg_logits_valid, masks_valid)
+                    seg_loss = 0.5 * bce_seg + 0.5 * dice_seg
+                    loss = loss + (seg_loss_weight * seg_loss)
+                    seg_loss_val = seg_loss.item()
+                run_seg_loss.update(seg_loss_val, n=data.size(0))
+
+                box_loss_val = 0.0
+                if (
+                    box_pred is not None
+                    and box_pred.requires_grad
+                    and bboxes is not None
+                    and has_bbox is not None
+                    and has_bbox.any()
+                ):
+                    valid_box_indices = has_bbox.to(device)
+                    pred_boxes = box_pred[valid_box_indices]
+                    tgt_boxes = bboxes[valid_box_indices]
+                    l1, giou = bbox_loss_2d(pred_boxes, tgt_boxes)
+                    box_loss = l1.mean() + giou.mean()
+                    loss = loss + (bbox_loss_weight * box_loss)
+                    box_loss_val = box_loss.item()
+                run_box_loss.update(box_loss_val, n=data.size(0))
             else:
-                loss = criterion(logits, y_a)
+                logits = model(data_mix, return_segmentation=False)
+                if mixup_active:
+                    loss = lam * criterion(logits, y_a) + (1.0 - lam) * criterion(logits, y_b)
+                else:
+                    loss = criterion(logits, y_a)
+                cls_loss = loss
 
             preds = torch.argmax(logits.detach(), dim=1)
             all_preds.extend(preds.cpu().tolist())
@@ -190,12 +307,21 @@ def train_epoch_2d(
             optimizer.zero_grad()
 
         run_loss.update(unscaled_loss, n=data.size(0))
+        run_cls_loss.update(cls_loss.item(), n=data.size(0))
 
         if (idx + 1) % 50 == 0 or (idx + 1) == len(loader):
-            msg = (
-                f"[2D] Epoch {epoch} [{idx + 1}/{len(loader)}] "
-                f"Loss: {run_loss.avg:.4f} Time: {time.time() - start_time:.2f}s"
-            )
+            if use_det_seg:
+                msg = (
+                    f"[2D] Epoch {epoch} [{idx + 1}/{len(loader)}] "
+                    f"Loss: {run_loss.avg:.4f} (Cls: {run_cls_loss.avg:.4f} / "
+                    f"Seg: {run_seg_loss.avg:.4f} / Box: {run_box_loss.avg:.4f}) "
+                    f"Time: {time.time() - start_time:.2f}s"
+                )
+            else:
+                msg = (
+                    f"[2D] Epoch {epoch} [{idx + 1}/{len(loader)}] "
+                    f"Loss: {run_loss.avg:.4f} Time: {time.time() - start_time:.2f}s"
+                )
             print(msg)
             logger.info(msg)
             start_time = time.time()
@@ -239,7 +365,10 @@ def validate_epoch_2d(
     logger.info("[2D] Starting validation...")
 
     for batch_data in loader:
-        data, target, meta = batch_data
+        if len(batch_data) >= 7:
+            data, target, _, _, _, _, meta = batch_data
+        else:
+            data, target, meta = batch_data
         data, target = data.to(device), target.to(device)
         logits = model(data)
         loss = criterion(logits, target)

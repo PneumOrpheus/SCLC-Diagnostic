@@ -56,8 +56,17 @@ def get_lung_pet_ct_dx_data_list(
     seed: int = 42,
     testing: bool = False,
     max_scans_per_patient: int = 2,
+    cv_fold: int = -1,
+    cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Build {split: data_list} dict with patient-level splitting for Lung-PET-CT-Dx."""
+    """Build {split: data_list} dict with patient-level splitting for Lung-PET-CT-Dx.
+
+    When ``cv_fold >= 0`` uses stratified k-fold CV (StratifiedKFold with
+    ``n_splits=cv_folds``): fold ``cv_fold`` becomes the test set and the
+    remaining folds are further split into train/val with an inner stratified
+    split that keeps val_frac of the total as validation.  Mirrors the
+    behaviour of ``get_biglunge_data_list``.
+    """
     if not os.path.isdir(data_path):
         raise ValueError(f"Data path '{data_path}' does not exist or is not a directory.")
 
@@ -90,24 +99,40 @@ def get_lung_pet_ct_dx_data_list(
                 f"hits {len(matched)} keys ({matched}). Refusing to silently pick one."
             )
 
-    val_test_frac = val_frac + test_frac
-    if val_test_frac > 0:
-        train_ids, temp_ids, train_labels, temp_labels = train_test_split(
-            valid_patients, patient_labels, test_size=val_test_frac, random_state=seed, stratify=patient_labels
+    from sklearn.model_selection import StratifiedKFold
+
+    if cv_fold >= 0:
+        # Stratified k-fold: fold cv_fold → test; rest → inner train/val split.
+        skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
+        all_folds = list(skf.split(valid_patients, patient_labels))
+        train_val_idx, test_idx = all_folds[cv_fold]
+        test_ids = [valid_patients[i] for i in test_idx]
+        train_val_patients = [valid_patients[i] for i in train_val_idx]
+        train_val_labels = [patient_labels[i] for i in train_val_idx]
+        val_frac_inner = min(val_frac / (1.0 - 1.0 / cv_folds), 0.49)
+        train_ids, val_ids, _, _ = train_test_split(
+            train_val_patients, train_val_labels,
+            test_size=val_frac_inner, random_state=seed, stratify=train_val_labels,
         )
-        
-        # Split temp into val and test
-        if test_frac > 0 and val_frac > 0:
-            test_ratio = test_frac / val_test_frac
-            val_ids, test_ids, val_labels, test_labels = train_test_split(
-                temp_ids, temp_labels, test_size=test_ratio, random_state=seed, stratify=temp_labels
-            )
-        elif test_frac > 0:
-            val_ids, test_ids = [], temp_ids
-        else:
-            val_ids, test_ids = temp_ids, []
+        print(f"[lung_pet_ct_dx CV fold {cv_fold}/{cv_folds}] "
+              f"train={len(train_ids)}, val={len(val_ids)}, test={len(test_ids)}")
     else:
-        train_ids, val_ids, test_ids = valid_patients, [], []
+        val_test_frac = val_frac + test_frac
+        if val_test_frac > 0:
+            train_ids, temp_ids, train_labels, temp_labels = train_test_split(
+                valid_patients, patient_labels, test_size=val_test_frac, random_state=seed, stratify=patient_labels
+            )
+            if test_frac > 0 and val_frac > 0:
+                test_ratio = test_frac / val_test_frac
+                val_ids, test_ids, val_labels, test_labels = train_test_split(
+                    temp_ids, temp_labels, test_size=test_ratio, random_state=seed, stratify=temp_labels
+                )
+            elif test_frac > 0:
+                val_ids, test_ids = [], temp_ids
+            else:
+                val_ids, test_ids = temp_ids, []
+        else:
+            train_ids, val_ids, test_ids = valid_patients, [], []
 
     split_patients = {
         "train": set(train_ids),
@@ -202,8 +227,16 @@ def get_biglunge_data_list(
     test_frac: float = 0.15,
     seed: int = 42,
     testing: bool = False,
+    cv_fold: int = -1,
+    cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Build {split: data_list} dict with patient-level splitting for BigLunge."""
+    """Build {split: data_list} dict with patient-level splitting for BigLunge.
+
+    When ``cv_fold >= 0`` the split uses stratified k-fold CV (StratifiedKFold
+    with ``n_splits=cv_folds``): fold ``cv_fold`` becomes the test set and the
+    remaining folds are further split into train/val with an inner stratified
+    split that keeps val_frac of the total as validation.
+    """
     if not os.path.isdir(data_path):
         raise ValueError(f"Data path '{data_path}' does not exist or is not a directory.")
     if not os.path.isfile(csv_path):
@@ -244,26 +277,42 @@ def get_biglunge_data_list(
     
     patient_classes = [patient_labels[pid] for pid in patient_folders]
 
-    from sklearn.model_selection import train_test_split
+    from sklearn.model_selection import train_test_split, StratifiedKFold
 
-    val_test_frac = val_frac + test_frac
-    if val_test_frac > 0:
-        train_ids, temp_ids, train_classes, temp_classes = train_test_split(
-            patient_folders, patient_classes, test_size=val_test_frac, random_state=seed, stratify=patient_classes
+    if cv_fold >= 0:
+        # Stratified k-fold: fold cv_fold → test; rest → inner train/val split.
+        skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
+        all_folds = list(skf.split(patient_folders, patient_classes))
+        train_val_idx, test_idx = all_folds[cv_fold]
+        test_ids = [patient_folders[i] for i in test_idx]
+        train_val_folders = [patient_folders[i] for i in train_val_idx]
+        train_val_classes = [patient_classes[i] for i in train_val_idx]
+        # Scale val_frac to the train+val portion size so that the fraction of
+        # the TOTAL dataset used for validation stays roughly equal to val_frac.
+        val_frac_inner = min(val_frac / (1.0 - 1.0 / cv_folds), 0.49)
+        train_ids, val_ids, _, _ = train_test_split(
+            train_val_folders, train_val_classes,
+            test_size=val_frac_inner, random_state=seed, stratify=train_val_classes,
         )
-        
-        # Split temp into val and test
-        if test_frac > 0 and val_frac > 0:
-            test_ratio = test_frac / val_test_frac
-            val_ids, test_ids, val_classes, test_classes = train_test_split(
-                temp_ids, temp_classes, test_size=test_ratio, random_state=seed, stratify=temp_classes
-            )
-        elif test_frac > 0:
-            val_ids, test_ids = [], temp_ids
-        else:
-            val_ids, test_ids = temp_ids, []
+        print(f"[big_lunge CV fold {cv_fold}/{cv_folds}] "
+              f"train={len(train_ids)}, val={len(val_ids)}, test={len(test_ids)}")
     else:
-        train_ids, val_ids, test_ids = patient_folders, [], []
+        val_test_frac = val_frac + test_frac
+        if val_test_frac > 0:
+            train_ids, temp_ids, train_classes, temp_classes = train_test_split(
+                patient_folders, patient_classes, test_size=val_test_frac, random_state=seed, stratify=patient_classes
+            )
+            if test_frac > 0 and val_frac > 0:
+                test_ratio = test_frac / val_test_frac
+                val_ids, test_ids, val_classes, test_classes = train_test_split(
+                    temp_ids, temp_classes, test_size=test_ratio, random_state=seed, stratify=temp_classes
+                )
+            elif test_frac > 0:
+                val_ids, test_ids = [], temp_ids
+            else:
+                val_ids, test_ids = temp_ids, []
+        else:
+            train_ids, val_ids, test_ids = patient_folders, [], []
 
     split_patients = {
         "train": train_ids,
@@ -337,11 +386,14 @@ def create_dataset(
     seed: int = 42,
     strong_augs: bool = False,
     clear_cache: bool = False,
+    include_bbox: bool = False,
+    cv_fold: int = -1,
+    cv_folds: int = 5,
     **kwargs: Any,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
     """
     Unified function to create train/val/test PersistentDatasets for SCLC.
-    
+
     Args:
         dataset_type: "big_lunge" or "lung_pet_ct_dx"
         ...
@@ -350,7 +402,7 @@ def create_dataset(
         all_splits = get_biglunge_data_list(
             data_path=data_path, csv_path=csv_path,
             val_frac=val_frac, test_frac=test_frac, seed=seed,
-            testing=testing,
+            testing=testing, cv_fold=cv_fold, cv_folds=cv_folds,
         )
         cache_name = "monai_biglunge"
     elif dataset_type == "lung_pet_ct_dx":
@@ -363,20 +415,24 @@ def create_dataset(
         raise ValueError(f"Unknown dataset_type: {dataset_type}")
 
     # Run-specific cache parent (the parameterized path that holds train/
-    # val/test subdirs for THIS img_size/depth_size combo). When
-    # clear_cache=True we rmtree this once before the per-split loop, so
-    # only the cache that this run will rebuild gets wiped — sibling
-    # configs with different img_size/depth_size stay intact.
+    # val/test subdirs for THIS img_size/depth_size combo). The path is
+    # SHARED across CV folds because a patient's deterministic preprocessing
+    # output is identical regardless of which fold they land in;
+    # PersistentDataset keys .pt files by content hash and dedupes
+    # automatically. Per-fold patient lists / metadata live in fold-tagged
+    # valid_data_fold{N}.json / meta_fold{N}.json files inside each split.
     if cache_dir is None:
         mode_key = "3d" if use_3d else "2d"
         test_suffix = "_testing" if testing else ""
         run_cache_root = os.path.join(
-            os.path.expanduser("~"), ".cache", cache_name,
+            "/home/data/.cache", cache_name,
             f"{mode_key}_img{img_size}_d{depth_size}{test_suffix}",
         )
     else:
         run_cache_root = cache_dir
-    if clear_cache and os.path.isdir(run_cache_root):
+    # Only wipe on the first fold of a CV run (or non-CV) — otherwise
+    # sequential fold runs would clobber each other's shared cache.
+    if clear_cache and cv_fold <= 0 and os.path.isdir(run_cache_root):
         import shutil as _shutil
         print(f"[--clear-cache] Removing {run_cache_root}")
         _shutil.rmtree(run_cache_root)
@@ -400,11 +456,13 @@ def create_dataset(
                     img_size=img_size, depth_size=depth_size,
                     use_lung_crop=use_lung_crop,
                     strong_augs=strong_augs,
+                    include_bbox=include_bbox,
                 )
             else:
                 transforms = get_val_transforms_3d(
                     img_size=img_size, depth_size=depth_size,
                     use_lung_crop=use_lung_crop,
+                    include_bbox=include_bbox,
                 )
 
 
@@ -414,8 +472,9 @@ def create_dataset(
         os.makedirs(current_cache_dir, exist_ok=True)
         print(f"PersistentDataset cache_dir='{current_cache_dir}'")
 
-        valid_data_file = os.path.join(current_cache_dir, "valid_data.json")
-        meta_file = os.path.join(current_cache_dir, "meta.json")
+        _fold_suffix = f"_fold{cv_fold}" if cv_fold >= 0 else ""
+        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}.json")
+        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}.json")
         import json
 
         # Cache key covers everything that can change the split or preprocessing shape.
@@ -441,6 +500,7 @@ def create_dataset(
             "img_size": int(img_size),
             "depth_size": int(depth_size),
             "split": split,
+            "include_bbox": bool(include_bbox),
         }
 
         cached_meta = None

@@ -1,4 +1,5 @@
 import time
+import warnings
 from typing import Any, Dict, List, Optional
 
 import torch
@@ -6,6 +7,9 @@ import torch.nn as nn
 import numpy as np
 from monai.losses import DiceLoss
 from sklearn.metrics import balanced_accuracy_score, f1_score
+
+warnings.filterwarnings("ignore", message="y_pred contains classes not in y_true", category=UserWarning)
+from sclc.training.bbox_utils import bbox_loss_3d
 
 NUM_CLASSES = 3
 CLASS_NAMES = ["Adenocarcinoma", "Small Cell", "Squamous"]
@@ -154,37 +158,40 @@ def simple_collate_fn(batch):
 
     # Extract segmentation masks if available, filling missing ones with zeros
     masks = None
+    has_mask = None
     if any("mask" in item for item in batch):
-        # Find the shape and type of the first valid mask in the batch
-        mask_shape = None
-        mask_dtype = None
-        mask_device = None
-        for item in batch:
-            if "mask" in item:
-                mask_shape = item["mask"].shape
-                mask_dtype = item["mask"].dtype
-                mask_device = item["mask"].device
-                break
-
-        # Stack masks, generating an empty (all zeros) mask for items without one
         masks_list = []
         has_mask_list = []
         for item in batch:
-            if "mask" in item:
-                # Also check to make sure it's not an empty mask (all zeros)
-                is_empty = (item["mask"].sum() == 0)
-                masks_list.append(item["mask"])
-                has_mask_list.append(not is_empty)
-            else:
-                masks_list.append(torch.zeros(mask_shape, dtype=mask_dtype, device=mask_device))
+            mask = item.get("mask")
+            if mask is None:
+                mask = torch.zeros_like(item["image"])
                 has_mask_list.append(False)
-
+            else:
+                has_mask_list.append(bool(mask.sum() > 0))
+            masks_list.append(mask)
         masks = torch.stack(masks_list, dim=0)
         has_mask = torch.tensor(has_mask_list, dtype=torch.bool)
 
-        return scans, labels, masks, has_mask, meta
+    bboxes = None
+    has_bbox = None
+    if any("bbox" in item for item in batch):
+        bbox_list = []
+        has_bbox_list = []
+        for item in batch:
+            bbox = item.get("bbox")
+            if bbox is None:
+                bbox_t = torch.zeros(6, dtype=torch.float32)
+                hb = False
+            else:
+                bbox_t = bbox if torch.is_tensor(bbox) else torch.as_tensor(bbox, dtype=torch.float32)
+                hb = bool(item.get("has_bbox", True))
+            bbox_list.append(bbox_t)
+            has_bbox_list.append(hb)
+        bboxes = torch.stack(bbox_list, dim=0)
+        has_bbox = torch.tensor(has_bbox_list, dtype=torch.bool)
 
-    return scans, labels, None, None, meta
+    return scans, labels, masks, has_mask, bboxes, has_bbox, meta
 
 
 def _mixup_3d(x: torch.Tensor, y: torch.Tensor, alpha: float):
@@ -220,8 +227,10 @@ def train_epoch(
     logger,
     scaler=None,
     use_segmentation=False,
+    use_det_seg: bool = False,
     accumulation_steps=1,
     seg_loss_weight=0.1,
+    bbox_loss_weight: float = 0.1,
     mixup_alpha=0.0,
     **_unused,  # keep signature tolerant of pipeline-specific kwargs (bag_dropout, etc.)
 ):
@@ -230,7 +239,9 @@ def train_epoch(
     run_loss = AverageMeter()
     run_cls_loss = AverageMeter()
     run_seg_loss = AverageMeter()
+    run_box_loss = AverageMeter()
     seg_loss_weight = max(0.0, float(seg_loss_weight))
+    bbox_loss_weight = max(0.0, float(bbox_loss_weight))
     all_preds = []
     all_targets = []
 
@@ -242,24 +253,28 @@ def train_epoch(
     # which is the whole reason DAPT exists (BigLunge has no masks).
     dice_loss_fn = DiceLoss(sigmoid=True)
 
-    # Mixup is applied to classification only — when seg loss is active we
-    # skip mixup entirely (mixing would desync image and tumor mask, and
-    # using the un-mixed mask with a mixed image teaches the decoder a
-    # contradictory signal). When seg loss is off, mixup runs normally.
-    mixup_active = float(mixup_alpha) > 0.0 and not use_segmentation
+    # Mixup is applied to classification only — when seg/det losses are
+    # active we skip mixup entirely (mixing would desync image and mask/box).
+    mixup_active = float(mixup_alpha) > 0.0 and not use_segmentation and not use_det_seg
     if mixup_active and epoch == 1:
         logger.info(f"[3D] Mixup active with alpha={mixup_alpha:.3f}")
-    elif float(mixup_alpha) > 0.0 and use_segmentation and epoch == 1:
+    elif float(mixup_alpha) > 0.0 and (use_segmentation or use_det_seg) and epoch == 1:
         logger.info(
             f"[3D] Mixup requested (alpha={mixup_alpha:.3f}) but suppressed because "
-            f"use_segmentation=True (image/mask desync would corrupt seg-aux loss)."
+            f"seg/det loss active (image/mask desync would corrupt aux loss)."
         )
 
     optimizer.zero_grad()  # 1. Zero gradients before the loop starts
 
     for idx, batch_data in enumerate(loader):
         has_mask_tensor = None
-        if len(batch_data) == 5:
+        has_bbox_tensor = None
+        bboxes = None
+        if len(batch_data) >= 7:
+            data, target, masks, has_mask_tensor, bboxes, has_bbox_tensor, _meta = batch_data
+            masks = masks.to(device) if masks is not None else None
+            bboxes = bboxes.to(device) if bboxes is not None else None
+        elif len(batch_data) == 5:
             data, target, masks, has_mask_tensor, _meta = batch_data
             masks = masks.to(device) if masks is not None else None
         elif len(batch_data) == 4:
@@ -281,18 +296,29 @@ def train_epoch(
             y_a, y_b, lam = target, target, 1.0
 
         with torch.amp.autocast(enabled=(scaler is not None), device_type='cuda'):
-            if use_segmentation:
-                logits, seg_outputs = model(data, return_segmentation=True)
+            if use_segmentation or use_det_seg:
+                outputs = model(data, return_segmentation=True, return_detection=use_det_seg)
+                if isinstance(outputs, tuple):
+                    if len(outputs) == 3:
+                        logits, seg_outputs, box_pred = outputs
+                    else:
+                        logits, seg_outputs = outputs
+                        box_pred = None
+                else:
+                    logits, seg_outputs, box_pred = outputs, None, None
                 cls_loss = criterion(logits, target)
+                loss = cls_loss
 
                 seg_loss_val = 0.0
-                if masks is not None and has_mask_tensor is not None and has_mask_tensor.any():
+                if (
+                    seg_outputs is not None
+                    and seg_outputs.requires_grad
+                    and masks is not None
+                    and has_mask_tensor is not None
+                    and has_mask_tensor.any()
+                ):
                     valid_mask_indices = has_mask_tensor.to(device)
-                    masks = masks.float()  # Make sure masks are float
-                    # Compute the aux seg loss only on samples that genuinely
-                    # have a mask. BCE gives a pixel-wise signal, Dice gives
-                    # a region-overlap signal — combined they are substantially
-                    # more stable on sparse tumor foregrounds than either alone.
+                    masks = masks.float()
                     seg_logits_valid = seg_outputs[valid_mask_indices]
                     masks_valid = masks[valid_mask_indices]
                     bce_seg = nn.functional.binary_cross_entropy_with_logits(
@@ -300,10 +326,26 @@ def train_epoch(
                     )
                     dice_seg = dice_loss_fn(seg_logits_valid, masks_valid)
                     seg_loss = 0.5 * bce_seg + 0.5 * dice_seg
-                    loss = cls_loss + (seg_loss_weight * seg_loss)
+                    loss = loss + (seg_loss_weight * seg_loss)
                     seg_loss_val = seg_loss.item()
-                else:
-                    loss = cls_loss
+
+                box_loss_val = 0.0
+                if (
+                    use_det_seg
+                    and box_pred is not None
+                    and box_pred.requires_grad
+                    and bboxes is not None
+                    and has_bbox_tensor is not None
+                    and has_bbox_tensor.any()
+                ):
+                    valid_box_indices = has_bbox_tensor.to(device)
+                    pred_boxes = box_pred[valid_box_indices]
+                    tgt_boxes = bboxes[valid_box_indices]
+                    l1, giou = bbox_loss_3d(pred_boxes, tgt_boxes)
+                    box_loss = l1.mean() + giou.mean()
+                    loss = loss + (bbox_loss_weight * box_loss)
+                    box_loss_val = box_loss.item()
+                run_box_loss.update(box_loss_val, n=data.size(0))
             else:
                 logits = model(data, return_segmentation=False)
                 if mixup_active:
@@ -347,9 +389,10 @@ def train_epoch(
         
         # Log every 10 steps and on the last step
         if (idx + 1) % 20 == 0 or (idx + 1) == len(loader):
-            if use_segmentation:
+            if use_segmentation or use_det_seg:
                 msg = (f"Epoch {epoch} [{idx + 1}/{len(loader)}] "
-                       f"Loss: {run_loss.avg:.4f} (Cls: {run_cls_loss.avg:.4f} / Seg: {run_seg_loss.avg:.4f}) "
+                       f"Loss: {run_loss.avg:.4f} (Cls: {run_cls_loss.avg:.4f} / "
+                       f"Seg: {run_seg_loss.avg:.4f} / Box: {run_box_loss.avg:.4f}) "
                        f"Time: {time.time() - start_time:.2f}s")
             else:
                 msg = (f"Epoch {epoch} [{idx + 1}/{len(loader)}] "
@@ -404,7 +447,9 @@ def validate_epoch(
 
     for batch_data in loader:
         meta_batch: List[Dict[str, Any]] = []
-        if len(batch_data) == 5:
+        if len(batch_data) >= 7:
+            data, target, _, _, _, _, meta_batch = batch_data
+        elif len(batch_data) == 5:
             data, target, _, _, meta_batch = batch_data
         elif len(batch_data) == 4:
             data, target, _, _ = batch_data
