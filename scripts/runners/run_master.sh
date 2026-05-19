@@ -34,7 +34,7 @@ LOG_ROOT=${1:-results/runs/$(date +%Y-%m-%d_%H-%M)_master}
 mkdir -p "$LOG_ROOT"
 SUMMARY="$LOG_ROOT/_summary.txt"
 
-PY=/home/rhoversa/anaconda3/bin/python
+PY=${PY:-/home/hansstem/anaconda3/envs/sclc/bin/python}
 
 # ---- Output roots -----------------------------------------------------------
 BASE_OUTPUT=results/output_master_base

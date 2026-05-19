@@ -1,6 +1,7 @@
 import os
 import sys
 import csv
+import gc
 import shutil
 import random
 import json
@@ -32,6 +33,19 @@ from sclc.data.loaders import create_dataset
 from sclc.data.dataset_2d import create_dataset_2d
 from sclc.data.dataset_mil import create_dataset_mil_bag, create_dataset_mil_bag_dapt, create_dataset_whole_slice
 from sclc.logger import create_logger
+
+
+def _log_rss(logger, label: str) -> None:
+    try:
+        import psutil
+        rss_gb = psutil.Process().memory_info().rss / 1e9
+        cuda_gb = (
+            torch.cuda.memory_allocated() / 1e9
+            if torch.cuda.is_available() else 0.0
+        )
+        logger.info(f"[RSS] {label}: host={rss_gb:.1f}GB cuda={cuda_gb:.1f}GB")
+    except Exception:
+        pass
 
 
 def _dump_effective_config(output_dir: str, args: argparse.Namespace, logger) -> str:
@@ -451,6 +465,12 @@ def parse_args():
                              "1 (default) uses the original fixed 70/15/15 split. "
                              "5 runs 5-fold CV and writes per-fold metrics (test_fold_k / "
                              "dapt_test_fold_k) plus an averaged 'test' row.")
+    parser.add_argument("--cv-fold-index", type=int, default=None,
+                        help="Run only this zero-based fold of --cv-folds (e.g. --cv-folds 5 "
+                             "--cv-fold-index 3 runs fold 3 only). Splits are computed exactly "
+                             "as for the full --cv-folds run, so fold-k here matches fold-k in "
+                             "a full sweep. Skips writing the aggregated 'test' row. Used by "
+                             "resume scripts.")
     parser.add_argument("--finetune-freeze-backbone-epochs", type=int, default=0,
                         help="LP-FT recipe: freeze the backbone for the first N fine-tune epochs (head trains "
                              "alone), then unfreeze and apply differential LR. 0 disables (full diff-LR from "
@@ -740,6 +760,19 @@ _HEAD_PREFIXES = (
     # freshly initialized when we load a DAPT backbone, so they belong in the
     # "head" group for differential LR.
     "mil.attention", "mil.myfc",
+    # FPN / multi-task variants (use_advanced_fpn / use_det_seg). All of the
+    # submodules below are randomly initialised at construction time and must
+    # train during the LP-FT freeze window; without them in this list, the
+    # freeze step puts every parameter into the backbone group and loss.backward()
+    # fails with "element 0 of tensors does not require grad".
+    #   fpn.          AdvancedFPNNeck (2D / RIN / MIL / 3D classifiers)
+    #   head.         MultiTaskHead in 2D and RIN classifiers (cls/seg/box subheads)
+    #   fpn_head.     MultiTaskHead in SwinUNETRClassifier
+    #   box_head.     auxiliary regression head in SwinUNETRClassifier (non-FPN det)
+    #   instance_head. per-instance head in MIL FPN (cls embed + seg/box)
+    #   att_pool.     bag-level attention pool + classifier in MIL FPN
+    "fpn.", "head.", "fpn_head.", "box_head.",
+    "instance_head.", "att_pool.",
 )
 _HEAD_TENSOR_SUFFIXES = (
     "._fc.weight", "._fc.bias",  # MONAI EfficientNetBN
@@ -1268,13 +1301,31 @@ def main():
     fold_test_results: List[Dict[str, Any]] = []
     best_dapt_ckpt = None  # set inside fold loop; used by --mode dapt reporting
 
-    for fold_idx in range(n_folds):
+    fold_index_override = getattr(args, "cv_fold_index", None)
+    if fold_index_override is not None:
+        if fold_index_override < 0 or fold_index_override >= n_folds:
+            raise ValueError(
+                f"--cv-fold-index {fold_index_override} out of range for --cv-folds {n_folds}"
+            )
+        fold_range: List[int] = [fold_index_override]
+        logger.info(f"[CV] Single-fold mode: running only fold {fold_index_override}/{n_folds-1}.")
+    else:
+        fold_range = list(range(n_folds))
+
+    for fold_idx in fold_range:
         cv_fold = fold_idx if n_folds > 1 else -1
+        _log_rss(logger, f"fold {fold_idx} start")
 
         if fold_idx > 0:
             # Rebuild from scratch rather than cloning state_dict: models with
             # AdvancedFPN have UninitializedParameter (LazyConv laterals) that
             # cannot be cloned before a forward pass materialises them.
+            # Free the previous fold's model on both CPU and GPU before the new
+            # allocation, otherwise both live in memory simultaneously.
+            del model
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
             model = get_sclc_model(**_model_kwargs).to(device)
             logger.info(f"[CV fold {fold_idx+1}/{n_folds}] Rebuilt model from initial checkpoint.")
 
@@ -1461,8 +1512,20 @@ def main():
                 if n_folds > 1:
                     fold_test_results.append(fold_metrics)
 
+        # End-of-fold cleanup: drop loader references and run gc before the
+        # next fold's BL fine-tune cache construction piles on top of this
+        # fold's residual loader memory. Mitigates the OOM observed at fold 3
+        # BL test cache validation on baseline 2D models (2026-05-13).
+        train_loader = val_loader = dapt_test_loader = test_loader = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        _log_rss(logger, f"fold {fold_idx} end (post-cleanup)")
+
     # Aggregate CV metrics into a single 'test' row after all folds.
-    if n_folds > 1 and fold_test_results and args.mode == "full":
+    # Skip when running a single fold via --cv-fold-index (would aggregate over n=1).
+    if (n_folds > 1 and fold_test_results and args.mode == "full"
+            and fold_index_override is None):
         _save_cv_aggregate_metrics(fold_test_results, metrics_path, args.model_type, n_folds, logger)
 
     # --- PHASE 3: INFERENCE (standalone --mode inference only) ---
