@@ -169,7 +169,7 @@ def get_sclc_model(
         )
         if checkpoint_path:
             if os.path.exists(checkpoint_path):
-                print(f"[*] Loading pretrained SwinUNETR weights from {checkpoint_path}")
+                print(f"[*] Loading SwinUNETR weights from {checkpoint_path}")
                 state_dict = torch.load(checkpoint_path, map_location="cpu")
                 if "state_dict" in state_dict:
                     state_dict = state_dict["state_dict"]
@@ -183,7 +183,10 @@ def get_sclc_model(
                 matched = len(state_dict) - len(unexpected)
                 print(f"[*] Pretrained weights loaded. Matched {matched}/{len(state_dict)} keys.")
                 if matched == 0:
-                    print(f"[!] Warning: 0 keys matched! Checkpoint {checkpoint_path} is likely for a different architecture.")
+                    raise RuntimeError(
+                        f"Loaded 0 keys from {checkpoint_path}; checkpoint format "
+                        f"does not match SwinUNETRClassifier or the BTCV pretrained layout."
+                    )
             else:
                 print(f"[!] Warning: Checkpoint path {checkpoint_path} does not exist. Initializing from scratch.")
     return model

@@ -1,0 +1,715 @@
+{
+  "num_samples": 46,
+  "class_names": [
+    "Adenocarcinoma",
+    "Small Cell",
+    "Squamous"
+  ],
+  "mean_probability_per_class": {
+    "Adenocarcinoma": 0.37204315610553906,
+    "Small Cell": 0.3224477398654689,
+    "Squamous": 0.30550910856412805
+  },
+  "predicted_class_counts": {
+    "Adenocarcinoma": 35,
+    "Small Cell": 9,
+    "Squamous": 2
+  },
+  "predicted_class_fractions": {
+    "Adenocarcinoma": 0.7608695652173914,
+    "Small Cell": 0.1956521739130435,
+    "Squamous": 0.043478260869565216
+  },
+  "samples": [
+    {
+      "sample_index": 0,
+      "patient_id": "patient_009896",
+      "volume_id": "/home/data/TrainingData/patient_009896/patient_009896_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.40423616766929626,
+      "probabilities": {
+        "Adenocarcinoma": 0.40423616766929626,
+        "Small Cell": 0.2810414433479309,
+        "Squamous": 0.31472235918045044
+      }
+    },
+    {
+      "sample_index": 1,
+      "patient_id": "patient_089876",
+      "volume_id": "/home/data/TrainingData/patient_089876/patient_089876_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.36204013228416443,
+      "probabilities": {
+        "Adenocarcinoma": 0.36204013228416443,
+        "Small Cell": 0.33734720945358276,
+        "Squamous": 0.3006126284599304
+      }
+    },
+    {
+      "sample_index": 2,
+      "patient_id": "patient_062296",
+      "volume_id": "/home/data/TrainingData/patient_062296/patient_062296_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3751668930053711,
+      "probabilities": {
+        "Adenocarcinoma": 0.3751668930053711,
+        "Small Cell": 0.27603423595428467,
+        "Squamous": 0.3487989008426666
+      }
+    },
+    {
+      "sample_index": 3,
+      "patient_id": "patient_002874",
+      "volume_id": "/home/data/TrainingData/patient_002874/patient_002874_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.37914586067199707,
+      "probabilities": {
+        "Adenocarcinoma": 0.37914586067199707,
+        "Small Cell": 0.32209837436676025,
+        "Squamous": 0.29875579476356506
+      }
+    },
+    {
+      "sample_index": 4,
+      "patient_id": "patient_070625",
+      "volume_id": "/home/data/TrainingData/patient_070625/patient_070625_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.3433822691440582,
+      "probabilities": {
+        "Adenocarcinoma": 0.33848342299461365,
+        "Small Cell": 0.31813427805900574,
+        "Squamous": 0.3433822691440582
+      }
+    },
+    {
+      "sample_index": 5,
+      "patient_id": "patient_094171",
+      "volume_id": "/home/data/TrainingData/patient_094171/patient_094171_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.39790844917297363,
+      "probabilities": {
+        "Adenocarcinoma": 0.39790844917297363,
+        "Small Cell": 0.29218676686286926,
+        "Squamous": 0.3099047541618347
+      }
+    },
+    {
+      "sample_index": 6,
+      "patient_id": "patient_092591",
+      "volume_id": "/home/data/TrainingData/patient_092591/patient_092591_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.39926034212112427,
+      "probabilities": {
+        "Adenocarcinoma": 0.39926034212112427,
+        "Small Cell": 0.27294883131980896,
+        "Squamous": 0.3277908265590668
+      }
+    },
+    {
+      "sample_index": 7,
+      "patient_id": "patient_065744",
+      "volume_id": "/home/data/TrainingData/patient_065744/patient_065744_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.3516143560409546,
+      "probabilities": {
+        "Adenocarcinoma": 0.34974101185798645,
+        "Small Cell": 0.3516143560409546,
+        "Squamous": 0.29864466190338135
+      }
+    },
+    {
+      "sample_index": 8,
+      "patient_id": "patient_011180",
+      "volume_id": "/home/data/TrainingData/patient_011180/patient_011180_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.36676740646362305,
+      "probabilities": {
+        "Adenocarcinoma": 0.3620606064796448,
+        "Small Cell": 0.36676740646362305,
+        "Squamous": 0.27117201685905457
+      }
+    },
+    {
+      "sample_index": 9,
+      "patient_id": "patient_061937",
+      "volume_id": "/home/data/TrainingData/patient_061937/patient_061937_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.3531588912010193,
+      "probabilities": {
+        "Adenocarcinoma": 0.35244667530059814,
+        "Small Cell": 0.3531588912010193,
+        "Squamous": 0.29439443349838257
+      }
+    },
+    {
+      "sample_index": 10,
+      "patient_id": "patient_079524",
+      "volume_id": "/home/data/TrainingData/patient_079524/patient_079524_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 2,
+      "pred_name": "Squamous",
+      "confidence": 0.3429233729839325,
+      "probabilities": {
+        "Adenocarcinoma": 0.3289470076560974,
+        "Small Cell": 0.3281296491622925,
+        "Squamous": 0.3429233729839325
+      }
+    },
+    {
+      "sample_index": 11,
+      "patient_id": "patient_084637",
+      "volume_id": "/home/data/TrainingData/patient_084637/patient_084637_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.37666645646095276,
+      "probabilities": {
+        "Adenocarcinoma": 0.37666645646095276,
+        "Small Cell": 0.33395710587501526,
+        "Squamous": 0.28937646746635437
+      }
+    },
+    {
+      "sample_index": 12,
+      "patient_id": "patient_084189",
+      "volume_id": "/home/data/TrainingData/patient_084189/patient_084189_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.37213456630706787,
+      "probabilities": {
+        "Adenocarcinoma": 0.37213456630706787,
+        "Small Cell": 0.3039045035839081,
+        "Squamous": 0.32396095991134644
+      }
+    },
+    {
+      "sample_index": 13,
+      "patient_id": "patient_074195",
+      "volume_id": "/home/data/TrainingData/patient_074195/patient_074195_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3830867409706116,
+      "probabilities": {
+        "Adenocarcinoma": 0.3830867409706116,
+        "Small Cell": 0.3097957968711853,
+        "Squamous": 0.3071174919605255
+      }
+    },
+    {
+      "sample_index": 14,
+      "patient_id": "patient_065740",
+      "volume_id": "/home/data/TrainingData/patient_065740/patient_065740_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3679973781108856,
+      "probabilities": {
+        "Adenocarcinoma": 0.3679973781108856,
+        "Small Cell": 0.35808002948760986,
+        "Squamous": 0.27392256259918213
+      }
+    },
+    {
+      "sample_index": 15,
+      "patient_id": "patient_086648",
+      "volume_id": "/home/data/TrainingData/patient_086648/patient_086648_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3792736530303955,
+      "probabilities": {
+        "Adenocarcinoma": 0.3792736530303955,
+        "Small Cell": 0.30695363879203796,
+        "Squamous": 0.31377267837524414
+      }
+    },
+    {
+      "sample_index": 16,
+      "patient_id": "patient_031225",
+      "volume_id": "/home/data/TrainingData/patient_031225/patient_031225_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.4045405983924866,
+      "probabilities": {
+        "Adenocarcinoma": 0.4045405983924866,
+        "Small Cell": 0.30275285243988037,
+        "Squamous": 0.29270657896995544
+      }
+    },
+    {
+      "sample_index": 17,
+      "patient_id": "patient_096202",
+      "volume_id": "/home/data/TrainingData/patient_096202/patient_096202_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.34955906867980957,
+      "probabilities": {
+        "Adenocarcinoma": 0.34955906867980957,
+        "Small Cell": 0.31894931197166443,
+        "Squamous": 0.3314916491508484
+      }
+    },
+    {
+      "sample_index": 18,
+      "patient_id": "patient_026988",
+      "volume_id": "/home/data/TrainingData/patient_026988/patient_026988_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3838249444961548,
+      "probabilities": {
+        "Adenocarcinoma": 0.3838249444961548,
+        "Small Cell": 0.3212272822856903,
+        "Squamous": 0.2949477434158325
+      }
+    },
+    {
+      "sample_index": 19,
+      "patient_id": "patient_095085",
+      "volume_id": "/home/data/TrainingData/patient_095085/patient_095085_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3517999053001404,
+      "probabilities": {
+        "Adenocarcinoma": 0.3517999053001404,
+        "Small Cell": 0.3383723199367523,
+        "Squamous": 0.3098278045654297
+      }
+    },
+    {
+      "sample_index": 20,
+      "patient_id": "patient_056956",
+      "volume_id": "/home/data/TrainingData/patient_056956/patient_056956_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.4137793183326721,
+      "probabilities": {
+        "Adenocarcinoma": 0.4137793183326721,
+        "Small Cell": 0.29594436287879944,
+        "Squamous": 0.29027634859085083
+      }
+    },
+    {
+      "sample_index": 21,
+      "patient_id": "patient_054454",
+      "volume_id": "/home/data/TrainingData/patient_054454/patient_054454_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3751223683357239,
+      "probabilities": {
+        "Adenocarcinoma": 0.3751223683357239,
+        "Small Cell": 0.3708997666835785,
+        "Squamous": 0.25397789478302
+      }
+    },
+    {
+      "sample_index": 22,
+      "patient_id": "patient_055122",
+      "volume_id": "/home/data/TrainingData/patient_055122/patient_055122_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.3539968430995941,
+      "probabilities": {
+        "Adenocarcinoma": 0.33809295296669006,
+        "Small Cell": 0.3539968430995941,
+        "Squamous": 0.30791017413139343
+      }
+    },
+    {
+      "sample_index": 23,
+      "patient_id": "patient_080332",
+      "volume_id": "/home/data/TrainingData/patient_080332/patient_080332_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3824456036090851,
+      "probabilities": {
+        "Adenocarcinoma": 0.3824456036090851,
+        "Small Cell": 0.2982937693595886,
+        "Squamous": 0.3192605972290039
+      }
+    },
+    {
+      "sample_index": 24,
+      "patient_id": "patient_004891",
+      "volume_id": "/home/data/TrainingData/patient_004891/patient_004891_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.39536213874816895,
+      "probabilities": {
+        "Adenocarcinoma": 0.39536213874816895,
+        "Small Cell": 0.3378197252750397,
+        "Squamous": 0.26681816577911377
+      }
+    },
+    {
+      "sample_index": 25,
+      "patient_id": "patient_014228",
+      "volume_id": "/home/data/TrainingData/patient_014228/patient_014228_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.37741178274154663,
+      "probabilities": {
+        "Adenocarcinoma": 0.37741178274154663,
+        "Small Cell": 0.33772820234298706,
+        "Squamous": 0.28485995531082153
+      }
+    },
+    {
+      "sample_index": 26,
+      "patient_id": "patient_095240",
+      "volume_id": "/home/data/TrainingData/patient_095240/patient_095240_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3702603578567505,
+      "probabilities": {
+        "Adenocarcinoma": 0.3702603578567505,
+        "Small Cell": 0.3319530785083771,
+        "Squamous": 0.29778653383255005
+      }
+    },
+    {
+      "sample_index": 27,
+      "patient_id": "patient_022777",
+      "volume_id": "/home/data/TrainingData/patient_022777/patient_022777_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3589330315589905,
+      "probabilities": {
+        "Adenocarcinoma": 0.3589330315589905,
+        "Small Cell": 0.32132914662361145,
+        "Squamous": 0.31973788142204285
+      }
+    },
+    {
+      "sample_index": 28,
+      "patient_id": "patient_037310",
+      "volume_id": "/home/data/TrainingData/patient_037310/patient_037310_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.35404494404792786,
+      "probabilities": {
+        "Adenocarcinoma": 0.34070485830307007,
+        "Small Cell": 0.35404494404792786,
+        "Squamous": 0.3052501976490021
+      }
+    },
+    {
+      "sample_index": 29,
+      "patient_id": "patient_077969",
+      "volume_id": "/home/data/TrainingData/patient_077969/patient_077969_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.38206788897514343,
+      "probabilities": {
+        "Adenocarcinoma": 0.38206788897514343,
+        "Small Cell": 0.27171626687049866,
+        "Squamous": 0.34621578454971313
+      }
+    },
+    {
+      "sample_index": 30,
+      "patient_id": "patient_095578",
+      "volume_id": "/home/data/TrainingData/patient_095578/patient_095578_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.37793299555778503,
+      "probabilities": {
+        "Adenocarcinoma": 0.37793299555778503,
+        "Small Cell": 0.31262677907943726,
+        "Squamous": 0.3094402551651001
+      }
+    },
+    {
+      "sample_index": 31,
+      "patient_id": "patient_095204",
+      "volume_id": "/home/data/TrainingData/patient_095204/patient_095204_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.377076655626297,
+      "probabilities": {
+        "Adenocarcinoma": 0.377076655626297,
+        "Small Cell": 0.34433919191360474,
+        "Squamous": 0.2785841226577759
+      }
+    },
+    {
+      "sample_index": 32,
+      "patient_id": "patient_095688",
+      "volume_id": "/home/data/TrainingData/patient_095688/patient_095688_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.35640642046928406,
+      "probabilities": {
+        "Adenocarcinoma": 0.35640642046928406,
+        "Small Cell": 0.32591962814331055,
+        "Squamous": 0.3176739811897278
+      }
+    },
+    {
+      "sample_index": 33,
+      "patient_id": "patient_041559",
+      "volume_id": "/home/data/TrainingData/patient_041559/patient_041559_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.367422491312027,
+      "probabilities": {
+        "Adenocarcinoma": 0.367422491312027,
+        "Small Cell": 0.3397141098976135,
+        "Squamous": 0.2928633987903595
+      }
+    },
+    {
+      "sample_index": 34,
+      "patient_id": "patient_036837",
+      "volume_id": "/home/data/TrainingData/patient_036837/patient_036837_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.3561832010746002,
+      "probabilities": {
+        "Adenocarcinoma": 0.32633909583091736,
+        "Small Cell": 0.3561832010746002,
+        "Squamous": 0.3174777328968048
+      }
+    },
+    {
+      "sample_index": 35,
+      "patient_id": "patient_090921",
+      "volume_id": "/home/data/TrainingData/patient_090921/patient_090921_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.3594096601009369,
+      "probabilities": {
+        "Adenocarcinoma": 0.3463277816772461,
+        "Small Cell": 0.3594096601009369,
+        "Squamous": 0.2942625880241394
+      }
+    },
+    {
+      "sample_index": 36,
+      "patient_id": "patient_090058",
+      "volume_id": "/home/data/TrainingData/patient_090058/patient_090058_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.4028775691986084,
+      "probabilities": {
+        "Adenocarcinoma": 0.4028775691986084,
+        "Small Cell": 0.2801607549190521,
+        "Squamous": 0.31696170568466187
+      }
+    },
+    {
+      "sample_index": 37,
+      "patient_id": "patient_025933",
+      "volume_id": "/home/data/TrainingData/patient_025933/patient_025933_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3925430476665497,
+      "probabilities": {
+        "Adenocarcinoma": 0.3925430476665497,
+        "Small Cell": 0.31958410143852234,
+        "Squamous": 0.287872850894928
+      }
+    },
+    {
+      "sample_index": 38,
+      "patient_id": "patient_013859",
+      "volume_id": "/home/data/TrainingData/patient_013859/patient_013859_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.4096137285232544,
+      "probabilities": {
+        "Adenocarcinoma": 0.4096137285232544,
+        "Small Cell": 0.29670536518096924,
+        "Squamous": 0.293680876493454
+      }
+    },
+    {
+      "sample_index": 39,
+      "patient_id": "patient_099295",
+      "volume_id": "/home/data/TrainingData/patient_099295/patient_099295_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.39709705114364624,
+      "probabilities": {
+        "Adenocarcinoma": 0.39709705114364624,
+        "Small Cell": 0.31496062874794006,
+        "Squamous": 0.2879423201084137
+      }
+    },
+    {
+      "sample_index": 40,
+      "patient_id": "patient_030571",
+      "volume_id": "/home/data/TrainingData/patient_030571/patient_030571_input.nii.gz",
+      "true_label": 1,
+      "true_name": "Small Cell",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.40801602602005005,
+      "probabilities": {
+        "Adenocarcinoma": 0.40801602602005005,
+        "Small Cell": 0.2764497399330139,
+        "Squamous": 0.3155342638492584
+      }
+    },
+    {
+      "sample_index": 41,
+      "patient_id": "patient_044352",
+      "volume_id": "/home/data/TrainingData/patient_044352/patient_044352_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.38439950346946716,
+      "probabilities": {
+        "Adenocarcinoma": 0.38439950346946716,
+        "Small Cell": 0.2915535271167755,
+        "Squamous": 0.3240469694137573
+      }
+    },
+    {
+      "sample_index": 42,
+      "patient_id": "patient_064426",
+      "volume_id": "/home/data/TrainingData/patient_064426/patient_064426_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.381552129983902,
+      "probabilities": {
+        "Adenocarcinoma": 0.3275461196899414,
+        "Small Cell": 0.381552129983902,
+        "Squamous": 0.290901780128479
+      }
+    },
+    {
+      "sample_index": 43,
+      "patient_id": "patient_019222",
+      "volume_id": "/home/data/TrainingData/patient_019222/patient_019222_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3898060619831085,
+      "probabilities": {
+        "Adenocarcinoma": 0.3898060619831085,
+        "Small Cell": 0.2899588942527771,
+        "Squamous": 0.3202349841594696
+      }
+    },
+    {
+      "sample_index": 44,
+      "patient_id": "patient_029476",
+      "volume_id": "/home/data/TrainingData/patient_029476/patient_029476_input.nii.gz",
+      "true_label": 0,
+      "true_name": "Adenocarcinoma",
+      "pred_label": 1,
+      "pred_name": "Small Cell",
+      "confidence": 0.3471067249774933,
+      "probabilities": {
+        "Adenocarcinoma": 0.33572882413864136,
+        "Small Cell": 0.3471067249774933,
+        "Squamous": 0.31716445088386536
+      }
+    },
+    {
+      "sample_index": 45,
+      "patient_id": "patient_077553",
+      "volume_id": "/home/data/TrainingData/patient_077553/patient_077553_input.nii.gz",
+      "true_label": 2,
+      "true_name": "Squamous",
+      "pred_label": 0,
+      "pred_name": "Adenocarcinoma",
+      "confidence": 0.3623516261577606,
+      "probabilities": {
+        "Adenocarcinoma": 0.3623516261577606,
+        "Small Cell": 0.3291912078857422,
+        "Squamous": 0.30845722556114197
+      }
+    }
+  ]
+}
