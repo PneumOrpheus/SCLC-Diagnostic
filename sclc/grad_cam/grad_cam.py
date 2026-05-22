@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -17,21 +16,11 @@ from sclc.data.transforms import get_val_transforms_3d
 from sclc.grad_cam.colorize import colorize_heatmap, colorize_overlay, save_rgb_nifti
 from sclc.models import get_sclc_model
 
-
 CLASS_NAMES = ["Adenocarcinoma", "Small Cell", "Squamous"]
 
-# Default target layers must output a spatial tensor [B, C, D, H, W].
-# MONAI's GradCAM registers forward/backward hooks here and does the
-# weighted sum + upsample + ReLU + normalize for us.
-#
-# - swin_unetr: layers4[0] is the last BasicLayer of the Swin encoder; its
-#   forward returns a single spatial tensor (not a list like swinViT does).
-# - resnet/densenet: the last conv stage is the canonical Grad-CAM target.
-# - vit / models_genesis: not supported here. ViT's final block outputs a
-#   token sequence [B, N, C] (would require a reshape wrapper), and
-#   ModelsGenesis' down_tr512 returns a tuple which MONAI's hook can't
-#   consume directly. Point at a different layer via --target-layer or
-#   add a wrapper module if you need them.
+# Target layers must output a spatial tensor [B, C, D, H, W] — MONAI's GradCAM
+# hooks fail on token-sequence outputs (ViT) and tuple outputs (ModelsGenesis).
+# swinViT's `layers4[0]` is used because swinViT itself returns a list.
 DEFAULT_TARGET_LAYER = {
 	"swin_unetr": "swin_unetr.swinViT.layers4.0",
 	"resnet50": "resnet.layer4",
@@ -52,7 +41,6 @@ def _strip_nii_suffix(path: str) -> str:
 
 
 def _unwrap_state_dict(ckpt: Any) -> Dict[str, torch.Tensor]:
-	"""Extract a model state_dict from common checkpoint wrappers."""
 	state = ckpt
 	if isinstance(state, dict):
 		for key in ("state_dict", "model_state_dict", "model"):
@@ -80,7 +68,6 @@ def _save_nifti(volume: np.ndarray, out_path: str) -> None:
 
 
 def _patient_name_from_image_path(image_path: str) -> str:
-	"""Return patient folder name from an input image path."""
 	parent_name = Path(image_path).resolve().parent.name.strip()
 	return parent_name if parent_name else "unknown_patient"
 
@@ -197,10 +184,7 @@ def use_grad_cam(
 
 	target = target_layer or DEFAULT_TARGET_LAYER[model_type]
 
-	# Grad-CAM requires gradients even though the model is in eval() mode.
-	# MONAI's GradCAM handles hook registration, backward pass, spatial
-	# reshape, ReLU, upsample to input resolution, and per-sample 0-1
-	# normalization internally — we only need to call it.
+	# Grad-CAM needs gradients even though the model is in eval() mode.
 	with torch.enable_grad():
 		with torch.no_grad():
 			logits = model(input_tensor)

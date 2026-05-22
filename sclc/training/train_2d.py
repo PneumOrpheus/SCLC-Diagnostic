@@ -1,12 +1,8 @@
 """Training loop for the 2D per-slice pipeline.
 
-Key differences from the 3D/2.5D ``training/train.py`` loop:
-
-- No segmentation auxiliary loss (the 2D baseline is classification-only).
-- Each training sample is one axial slice; each volume contributes many slices.
-- Validation aggregates slice-level softmax probabilities per volume (mean),
-  then argmax, so the reported metrics are volume/patient-level — directly
-  comparable to the 3D and 2.5D pipelines.
+One sample per axial slice. Validation aggregates per-slice softmax to the
+volume (mean) and then to the patient level, so headline metrics stay
+directly comparable to the 3D and MIL pipelines.
 """
 import time
 import warnings
@@ -16,19 +12,18 @@ import numpy as np
 import torch
 import torch.nn as nn
 from monai.losses import DiceLoss
-
 from sklearn.metrics import balanced_accuracy_score, f1_score
 
-warnings.filterwarnings("ignore", message="y_pred contains classes not in y_true", category=UserWarning)
-
+from sclc.training.bbox_utils import bbox_loss_2d
 from sclc.training.bootstrap import bootstrap_ci, per_class_f1_ci
 from sclc.training.train_3d import (
-    AverageMeter,
     CLASS_NAMES,
     NUM_CLASSES,
+    AverageMeter,
     _compute_classification_metrics,
 )
-from sclc.training.bbox_utils import bbox_loss_2d
+
+warnings.filterwarnings("ignore", message="y_pred contains classes not in y_true", category=UserWarning)
 
 
 def _macro_f1(yt, yp):
@@ -40,10 +35,8 @@ def _bacc(yt, yp):
 
 
 def _get_class_weight_tensor(loader, device, logger=None) -> Optional[torch.Tensor]:
-    """Build inverse-frequency class weights from loader.dataset.data.
-
-    We normalize weights to mean=1 and clip the extremes so weighting stays
-    stable even on small classes.
+    """Inverse-frequency class weights from `loader.dataset.data`, normalised
+    to mean=1 and clipped so small classes don't blow the weighting up.
     """
     cached = getattr(loader, "_class_weight_tensor", None)
     if cached is not None:
@@ -87,18 +80,9 @@ def _get_class_weight_tensor(loader, device, logger=None) -> Optional[torch.Tens
 
 
 def simple_collate_fn_2d(batch):
-    """Collate per-slice samples.
-
-    Returns
-    -------
-    images   : (B, 1, H, W) float tensor
-    labels   : (B,) long tensor
-    masks    : (B, 1, H, W) float tensor or None
-    has_mask : (B,) bool tensor or None
-    bboxes   : (B, 4) float tensor or None
-    has_bbox : (B,) bool tensor or None
-    meta     : list[dict] with ``volume_id``, ``patient_id`` (if present) and
-               ``slice_idx`` for patient-level aggregation in validate.
+    """Collate per-slice samples into (images, labels, masks?, has_mask?,
+    bboxes?, has_bbox?, meta). `meta` carries `volume_id`/`patient_id`/
+    `slice_idx` for the volume->patient rollup in validate.
     """
     images = torch.stack([item["image"] for item in batch], dim=0)
     labels = torch.tensor([int(item["scan_label"]) for item in batch], dtype=torch.long)
@@ -148,14 +132,9 @@ def simple_collate_fn_2d(batch):
 
 
 def _mixup_batch(x: torch.Tensor, y: torch.Tensor, alpha: float):
-    """Sample lam ~ Beta(alpha, alpha), mix x, return (x_mix, y_a, y_b, lam).
-
-    We flip ``lam = max(lam, 1-lam)`` so the primary target y_a is always the
-    larger-weighted sample — keeps on-the-fly train-metric tracking against
-    y_a interpretable as "how well we predict the dominant label of the mix".
-    alpha<=0 returns the identity (no mixing) so the training loop can stay
-    uniform whether MixUp is on or off. For tiny batches resample the
-    permutation until it has no fixed points; see flaws.md 1.4.
+    """Beta mixup with `lam = max(lam, 1-lam)` so `y_a` is the dominant
+    target. Resamples until the permutation is a derangement, since
+    `torch.randperm(2)` returns identity 50% of the time.
     """
     if alpha <= 0.0 or x.size(0) < 2:
         return x, y, y, 1.0
@@ -186,7 +165,7 @@ def train_epoch_2d(
     use_det_seg: bool = False,
     seg_loss_weight: float = 0.1,
     bbox_loss_weight: float = 0.1,
-    **_unused,  # keep a shared signature with train_epoch so run_training_phase can swap them
+    **_unused,
 ):
     model.train()
     start_time = time.time()
@@ -343,10 +322,8 @@ def validate_epoch_2d(
     compute_ci: bool = True,
     n_boot: int = 1000,
 ):
-    """Validate at volume level: mean softmax over a volume's slices, argmax.
-
-    Also reports slice-level metrics for sanity. The volume-level metrics are
-    the ones that matter — that's the comparable number vs. 3D/2.5D.
+    """Validate at volume level (mean softmax over a volume's slices, argmax)
+    and roll up to patient level for the headline metric.
     """
     model.eval()
     run_loss = AverageMeter()
@@ -355,7 +332,6 @@ def validate_epoch_2d(
     slice_preds: List[int] = []
     slice_targets: List[int] = []
 
-    # per-volume accumulation
     volume_prob_sum: Dict[str, np.ndarray] = {}
     volume_slice_count: Dict[str, int] = {}
     volume_label: Dict[str, int] = {}
@@ -400,13 +376,8 @@ def validate_epoch_2d(
         volume_preds.append(int(mean_p.argmax()))
         volume_targets.append(volume_label[vid])
 
-    # Patient-level aggregation: equal weight per volume (mean of each volume's
-    # mean-softmax), then argmax. For datasets where one patient == one volume
-    # (e.g. BigLunge) this reduces to the volume-level numbers. For Lung-PET-CT-Dx
-    # (multi-scan patients) it's the one clinically meaningful number.
-    # Volumes with an unknown patient_id get their own bucket keyed on volume_id
-    # so they contribute independently rather than collapsing into one fake
-    # "None" patient.
+    # Equal weight per volume in the patient rollup. Volumes missing patient_id
+    # get a synthetic key so they don't merge into one fake "None" patient.
     patient_prob_sum: Dict[Any, np.ndarray] = {}
     patient_volume_count: Dict[Any, int] = {}
     patient_slice_count: Dict[Any, int] = {}
@@ -473,7 +444,6 @@ def validate_epoch_2d(
             f"f1={metrics['per_class_f1'][c]:.4f}"
         )
 
-    # Confusion matrices (volume-level and patient-level)
     def _log_conf_matrix(title: str, matrix) -> None:
         print(f"\n[2D] {title}:")
         logger.info(f"\n[2D] {title}:")
@@ -517,9 +487,8 @@ def validate_epoch_2d(
         },
     }
 
-    # Stratified bootstrap CIs on patient-level metrics. n_patients=52 on
-    # Lung-PET-CT-Dx DAPT val → per-class F1 swings ~0.1 per single-patient
-    # flip, so the CI is the only honest thing to report.
+    # On small val sets a single-patient flip swings per-class F1 by ~0.1,
+    # so the bootstrap CI is the only defensible headline.
     if compute_ci and len(patient_targets) > 0:
         _, mf1_lo, mf1_hi = bootstrap_ci(
             patient_targets, patient_preds, _macro_f1, n_boot=n_boot, rng_seed=0
@@ -572,10 +541,8 @@ def validate_epoch_2d(
         mean_probs_dict = {display_names[c]: float(class_prob_sums[c] / n) for c in range(num_classes)}
         pred_counts_dict = {display_names[c]: int(pred_hist[c]) for c in range(num_classes)}
         pred_fracs_dict = {display_names[c]: float(pred_hist[c] / n) for c in range(num_classes)}
-        # Patient-level rollup for the inference JSON. Keys beginning with
-        # "__vol__:" are synthetic fallbacks for volumes whose patient_id was
-        # missing — we surface them as patient_id=None in the payload so
-        # downstream analysis can tell them apart from real patient groupings.
+        # Volumes whose patient_id was missing get a `__vol__:` synthetic key;
+        # surface them as patient_id=None so consumers can spot them.
         patient_samples = []
         pat_class_prob_sums = np.zeros(num_classes, dtype=np.float64)
         pat_pred_hist = np.zeros(num_classes, dtype=np.int64)

@@ -1,42 +1,35 @@
+import json
 import os
-import pandas as pd
-import numpy as np
-import torch
-import xml.etree.ElementTree as ET
+import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+import nibabel as nib
+import pandas as pd
 from monai.data import PersistentDataset
-from monai.transforms import Compose
+from sklearn.model_selection import StratifiedKFold, train_test_split
 from tqdm import tqdm
-import torchvision
 
+from sclc.data.exclusions import EMPTY_TUMOR_MASK, TRUNCATED_LUNG_MASK
 from sclc.data.transforms import (
     get_train_transforms_3d,
     get_val_transforms_3d,
 )
-from sclc.data.exclusions import TRUNCATED_LUNG_MASK, EMPTY_TUMOR_MASK
 
-from sklearn.model_selection import train_test_split
-
-# A: Adenocarcinoma (0), B: Small Cell Carcinoma (1), G: Squamous Cell Carcinoma (2)
+# Lung-PET-CT-Dx folder-name letter suffix -> class index.
 CLASS_MAP = {"A": 0, "B": 1, "G": 2}
 CLASS_NAMES = ["Adenocarcinoma", "Small Cell Carcinoma", "Squamous Cell Carcinoma"]
 
+# BigLunge `MorphologicalGroup` value -> class index.
 BIGLUNGE_CLASS_MAP = {
-    # English labels used by /home/data/TrainingData/patients_parameters.csv
     "Adenocarcinoma": 0,
     "Small cell carcinoma": 1,
     "Squamous cell carcinoma": 2,
 }
 
 def load_patient_labels(csv_path: str) -> Dict[str, int]:
-    """Load patient ID -> class label mapping from CSV (for BigLunge).
-
-    Patient IDs are kept as strings (e.g. ``patient_087599``) to match the
-    folder naming in /home/data/TrainingData. Rows whose MorphologicalGroup is
-    not one of the three target classes (e.g. ``Non-small cell carcinoma``)
-    are skipped.
+    """Load patient ID -> class label mapping from BigLunge CSV.
+    Rows whose `MorphologicalGroup` is outside the 3 target classes are skipped.
     """
     df = pd.read_csv(csv_path)
     labels: Dict[str, int] = {}
@@ -56,16 +49,15 @@ def get_lung_pet_ct_dx_data_list(
     seed: int = 42,
     testing: bool = False,
     max_scans_per_patient: int = 2,
-    cv_fold: int = -1,
+    *,
+    cv_fold: int,
     cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Build {split: data_list} dict with patient-level splitting for Lung-PET-CT-Dx.
 
-    When ``cv_fold >= 0`` uses stratified k-fold CV (StratifiedKFold with
-    ``n_splits=cv_folds``): fold ``cv_fold`` becomes the test set and the
-    remaining folds are further split into train/val with an inner stratified
-    split that keeps val_frac of the total as validation.  Mirrors the
-    behaviour of ``get_biglunge_data_list``.
+    `cv_fold >= 0` selects stratified k-fold CV; `cv_fold == -1` uses a single
+    70/15/15 split. Keyword-only to force callers to opt in — defaulting to
+    `-1` once silently masked the CV path when a caller forgot the kwarg.
     """
     if not os.path.isdir(data_path):
         raise ValueError(f"Data path '{data_path}' does not exist or is not a directory.")
@@ -78,17 +70,13 @@ def get_lung_pet_ct_dx_data_list(
         raise ValueError(f"No valid patient folders found in '{data_path}'.")
 
     all_patients = sorted([p.name for p in patient_folders])
-    
-    # Filter patients by valid class mapping and associate their labels
+
     valid_patients = []
     patient_labels = []
-    
+
     for pid in all_patients:
-        # Strict match: exactly one CLASS_MAP key must match. Multiple matches
-        # mean the substring rule is ambiguous for this folder name (e.g. a
-        # hypothetical 'Lung_Dx-GA-0001' would hit both -G and -A); first-match
-        # wins silently in dict iteration order, which is a sleeper bug. See
-        # flaws.md 3.1.
+        # Folders like 'Lung_Dx-GA-0001' hit two CLASS_MAP keys — fail loud
+        # rather than letting dict iteration pick first-match silently.
         matched = [val for key, val in CLASS_MAP.items() if f"-{key}" in pid]
         if len(matched) == 1:
             valid_patients.append(pid)
@@ -99,16 +87,14 @@ def get_lung_pet_ct_dx_data_list(
                 f"hits {len(matched)} keys ({matched}). Refusing to silently pick one."
             )
 
-    from sklearn.model_selection import StratifiedKFold
-
     if cv_fold >= 0:
-        # Stratified k-fold: fold cv_fold → test; rest → inner train/val split.
         skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
         all_folds = list(skf.split(valid_patients, patient_labels))
         train_val_idx, test_idx = all_folds[cv_fold]
         test_ids = [valid_patients[i] for i in test_idx]
         train_val_patients = [valid_patients[i] for i in train_val_idx]
         train_val_labels = [patient_labels[i] for i in train_val_idx]
+        # Rescale val_frac so the val partition stays ~val_frac of the full set.
         val_frac_inner = min(val_frac / (1.0 - 1.0 / cv_folds), 0.49)
         train_ids, val_ids, _, _ = train_test_split(
             train_val_patients, train_val_labels,
@@ -149,35 +135,26 @@ def get_lung_pet_ct_dx_data_list(
         for pid in selected:
             matched = [val for key, val in CLASS_MAP.items() if f"-{key}" in pid]
             if len(matched) != 1:
-                # Unreachable: ambiguity is caught upstream when valid_patients
-                # is built. Fail loud rather than silently dropping.
                 raise ValueError(
                     f"[lung_pet_ct_dx] expected exactly one CLASS_MAP match for '{pid}', got {matched}."
                 )
             label = matched[0]
-                
+
             patient_dir = data_root / pid
             image_files = [
                 f for f in patient_dir.iterdir()
                 if f.is_file() and f.name.endswith("_image.nii.gz")
             ]
-            # Sort: thinnest Z-spacing first (so multi-reconstruction patients
-            # prefer the 1mm version over the 5mm one when capped). Falls back
-            # to filename for ties or if the header can't be read. The
-            # ``data_pipeline/upgrade_thin_reconstructions.py`` step adds a
-            # second NIfTI per upgraded patient; this sort is what lets the
-            # loader prefer it without a code change there.
+            # Sort thinnest-Z first so multi-reconstruction patients prefer
+            # the 1mm version over the 5mm one when capped by max_scans_per_patient.
             def _z_then_name(p):
                 try:
-                    import nibabel as _nib
-                    return (float(_nib.load(str(p)).header.get_zooms()[2]), p.name)
+                    return (float(nib.load(str(p)).header.get_zooms()[2]), p.name)
                 except Exception:
                     return (float("inf"), p.name)
             images = sorted(image_files, key=_z_then_name)
-            # Flatten adeno dominance (~8 scans/patient) so WeightedRandomSampler
-            # doesn't repeat-sample the same SCLC volumes dozens of times per epoch.
-            # Deterministic: thinnest-Z first, take first N. SCLC (class 1)
-            # is exempt — it's too rare to cap.
+            # Cap adeno (~8 scans/patient) so WeightedRandomSampler doesn't
+            # over-repeat the rare SCLC volumes. SCLC (class 1) stays uncapped.
             if max_scans_per_patient is not None and max_scans_per_patient > 0 and label != 1:
                 images = images[:max_scans_per_patient]
 
@@ -185,22 +162,15 @@ def get_lung_pet_ct_dx_data_list(
                 entry: Dict[str, Any] = {
                     "image": str(img_path),
                     "scan_label": label,
-                    # Patient identity is the parent-folder name. Carrying it in
-                    # every entry lets the 3D validate_epoch aggregate
-                    # multi-scan patients to a single patient-level prediction
-                    # (matches what 2D and MIL do). The 2D builder overwrites
-                    # this downstream with the same value, so adding it here is
-                    # idempotent for the 2D path.
                     "patient_id": pid,
                 }
 
                 series_uid = img_path.name.replace("_image.nii.gz", "")
-                
-                # Check for mask in the same clean folder
+
                 mask_path = patient_dir / f"{series_uid}_mask.nii.gz"
                 if mask_path.exists():
                     entry["mask"] = str(mask_path)
-                        
+
                 data_list.append(entry)
                 if testing and len(data_list) >= 16:
                     break
@@ -227,15 +197,14 @@ def get_biglunge_data_list(
     test_frac: float = 0.15,
     seed: int = 42,
     testing: bool = False,
-    cv_fold: int = -1,
+    *,
+    cv_fold: int,
     cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Build {split: data_list} dict with patient-level splitting for BigLunge.
 
-    When ``cv_fold >= 0`` the split uses stratified k-fold CV (StratifiedKFold
-    with ``n_splits=cv_folds``): fold ``cv_fold`` becomes the test set and the
-    remaining folds are further split into train/val with an inner stratified
-    split that keeps val_frac of the total as validation.
+    `cv_fold >= 0` selects stratified k-fold CV; `cv_fold == -1` uses a single
+    70/15/15 split.
     """
     if not os.path.isdir(data_path):
         raise ValueError(f"Data path '{data_path}' does not exist or is not a directory.")
@@ -249,19 +218,11 @@ def get_biglunge_data_list(
         e.name for e in data_root.iterdir()
         if e.is_dir() and e.name in patient_labels
     )
-    # Drop patients whose lung mask is truncated — the 3D pipeline uses
-    # this list to bound a CropForegroundd, so a partial mask produces a
-    # wrongly-bounded volume. Same exclusion the MIL pipeline applies.
     excluded = [pid for pid in patient_folders if pid in TRUNCATED_LUNG_MASK]
     if excluded:
         print(f"[big_lunge] Excluding {len(excluded)} truncated-lung-mask patients: {excluded}")
         patient_folders = [pid for pid in patient_folders if pid not in TRUNCATED_LUNG_MASK]
 
-    # Drop patients whose tumor mask is empty / sub-threshold (largest CC
-    # below 50 voxels). The 2D pipeline silently drops these (no tumor
-    # slices found); the 3D pipeline silently falls back to volume-center
-    # crop. Both paths produce noise; honest fix is to exclude them up
-    # front. Source: results/output/multifocal_audit.csv.
     excluded_tumor = [pid for pid in patient_folders if pid in EMPTY_TUMOR_MASK]
     if excluded_tumor:
         print(f"[big_lunge] Excluding {len(excluded_tumor)} empty-tumor-mask patients: {excluded_tumor}")
@@ -277,18 +238,14 @@ def get_biglunge_data_list(
     
     patient_classes = [patient_labels[pid] for pid in patient_folders]
 
-    from sklearn.model_selection import train_test_split, StratifiedKFold
-
     if cv_fold >= 0:
-        # Stratified k-fold: fold cv_fold → test; rest → inner train/val split.
         skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
         all_folds = list(skf.split(patient_folders, patient_classes))
         train_val_idx, test_idx = all_folds[cv_fold]
         test_ids = [patient_folders[i] for i in test_idx]
         train_val_folders = [patient_folders[i] for i in train_val_idx]
         train_val_classes = [patient_classes[i] for i in train_val_idx]
-        # Scale val_frac to the train+val portion size so that the fraction of
-        # the TOTAL dataset used for validation stays roughly equal to val_frac.
+        # Rescale val_frac so the val partition stays ~val_frac of the full set.
         val_frac_inner = min(val_frac / (1.0 - 1.0 / cv_folds), 0.49)
         train_ids, val_ids, _, _ = train_test_split(
             train_val_folders, train_val_classes,
@@ -297,6 +254,7 @@ def get_biglunge_data_list(
         print(f"[big_lunge CV fold {cv_fold}/{cv_folds}] "
               f"train={len(train_ids)}, val={len(val_ids)}, test={len(test_ids)}")
     else:
+        print("Using random train/val/test split with fixed seed.")
         val_test_frac = val_frac + test_frac
         if val_test_frac > 0:
             train_ids, temp_ids, train_classes, temp_classes = train_test_split(
@@ -329,8 +287,7 @@ def get_biglunge_data_list(
             if not patient_dir.is_dir():
                 continue
             label = patient_labels[pid]
-            # New TrainingData layout: {pid}_input.nii.gz (CT) and
-            # {pid}_label_lungs.nii.gz (algorithmic lung-chamber mask).
+            # TrainingData layout: {pid}_input.nii.gz (CT) and {pid}_label_*.nii.gz.
             for nii in patient_dir.glob("*.nii*"):
                 if "_label_" in nii.name:
                     continue
@@ -342,14 +299,9 @@ def get_biglunge_data_list(
                 lung_mask_path = patient_dir / f"{pid}_label_lungs.nii.gz"
                 if lung_mask_path.exists():
                     entry["lung_mask"] = str(lung_mask_path)
-                # Algorithmic tumor segmentation. Most BigLunge patients
-                # (~80%, per scripts/audit_multifocal.py) are multifocal,
-                # so the 3D ExtractSubVolumed centers Z on the LARGEST
-                # connected component — same logic the 2D pipeline's
-                # CropAroundTumord uses. Note: we deliberately do NOT
-                # use this mask as a seg-aux loss target during fine-tune
-                # (auto-seg → seg-head distillation is circular); it's
-                # only consumed for spatial centering.
+                # Tumor mask is consumed only for spatial centering (largest CC
+                # picks the focal component in multifocal cases) — never as a
+                # seg-aux target, since that would be circular distillation.
                 tumor_mask_path = patient_dir / f"{pid}_label_tc.nii.gz"
                 if tumor_mask_path.exists():
                     entry["mask"] = str(tumor_mask_path)
@@ -387,16 +339,15 @@ def create_dataset(
     strong_augs: bool = False,
     clear_cache: bool = False,
     include_bbox: bool = False,
-    cv_fold: int = -1,
+    *,
+    cv_fold: int,
     cv_folds: int = 5,
     **kwargs: Any,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
-    """
-    Unified function to create train/val/test PersistentDatasets for SCLC.
-
-    Args:
-        dataset_type: "big_lunge" or "lung_pet_ct_dx"
-        ...
+    """Create train/val/test PersistentDatasets for `big_lunge` or
+    `lung_pet_ct_dx`. The cache layout is shared across CV folds (per-patient
+    preprocessing output is identical regardless of which fold a patient
+    lands in) — fold-specific bookkeeping lives in `*_fold{N}.json` sidecars.
     """
     if dataset_type == "big_lunge":
         all_splits = get_biglunge_data_list(
@@ -408,19 +359,12 @@ def create_dataset(
     elif dataset_type == "lung_pet_ct_dx":
         all_splits = get_lung_pet_ct_dx_data_list(
             data_path=data_path, val_frac=val_frac, test_frac=test_frac, seed=seed,
-            testing=testing
+            testing=testing, cv_fold=cv_fold, cv_folds=cv_folds,
         )
         cache_name = "monai_lung_pet_ct_clean"
     else:
         raise ValueError(f"Unknown dataset_type: {dataset_type}")
 
-    # Run-specific cache parent (the parameterized path that holds train/
-    # val/test subdirs for THIS img_size/depth_size combo). The path is
-    # SHARED across CV folds because a patient's deterministic preprocessing
-    # output is identical regardless of which fold they land in;
-    # PersistentDataset keys .pt files by content hash and dedupes
-    # automatically. Per-fold patient lists / metadata live in fold-tagged
-    # valid_data_fold{N}.json / meta_fold{N}.json files inside each split.
     if cache_dir is None:
         mode_key = "3d" if use_3d else "2d"
         test_suffix = "_testing" if testing else ""
@@ -430,25 +374,19 @@ def create_dataset(
         )
     else:
         run_cache_root = cache_dir
-    # Only wipe on the first fold of a CV run (or non-CV) — otherwise
-    # sequential fold runs would clobber each other's shared cache.
+    # Only wipe on fold 0 (or non-CV) — sequential folds share the cache.
     if clear_cache and cv_fold <= 0 and os.path.isdir(run_cache_root):
-        import shutil as _shutil
         print(f"[--clear-cache] Removing {run_cache_root}")
-        _shutil.rmtree(run_cache_root)
+        shutil.rmtree(run_cache_root)
 
     datasets = []
-
-    # Import nibabel here to safely read NIfTI headers without fully loading
-    import nibabel as nib
 
     for split in ("train", "val", "test"):
         data_list = all_splits[split]
 
         if use_3d:
-            # BigLunge ships per-patient algorithmic lung-chamber masks; use
-            # them to crop a generous lung-bbox so the limited spatial budget
-            # focuses on lung tissue and adjacent mediastinum.
+            # BigLunge ships per-patient lung-chamber masks; crop a lung bbox
+            # so the spatial budget focuses on lung + adjacent mediastinum.
             use_lung_crop = (dataset_type == "big_lunge")
 
             if split == "train":
@@ -466,7 +404,6 @@ def create_dataset(
                 )
 
 
-        # Per-split subdir inside the run cache root computed above.
         current_cache_dir = os.path.join(run_cache_root, split)
             
         os.makedirs(current_cache_dir, exist_ok=True)
@@ -475,23 +412,17 @@ def create_dataset(
         _fold_suffix = f"_fold{cv_fold}" if cv_fold >= 0 else ""
         valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}.json")
         meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}.json")
-        import json
 
-        # Cache key covers everything that can change the split or preprocessing shape.
-        # If any of these drift from what's on disk, the cache is rebuilt.
-        # Bump CACHE_SCHEMA_VERSION whenever the deterministic prefix of the
-        # 3D / 2.5D pipelines changes (Spacingd pixdim, intensity window,
-        # ExtractSubVolume centering rule, etc.) so existing on-disk caches
-        # are invalidated even if every other field above is unchanged.
-        CACHE_SCHEMA_VERSION = 3  # bumped: BigLunge tumor mask attached + ExtractSubVolumed largest-CC centering (2026-04-29)
+        # Bump CACHE_SCHEMA_VERSION whenever the deterministic preprocessing
+        # prefix changes (Spacingd pixdim, intensity window, centering rule).
+        CACHE_SCHEMA_VERSION = 3
         current_meta = {
             "schema_version": CACHE_SCHEMA_VERSION,
             "dataset_type": dataset_type,
             "data_list_len": len(data_list),
-            # data_list_keys catches schema drift in the entry dict (e.g.
-            # adding ``patient_id`` for patient-level validate aggregation).
-            # Without this the cache silently reuses stale entries that lack
-            # the new key and validate_epoch fails to find it at runtime.
+            # data_list_keys catches schema drift in entry dicts (e.g. adding
+            # `patient_id` for patient-level aggregation) that the schema
+            # version doesn't otherwise capture.
             "data_list_keys": sorted(data_list[0].keys()) if data_list else [],
             "testing": bool(testing),
             "val_frac": float(val_frac),
@@ -545,7 +476,6 @@ def create_dataset(
             with open(meta_file, "w") as f:
                 json.dump(current_meta, f, indent=2)
 
-            # Recreate dataset using only the valid subset
             ds = PersistentDataset(data=valid_data, transform=transforms, cache_dir=current_cache_dir)
 
         datasets.append(ds)

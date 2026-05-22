@@ -1,24 +1,25 @@
-"""2D per-slice pipeline.
+"""2D per-slice pipeline: one training sample per tumor-bearing axial slice.
 
-For every volume with a tumor mask, we scan the mask once to enumerate axial
-slices that contain tumor. Each such slice becomes a training sample. This
-yields thousands of samples from hundreds of volumes — the 2D baseline most
-2D medical-imaging papers use.
-
-Shared utilities with the 3D/2.5D data builders live in ``data/data_loader.py``
-(class maps, ``load_patient_labels``, patient split logic inside
-``get_biglunge_data_list`` / ``get_lung_pet_ct_dx_data_list``). This file only
-adds the per-slice expansion + tumor-slice index cache.
+Patient splits and class maps are shared with the 3D builders in
+`sclc.data.loaders`; this file only adds the per-slice expansion and
+tumor-slice index cache.
 """
 import json
 import os
+import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
 import numpy as np
 from monai.data import PersistentDataset
+from monai.transforms import (
+    Compose,
+    EnsureChannelFirst,
+    LoadImage,
+    Orientation,
+    Spacing,
+)
 from tqdm import tqdm
 
 from sclc.data.loaders import (
@@ -33,15 +34,11 @@ def _scan_tumor_slice_indices(
     min_pixels: int = 1,
     pixdim=(1.0, 1.0, 2.0),
 ) -> List[int]:
-    """Return the axial-slice indices (in the RAS + ``pixdim``-resampled grid)
-    that contain ``>= min_pixels`` non-zero mask voxels. ``pixdim`` must match
-    the value used by ``_build_2d_pipeline``'s Spacingd, otherwise the slice
-    indices are off-by-resampling.
-    """
-    from monai.transforms import (
-        Compose, EnsureChannelFirst, LoadImage, Orientation, Spacing,
-    )
+    """Axial slice indices with `>= min_pixels` tumor voxels at `pixdim` spacing.
 
+    `pixdim` must match the transform-pipeline Spacingd value, otherwise the
+    slice indices are off-by-resampling at training time.
+    """
     loader = Compose(
         [
             LoadImage(image_only=True),
@@ -50,7 +47,7 @@ def _scan_tumor_slice_indices(
             Spacing(pixdim=pixdim, mode="nearest"),
         ]
     )
-    mask = loader(mask_path)  # (1, H, W, D) in canonical RAS at target spacing
+    mask = loader(mask_path)
     arr = mask[0].cpu().numpy() if hasattr(mask[0], "cpu") else np.asarray(mask[0])
     if arr.ndim < 2:
         return []
@@ -64,9 +61,7 @@ def _tumor_slice_index(
     cache_path: str,
     min_pixels: int = 1,
 ) -> Dict[str, List[int]]:
-    """Build/refresh a {mask_path: [slice_idx, ...]} cache on disk. Only rescans
-    masks whose mtime changed or that aren't in the cache yet.
-    """
+    """Disk-cached `{mask_path: [slice_idx, ...]}`; rescans only on mtime change."""
     index: Dict[str, Any] = {}
     if os.path.exists(cache_path):
         try:
@@ -113,14 +108,11 @@ def _expand_volume_entries_to_slices(
     tumor_slice_index: Dict[str, List[int]],
     max_slices_per_volume: Optional[int] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, List[Dict[str, Any]]]]:
-    """One volume -> one entry per tumor slice. ``mask_key`` names the
-    per-volume tumor mask on the input entry.
+    """One volume -> one entry per tumor slice.
 
-    Returns (kept_slices, dropped) where ``dropped`` has two keys:
-    ``no_mask`` (volume has no mask sidecar) and ``no_tumor_slices`` (mask
-    exists but no axial slice passes ``min_tumor_pixels``). Logging silently-
-    dropped volumes is required so cross-pipeline (2D vs MIL) comparisons run
-    on a known patient set — see flaws.md 1.3 / 4.3.
+    Returns `(kept_slices, dropped)` where `dropped` records the cause
+    (`no_mask` / `no_tumor_slices`) — load-bearing for the cross-pipeline
+    cohort comparison.
     """
     out: List[Dict[str, Any]] = []
     dropped_no_mask: List[Dict[str, Any]] = []
@@ -140,8 +132,8 @@ def _expand_volume_entries_to_slices(
             meta["mask_path"] = mask_path
             dropped_no_slices.append(meta)
             continue
-        # Deterministic subsample: evenly spaced across the tumor extent, so
-        # even volumes with 40+ tumor slices don't dominate the training set.
+        # Evenly-spaced subsample so volumes with 40+ tumor slices don't
+        # dominate the training set.
         if max_slices_per_volume and len(slices) > max_slices_per_volume:
             picks = np.linspace(0, len(slices) - 1, max_slices_per_volume).round().astype(int)
             slices = [slices[i] for i in picks]
@@ -150,7 +142,6 @@ def _expand_volume_entries_to_slices(
             entry["image"] = v["image"]
             entry["tumor_mask"] = mask_path
             entry["slice_idx"] = int(s)
-            # Volume identity — used for patient/series-level eval aggregation.
             entry.setdefault("volume_id", v.get("image"))
             out.append(entry)
     return out, {"no_mask": dropped_no_mask, "no_tumor_slices": dropped_no_slices}
@@ -162,12 +153,8 @@ def _testing_subset_balanced(
     num_classes: int = 3,
     label_key: str = "scan_label",
 ) -> List[Dict[str, Any]]:
-    """Deterministically cap a testing split while preserving class coverage.
-
-    Strategy:
-    1) Round-robin pick across class buckets in original order.
-    2) If fewer than ``max_items`` are selected, fill from the remaining
-       entries in original order.
+    """Cap a testing split while preserving class coverage: round-robin
+    across class buckets, then fill from the remaining entries in order.
     """
     if max_items <= 0 or len(entries) <= max_items:
         return entries
@@ -223,13 +210,11 @@ def get_biglunge_2d_data_list(
     testing: bool = False,
     min_tumor_pixels: int = 1,
     max_slices_per_volume: Optional[int] = None,
-    cv_fold: int = -1,
+    *,
+    cv_fold: int,
     cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """BigLunge 2D data list: one entry per tumor slice. Reuses the standard
-    patient-stratified split from ``get_biglunge_data_list``, then attaches the
-    per-patient tumor mask + slice index.
-    """
+    """BigLunge 2D data list: one entry per tumor slice."""
     volumes = get_biglunge_data_list(
         data_path=data_path, csv_path=csv_path,
         val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
@@ -305,12 +290,12 @@ def get_lung_pet_ct_dx_2d_data_list(
     max_scans_per_patient: int = 2,
     min_tumor_pixels: int = 1,
     max_slices_per_volume: Optional[int] = None,
-    cv_fold: int = -1,
+    *,
+    cv_fold: int,
     cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Lung-PET-CT-Dx 2D data list: one entry per tumor slice. The per-series
-    ``_mask.nii.gz`` already sits in each volume entry as ``mask`` — rename it
-    to ``tumor_mask`` and expand to slices.
+    """Lung-PET-CT-Dx 2D data list: one entry per tumor slice.
+    The per-series `_mask.nii.gz` is renamed `tumor_mask` before slice expansion.
     """
     volumes = get_lung_pet_ct_dx_data_list(
         data_path=data_path, val_frac=val_frac, test_frac=test_frac, seed=seed,
@@ -318,10 +303,8 @@ def get_lung_pet_ct_dx_2d_data_list(
         cv_fold=cv_fold, cv_folds=cv_folds,
     )
 
-    # Attach patient_id (derived from the Lung-PET-CT-Dx folder name) so the
-    # 2D validator can aggregate slice-level probabilities per patient rather
-    # than per scan. The 3D builder omits this field; adding it here keeps the
-    # existing 3D PersistentDataset cache hash unchanged.
+    # Attach patient_id from the folder name so the 2D validator can aggregate
+    # slice-level probabilities per patient rather than per scan.
     mask_paths: List[str] = []
     for split_entries in volumes.values():
         for v in split_entries:
@@ -398,12 +381,12 @@ def create_dataset_2d(
     clear_cache: bool = False,
     include_mask: bool = False,
     include_bbox: bool = False,
-    cv_fold: int = -1,
+    *,
+    cv_fold: int,
     cv_folds: int = 5,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
-    """Create train/val/test ``PersistentDataset``s of 2D tumor slices.
-    Samples are (C=1, img_size, img_size). Supported ``dataset_type``:
-    ``"big_lunge"`` and ``"lung_pet_ct_dx"``.
+    """Train/val/test `PersistentDataset`s of 2D tumor slices, shape (C=1, H, W).
+    `dataset_type` is `"big_lunge"` or `"lung_pet_ct_dx"`.
     """
     if dataset_type == "big_lunge":
         cache_name = "monai_biglunge_2d"
@@ -412,19 +395,15 @@ def create_dataset_2d(
     else:
         raise ValueError(f"Unknown dataset_type for 2D: '{dataset_type}'.")
 
-    # Cache is keyed on (img_size, crop_size, min_tumor_pixels, mask/bbox
-    # flags). Path is SHARED across CV folds — see loaders.py for the
-    # rationale (PersistentDataset content-hashing makes per-fold dirs
-    # redundant; per-fold state lives in fold-tagged meta files).
+    # Cache root is shared across CV folds — see loaders.py for the rationale.
     _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
     cache_root = os.path.join(
         "/home/data/.cache", cache_name,
         f"img{img_size}_crop{int(crop_size)}_mp{int(min_tumor_pixels)}{_mask_tag}{'_testing' if testing else ''}",
     )
     if clear_cache and cv_fold <= 0 and os.path.isdir(cache_root):
-        import shutil as _shutil
         print(f"[--clear-cache] Removing {cache_root}")
-        _shutil.rmtree(cache_root)
+        shutil.rmtree(cache_root)
     os.makedirs(cache_root, exist_ok=True)
 
     if dataset_type == "big_lunge":
@@ -445,6 +424,7 @@ def create_dataset_2d(
             val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
             min_tumor_pixels=min_tumor_pixels,
             max_slices_per_volume=max_slices_per_volume,
+            cv_fold=cv_fold, cv_folds=cv_folds,
         )
 
     datasets: List[PersistentDataset] = []
@@ -467,16 +447,19 @@ def create_dataset_2d(
             )
         )
 
+        # Flat cache (no per-split subdir): PersistentDataset content-hashes
+        # entries, so a slice in train (fold k) and test (fold j) maps to the
+        # same .pt. Per-fold/per-split bookkeeping lives in filename suffixes.
         if cache_dir is None:
-            current_cache_dir = os.path.join(cache_root, split)
+            current_cache_dir = cache_root
         else:
-            current_cache_dir = os.path.join(cache_dir, split)
+            current_cache_dir = cache_dir
         os.makedirs(current_cache_dir, exist_ok=True)
-        print(f"[2D] PersistentDataset cache_dir='{current_cache_dir}'")
+        print(f"[2D] PersistentDataset cache_dir='{current_cache_dir}' (split='{split}')")
 
         _fold_suffix = f"_fold{cv_fold}" if cv_fold >= 0 else ""
-        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}.json")
-        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}.json")
+        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}_{split}.json")
+        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}_{split}.json")
         current_meta = {
             "pipeline": "2d",
             "dataset_type": dataset_type,
@@ -490,12 +473,8 @@ def create_dataset_2d(
             "min_tumor_pixels": int(min_tumor_pixels),
             "max_slices_per_volume": max_slices_per_volume,
             "split": split,
-            # Bumped 2026-04-28: CropAroundTumord now picks the largest CC
-            # (≥ 50 voxels) instead of centroid-of-all. Old caches contained
-            # crops centered between disjoint tumor components on multifocal
-            # patients (~70% of BigLunge). Keep this string in lockstep with
-            # CropAroundTumord's algorithm; bump it when min_component_voxels
-            # or the connectivity changes. flaws.md §1.7.
+            # Bump this when CropAroundTumord's min_component_voxels or
+            # connectivity changes — otherwise stale crops survive cache reuse.
             "centroid_algo": "largest_cc_min50",
             "include_mask": bool(include_mask),
             "include_bbox": bool(include_bbox),
@@ -527,7 +506,7 @@ def create_dataset_2d(
                 try:
                     _ = ds[i]
                     return i, None
-                except Exception as e:  # noqa: BLE001 — we want every failure logged, not the first one to abort
+                except Exception as e:  # noqa: BLE001 — log every failure, not just the first
                     return i, e
 
             desc = f"Validating & Caching [2D {split}] (threads={n_workers})"
@@ -539,8 +518,8 @@ def create_dataset_2d(
                     else:
                         print(f"Failed sample ({data_list[i].get('image', 'N/A')} @ z={data_list[i].get('slice_idx')}): {err}")
             else:
-                # MONAI LoadImage + numpy release the GIL during I/O, so threads
-                # parallelize the disk-bound first-pass cache build well.
+                # LoadImage + numpy release the GIL during I/O, so threads
+                # parallelize the disk-bound first-pass cache build.
                 with ThreadPoolExecutor(max_workers=n_workers) as ex:
                     futures = [ex.submit(_try_one, i) for i in range(len(ds))]
                     for fut in tqdm(as_completed(futures), total=len(futures), desc=desc, unit="slice"):

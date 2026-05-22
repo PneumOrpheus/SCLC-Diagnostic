@@ -1,38 +1,30 @@
 """Bag-level training + validation for the MIL pipeline.
 
-Key differences from ``training/train.py`` and ``training/train_2d.py``:
-
-- One loss per bag. No per-slice / per-instance supervision.
-- Validation is patient-level by construction (one bag = one patient). No
-  slice-to-volume or volume-to-patient aggregation needed.
-- No segmentation auxiliary loss (MIL has no decoder).
-- Mixup is applied at the bag level (mix whole bags with a per-batch λ),
-  following the same convention as ``train_2d.py``.
+One loss per bag, one bag per patient, so validation is patient-level
+without any extra aggregation. Mixup is applied at the bag level.
 """
 from __future__ import annotations
 
 import math
 import time
 import warnings
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 import torch
 import torch.nn as nn
 from monai.losses import DiceLoss
-
 from sklearn.metrics import balanced_accuracy_score, f1_score
 
-warnings.filterwarnings("ignore", message="y_pred contains classes not in y_true", category=UserWarning)
-
+from sclc.training.bbox_utils import bbox_loss_2d
 from sclc.training.bootstrap import bootstrap_ci, per_class_f1_ci
 from sclc.training.train_3d import (
-    AverageMeter,
     CLASS_NAMES,
-    NUM_CLASSES,
+    AverageMeter,
     _compute_classification_metrics,
 )
-from sclc.training.bbox_utils import bbox_loss_2d
+
+warnings.filterwarnings("ignore", message="y_pred contains classes not in y_true", category=UserWarning)
 
 
 def _macro_f1(yt, yp):
@@ -44,17 +36,8 @@ def _bacc(yt, yp):
 
 
 def simple_collate_fn_mil(batch):
-    """Stack bag tensors and labels; preserve per-sample metadata.
-
-    Returns
-    -------
-    images   : (B, N, 1, H, W) float tensor
-    labels   : (B,) long tensor
-    masks    : (B, N, 1, H, W) float tensor or None
-    has_mask : (B, N) bool tensor or None
-    bboxes   : (B, N, 4) float tensor or None
-    has_bbox : (B, N) bool tensor or None
-    meta     : list[dict] per sample with ``patient_id``, ``volume_id``.
+    """Stack bag tensors + labels (+ optional masks/bboxes) + per-sample meta.
+    Bag shape stays `(B, N, 1, H, W)`; meta carries `patient_id`/`volume_id`.
     """
     images = torch.stack([item["image"] for item in batch], dim=0)
     labels = torch.tensor([int(item["scan_label"]) for item in batch], dtype=torch.long)
@@ -104,12 +87,8 @@ def simple_collate_fn_mil(batch):
 
 
 def _bag_instance_dropout(x: torch.Tensor, drop_prob: float) -> torch.Tensor:
-    """Zero a Bernoulli(drop_prob) subset of bag instances per sample.
-
-    Acts as bag-level cutout: forces attention to distribute mass across
-    multiple slices since any single slice may be dropped on a given step.
-    Guarantees at least one surviving instance per bag — an all-zero bag
-    feeds zero features into MIL attention and NaNs the softmax.
+    """Bag-level cutout: zero a Bernoulli(drop_prob) subset of instances per
+    bag, with at least one survivor (an all-zero bag NaN's MIL attention).
     """
     if drop_prob <= 0.0:
         return x
@@ -123,16 +102,9 @@ def _bag_instance_dropout(x: torch.Tensor, drop_prob: float) -> torch.Tensor:
 
 
 def _mixup_bags(x: torch.Tensor, y: torch.Tensor, alpha: float):
-    """Mixup at the bag level.
-
-    ``x`` shape is ``(B, N, C, H, W)`` — we mix along B, keeping each bag's
-    instance count N fixed. Sampling is identical to the per-slice mixup in
-    ``train_2d.py``: Beta(alpha, alpha) with lam = max(lam, 1-lam).
-
-    For B<4, ``torch.randperm(B)`` returns the identity with non-negligible
-    probability (50% at B=2), so the "mix" degenerates to the original sample.
-    Resample the permutation up to a few times until it is a derangement; if
-    we still can't get one (B==1), skip mixup. See flaws.md 1.4.
+    """Bag-level mixup; same convention as 2D mixup but on (B, N, C, H, W).
+    Resamples until the permutation is a derangement, since
+    `torch.randperm(2)` returns identity 50% of the time.
     """
     if alpha <= 0.0 or x.size(0) < 2:
         return x, y, y, 1.0
@@ -145,7 +117,6 @@ def _mixup_bags(x: torch.Tensor, y: torch.Tensor, alpha: float):
             break
         idx = torch.randperm(B, device=x.device)
     else:
-        # No derangement found in 8 tries — skip mixup this batch.
         return x, y, y, 1.0
     x_mix = lam * x + (1.0 - lam) * x[idx]
     return x_mix, y, y[idx], lam
@@ -286,9 +257,8 @@ def train_epoch_mil(
             unscaled_loss = loss.item()
             loss = loss / accumulation_steps
 
-        # Skip non-finite losses so one overflow doesn't poison the running
-        # mean (AverageMeter is sticky-NaN) and to avoid propagating NaN
-        # grads into the optimizer on the next accumulation boundary.
+        # Skip non-finite losses: AverageMeter is sticky-NaN, and NaN grads
+        # would propagate through the next accumulation boundary's step().
         if not math.isfinite(unscaled_loss):
             nonfinite_count += 1
             if (idx + 1) % accumulation_steps == 0 or (idx + 1) == len(loader):
@@ -303,16 +273,13 @@ def train_epoch_mil(
         if (idx + 1) % accumulation_steps == 0 or (idx + 1) == len(loader):
             if scaler is not None:
                 scaler.unscale_(optimizer)
-            # clip_grad_norm_ returns NaN-total when any grad is NaN/Inf but
-            # does NOT zero the bad grads, so the optimizer step would still
-            # corrupt the weights. Check once across the whole parameter set
-            # and skip the step if anything is non-finite.
+            # clip_grad_norm_ returns NaN total_norm on any NaN/Inf grad but
+            # does NOT zero them, so a step() would corrupt the weights.
             total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             if not torch.isfinite(total_norm):
                 nonfinite_grad_steps += 1
                 optimizer.zero_grad()
                 if scaler is not None:
-                    # Tell the scaler this step was bad so it adjusts its scale.
                     scaler.update()
                 continue
             if scaler is not None:
@@ -364,11 +331,9 @@ def validate_epoch_mil(
     compute_ci: bool = True,
     n_boot: int = 1000,
 ):
-    """Validate at bag level. One patient = one bag on BigLunge, so
-    bag-level metrics ARE patient-level metrics. We still emit a
-    ``patient_level`` sub-dict so the generic ``run_training_phase`` in
-    ``main.py`` can monitor patient metrics for checkpoint selection without
-    special-casing MIL.
+    """Validate at bag level. One patient == one bag on BigLunge, so the
+    `patient_level` sub-dict mirrors the top-level metrics (this lets
+    `run_training_phase` monitor patient metrics without special-casing MIL).
     """
     model.eval()
     run_loss = AverageMeter()
@@ -379,9 +344,8 @@ def validate_epoch_mil(
     all_probs: List[np.ndarray] = []
     all_patient_ids: List[Any] = []
     all_volume_ids: List[Any] = []
-    # Attention diagnostics — only valid for att / att_trans MIL modes.
-    # entropy is normalized by log(N) so 1.0 == uniform attention,
-    # 0.0 == one-hot. top1_mass / top3_mass quantify concentration.
+    # Attention diagnostics for att / att_trans modes: entropy is normalized
+    # by log(N) so 1.0 == uniform, 0.0 == one-hot.
     attn_entropies: List[float] = []
     attn_top1_mass: List[float] = []
     attn_top3_mass: List[float] = []
@@ -402,7 +366,7 @@ def validate_epoch_mil(
 
         if hasattr(model, "attention_weights"):
             try:
-                a = model.attention_weights(data)  # (B, N), softmax already applied
+                a = model.attention_weights(data)
                 N = int(a.shape[1])
                 if N >= 2:
                     log_n = float(np.log(N))
@@ -473,8 +437,6 @@ def validate_epoch_mil(
         print(attn_msg)
         logger.info(attn_msg)
 
-    # The monitor loop in main.py reads from result['patient_level'] when it
-    # exists. For MIL, patient == bag, so mirror the top-level numbers here.
     result = {
         "loss": run_loss.avg,
         "accuracy": metrics["accuracy"],
@@ -504,8 +466,7 @@ def validate_epoch_mil(
             "top3_mass_mean": float(np.mean(attn_top3_mass)) if attn_top3_mass else None,
             "n_bags": len(attn_entropies),
         }
-        # Surface in patient_level too so metrics.jsonl rows pick it up via
-        # the existing val_patient capture in run_training_phase.
+        # Mirror to patient_level so existing val_patient capture picks it up.
         result["patient_level"]["attention"] = result["attention"]
 
     if compute_ci and len(all_targets) > 0:

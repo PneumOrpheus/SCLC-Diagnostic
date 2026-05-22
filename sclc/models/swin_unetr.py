@@ -20,7 +20,6 @@ class SwinUNETRClassifier(nn.Module):
         tfpn_levels: int = 1,
     ):
         super().__init__()
-        # We initialize the base SwinUNETR
         self.swin_unetr = SwinUNETR(
             in_channels=in_channels,
             out_channels=1,
@@ -29,12 +28,11 @@ class SwinUNETRClassifier(nn.Module):
             use_checkpoint=True,
             use_v2=False,
         )
-        
-        # In MONAI's SwinUNETR, the deepest feature channel size is feature_size * 16 (i.e., 768)
+
+        # MONAI SwinUNETR deepest feature is feature_size * 16.
         bottleneck_channels = 48 * 16
 
         self.global_pool = nn.AdaptiveMaxPool3d(1)
-        # Single linear head
         self.classification_head = nn.Linear(bottleneck_channels, num_classes)
         self._use_advanced_fpn = bool(use_advanced_fpn)
         self._use_det_seg = bool(use_det_seg)
@@ -62,7 +60,8 @@ class SwinUNETRClassifier(nn.Module):
             self.fpn_head = None
             self.box_head = nn.Linear(bottleneck_channels, 6) if use_det_seg else None
         
-        # Hook captures the deepest swinViT feature map during the full forward pass
+        # Hook captures the deepest swinViT feature map during the seg forward
+        # so the bottleneck is available without re-running the encoder.
         self.deepest_features = None
         self._capture_deepest = False
         def vit_hook(module, input, output):
@@ -74,14 +73,12 @@ class SwinUNETRClassifier(nn.Module):
         self.deepest_features = None
         seg_logits = None
         if return_segmentation:
-            # populates self.deepest_features with the final encoder bottleneck before the decoder.
             self._capture_deepest = True
             try:
                 seg_logits = self.swin_unetr(x)
             finally:
                 self._capture_deepest = False
 
-        # Always compute encoder features for classification/detection.
         hidden_states = self.swin_unetr.swinViT(x.contiguous())
         if self._use_advanced_fpn:
             feats = hidden_states[-4:] if isinstance(hidden_states, (list, tuple)) and len(hidden_states) >= 4 else [hidden_states[-1]]
@@ -102,10 +99,3 @@ class SwinUNETRClassifier(nn.Module):
                 return cls_logits, seg_logits, box_pred
             return cls_logits, seg_logits
         return cls_logits
-
-
-
-# Pipeline selection by model-type suffix.
-#   _2d  -> single axial slice containing tumor, 2D CNN (in_channels=1)
-#   mil_ -> attention-MIL bag of axial slices
-#   else -> full 3D volume
