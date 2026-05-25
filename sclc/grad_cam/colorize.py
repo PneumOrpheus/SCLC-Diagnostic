@@ -6,7 +6,6 @@ from typing import Optional, Union
 import nibabel as nib
 import numpy as np
 
-
 RGB_DTYPE = np.dtype([("R", "u1"), ("G", "u1"), ("B", "u1")])
 
 

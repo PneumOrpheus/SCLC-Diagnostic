@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -35,8 +36,6 @@ from sclc.data.transforms import (
     get_val_transforms_mil_bag,
 )
 from sclc.models import get_sclc_model
-from sclc.models.factory import get_pipeline
-
 
 CLASS_NAMES = ["Adenocarcinoma", "Small Cell", "Squamous"]
 REPO_ROOT = Path(__file__).resolve().parents[2]

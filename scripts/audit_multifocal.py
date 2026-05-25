@@ -28,7 +28,11 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
+import matplotlib.pyplot as plt
+import nibabel as nib
 import numpy as np
+import pandas as pd
+from scipy.ndimage import label as cc_label
 
 _HERE = os.path.abspath(os.path.dirname(__file__))
 _REPO = os.path.abspath(os.path.join(_HERE, ".."))
@@ -37,8 +41,6 @@ if _REPO not in sys.path:
 
 
 def _load_labels(csv_path: str) -> Dict[str, str]:
-    """Patient ID -> MorphologicalGroup, lower-cased and trimmed."""
-    import pandas as pd
     df = pd.read_csv(csv_path)
     out: Dict[str, str] = {}
     for _, row in df.iterrows():
@@ -48,16 +50,13 @@ def _load_labels(csv_path: str) -> Dict[str, str]:
     return out
 
 
-
 def _connected_components(mask: np.ndarray, min_voxels: int) -> Tuple[int, List[int], int]:
-    """Return (n_large_cc, sorted_sizes, total_nonzero_voxels)."""
-    from scipy.ndimage import label as cc_label
     binary = mask > 0.5
     total = int(binary.sum())
     if total == 0:
         return 0, [], 0
-    # 6-connectivity (faces) is the conservative choice for medical masks;
-    # 26-connectivity (default) over-merges nearby blobs.
+    # 6-connectivity (faces only) — 26-connectivity over-merges nearby blobs
+    # on medical masks.
     structure = np.zeros((3, 3, 3), dtype=int)
     structure[1, 1, :] = 1
     structure[1, :, 1] = 1
@@ -65,7 +64,7 @@ def _connected_components(mask: np.ndarray, min_voxels: int) -> Tuple[int, List[
     labeled, n = cc_label(binary, structure=structure)
     if n == 0:
         return 0, [], total
-    sizes = np.bincount(labeled.ravel())[1:]  # drop background bucket
+    sizes = np.bincount(labeled.ravel())[1:]
     large = [int(s) for s in sizes if s >= min_voxels]
     large.sort(reverse=True)
     return len(large), large, total
@@ -77,7 +76,6 @@ def audit(
     min_component_voxels: int = 50,
     tumor_mask_suffix: str = "_label_tc.nii.gz",
 ) -> List[Dict[str, Any]]:
-    import nibabel as nib
     labels = _load_labels(csv_path)
     rows: List[Dict[str, Any]] = []
     root = Path(data_root)
@@ -87,7 +85,6 @@ def audit(
         if pid not in labels:
             continue
         mask_path = d / f"{pid}{tumor_mask_suffix}"
-        cls_str = labels[pid]
         if not mask_path.exists():
             rows.append({
                 "patient_id": pid,
@@ -162,14 +159,12 @@ def print_summary(rows: List[Dict[str, Any]]) -> None:
 
 
 def write_figure(rows: List[Dict[str, Any]], out_path: str) -> None:
-    import matplotlib.pyplot as plt
     classes = ["Adenocarcinoma", "Small Cell", "Squamous"]
     colors = {"Adenocarcinoma": "#4E79A7", "Small Cell": "#F28E2B", "Squamous": "#59A14F"}
 
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
     ax_n, ax_size = axes
 
-    # Histogram: number of components, capped at 8+ for readability.
     bins = np.arange(0.5, 9.5, 1.0)
     for cls in classes:
         cs = [r["n_components_large"] for r in rows
@@ -185,7 +180,6 @@ def write_figure(rows: List[Dict[str, Any]], out_path: str) -> None:
     ax_n.grid(axis="y", alpha=0.3, linestyle=":")
     ax_n.legend(loc="upper right", frameon=False)
 
-    # Distribution: largest-component size in voxels, log scale.
     for cls in classes:
         sizes = [r["largest_component_voxels"] for r in rows
                  if r["class"] == cls and r["largest_component_voxels"] > 0]

@@ -1,38 +1,47 @@
-import os
-import sys
+import argparse
 import csv
 import gc
-import shutil
-import random
 import json
+import os
+import random
+import sys
+from collections import Counter, deque
+from datetime import datetime
+from typing import Any, Dict, List, Tuple
+
 import numpy as np
 import torch
-import torch.nn as nn
-import torch.optim as optim
 from torch.amp import GradScaler
 from torch.utils.data import DataLoader, WeightedRandomSampler
-from typing import Dict, Any, List, Tuple
-import argparse
-import time
-from datetime import datetime
-from collections import Counter, deque
 
 try:
     import yaml
-except ImportError:  # PyYAML is only needed when --config is used
-    yaml = None
+except ImportError:
+    yaml = None  # PyYAML is only required when --config is used.
 
+from sclc.data.dataset_2d import create_dataset_2d
+from sclc.data.dataset_mil import (
+    create_dataset_mil_bag,
+    create_dataset_mil_bag_dapt,
+)
+from sclc.data.loaders import create_dataset
+from sclc.logger import create_logger
 from sclc.models import (
-    get_sclc_model, get_pipeline, MILResNet50Classifier, MILSwinTinyClassifier, MILSwinV2BaseClassifier,
     MILSwinV2TinyClassifier,
+    get_pipeline,
+    get_sclc_model,
+)
+from sclc.training.train_2d import (
+    simple_collate_fn_2d,
+    train_epoch_2d,
+    validate_epoch_2d,
 )
 from sclc.training.train_3d import simple_collate_fn, train_epoch, validate_epoch
-from sclc.training.train_2d import simple_collate_fn_2d, train_epoch_2d, validate_epoch_2d
-from sclc.training.train_mil import simple_collate_fn_mil, train_epoch_mil, validate_epoch_mil
-from sclc.data.loaders import create_dataset
-from sclc.data.dataset_2d import create_dataset_2d
-from sclc.data.dataset_mil import create_dataset_mil_bag, create_dataset_mil_bag_dapt, create_dataset_whole_slice
-from sclc.logger import create_logger
+from sclc.training.train_mil import (
+    simple_collate_fn_mil,
+    train_epoch_mil,
+    validate_epoch_mil,
+)
 
 
 def _log_rss(logger, label: str) -> None:
@@ -49,9 +58,8 @@ def _log_rss(logger, label: str) -> None:
 
 
 def _dump_effective_config(output_dir: str, args: argparse.Namespace, logger) -> str:
-    """Persist the fully-resolved argparse namespace (config + CLI merged) to
-    ``output_dir/effective_config.yaml``. Written at startup so even a crashed
-    run leaves behind a reproducible record of what it was about to do.
+    """Persist the resolved argparse namespace at startup so a crashed run
+    still leaves behind a reproducible record of its inputs.
     """
     cfg = {k: v for k, v in vars(args).items() if not k.startswith("_")}
     cfg["_meta"] = {
@@ -76,8 +84,8 @@ def _dump_effective_config(output_dir: str, args: argparse.Namespace, logger) ->
 
 
 def _append_metrics_row(metrics_path: str, row: Dict[str, Any]) -> None:
-    """Append one JSON object per line to ``metrics_path``. Flushing is
-    best-effort — a mid-run crash still leaves completed epochs on disk.
+    """Append one JSON object per line to `metrics_path`. Metrics logging
+    must never take down training, so all errors are swallowed.
     """
     if not metrics_path:
         return
@@ -85,16 +93,12 @@ def _append_metrics_row(metrics_path: str, row: Dict[str, Any]) -> None:
         with open(metrics_path, "a") as f:
             f.write(json.dumps(row, default=str) + "\n")
     except Exception:
-        # Metrics logging must never take down training.
         pass
 
 
 def _save_inference_probabilities(output_dir: str, model_type: str, payload: Dict[str, Any], logger, suffix: str = "") -> str:
-    """Persist inference softmax probabilities to disk for post-hoc analysis.
-
-    ``suffix`` (e.g. "dapt") is inserted into the filename so multiple test
-    evaluations in the same run (DAPT test + finetune test) don't overwrite
-    each other.
+    """Persist softmax probabilities. `suffix` (e.g. "dapt") disambiguates
+    multiple test evaluations sharing one output directory.
     """
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     tag = f"_{suffix}" if suffix else ""
@@ -114,28 +118,15 @@ def _save_misclassifications_csv(
     output_dir: str, model_type: str, payload: Dict[str, Any], logger,
     phase: str, suffix: str = "",
 ) -> str:
-    """Filter the inference payload to misclassified samples and write a CSV.
+    """Write a CSV of misclassified samples sorted by (true, pred, -confidence)
+    so confident-wrong cases cluster at the top of each confusion bucket.
 
-    One row per misclassified sample with patient/volume identifiers, true
-    vs predicted labels, model confidence (max softmax) and per-class
-    probabilities. Rows are sorted by (true_name, pred_name) ascending and
-    confidence descending — confident-wrong samples cluster at the top of
-    each confusion bucket, which is the kind that teaches you the most
-    on manual review.
-
-    For pipelines that emit a patient-level rollup inside the inference
-    payload (``patient_level.samples``), we use that — it's the rollup
-    matching the headline "patient-level macro F1" metric. Otherwise we
-    fall back to the volume-level ``samples`` list.
-
-    Returns the CSV path written, or '' if no misclassifications existed
-    (the file is still written, with a header row only).
+    Patient-level rollups (`patient_level.samples`) are preferred when the
+    pipeline emits them so the CSV matches the headline patient-level macro F1.
     """
     if not isinstance(payload, dict):
         return ""
 
-    # Prefer patient-level samples if the pipeline emitted them (2D path).
-    # MIL and 3D emit one sample per patient already.
     pat_block = payload.get("patient_level") if isinstance(payload, dict) else None
     samples: List[Dict[str, Any]] = []
     if isinstance(pat_block, dict) and isinstance(pat_block.get("samples"), list):
@@ -147,12 +138,8 @@ def _save_misclassifications_csv(
 
     class_names: List[str] = list(payload.get("class_names") or [])
 
-    # Filter to misclassified rows.
     wrong = [s for s in samples if int(s.get("pred_label", -1)) != int(s.get("true_label", -2))]
 
-    # Sort: group by (true_name, pred_name); within each group, highest
-    # confidence first (confident wrongs first — those are the ones that
-    # most likely indicate a real failure mode rather than a borderline call).
     wrong.sort(key=lambda s: (
         str(s.get("true_name", "")),
         str(s.get("pred_name", "")),
@@ -181,9 +168,8 @@ def _save_misclassifications_csv(
         w.writeheader()
         for s in wrong:
             probs = s.get("probabilities") or {}
-            # 2D patient-level samples carry ``volume_ids`` (a list) instead
-            # of a single ``volume_id``. Join with ';' so the CSV stays one
-            # row per patient and the user can still see all underlying paths.
+            # 2D patient-level samples carry a `volume_ids` list; collapse to
+            # a single semicolon-joined cell so the CSV stays patient-per-row.
             vid = s.get("volume_id")
             if vid is None and isinstance(s.get("volume_ids"), list):
                 vid = ";".join(str(v) for v in s["volume_ids"])
@@ -217,10 +203,8 @@ def _run_test_inference(
     metrics_path: str, output_dir: str, model_type: str,
     phase: str, prob_file_suffix: str = "",
 ) -> Dict[str, Any]:
-    """Run validate_fn on test_loader, log a summary, append a metrics row,
-    and save inference probabilities. ``phase`` labels the metrics row
-    (e.g. "dapt_test", "test"); ``prob_file_suffix`` disambiguates the
-    probability-file name when multiple test runs share an output dir.
+    """Run `validate_fn` on `test_loader`, log a summary, append a metrics row,
+    and save inference probabilities + misclassification CSV.
     """
     logger.info(f"Running evaluation on the {phase} set...")
     test_metrics = validate_fn(model, test_loader, device, logger, return_probabilities=True)
@@ -263,13 +247,9 @@ def _save_cv_aggregate_metrics(
     n_folds: int,
     logger,
 ) -> None:
-    """Average per-fold test metrics and write a single 'test' row to metrics.jsonl.
-
-    The row mirrors the schema of a regular test row so downstream scripts
-    (ablation_plots.py, build_thesis_results.py) read it without modification.
+    """Average per-fold test metrics and write a single 'test' row matching
+    the per-fold row schema (so downstream readers stay unchanged).
     """
-    import numpy as np
-
     def _avg(key_path):
         vals = []
         for r in fold_results:
@@ -357,11 +337,8 @@ def _save_cv_aggregate_metrics(
 
 
 def _flatten_config(cfg: Any, out: Dict[str, Any] = None) -> Dict[str, Any]:
-    """Flatten a nested YAML config into {dest_name: value}.
-
-    Nested sections are walked for their leaves; section names themselves are
-    discarded (grouping is cosmetic). Hyphenated keys are converted to
-    underscores so they match argparse ``dest`` names.
+    """Flatten nested YAML to `{dest_name: value}`. Hyphenated keys are
+    converted to underscores to match argparse `dest` names.
     """
     if out is None:
         out = {}
@@ -376,11 +353,8 @@ def _flatten_config(cfg: Any, out: Dict[str, Any] = None) -> Dict[str, Any]:
 
 
 def _apply_config_to_parser(parser: argparse.ArgumentParser, config_path: str) -> Dict[str, Any]:
-    """Load YAML at ``config_path`` and push its leaves as argparse defaults.
-
-    Returns the flat dict that was applied so main() can log what came from
-    the config file. Keys that don't match any argparse dest are logged as a
-    warning (typos surface loud instead of silently doing nothing).
+    """Push YAML leaves as argparse defaults; unrecognised keys surface as a
+    warning so typos fail loud rather than silently doing nothing.
     """
     if yaml is None:
         raise RuntimeError("PyYAML is required to use --config. Install with: pip install pyyaml")
@@ -401,31 +375,26 @@ def _apply_config_to_parser(parser: argparse.ArgumentParser, config_path: str) -
 def parse_args():
     parser = argparse.ArgumentParser(description="SCLC Simplified 3D Classification Pipeline")
 
-    # Config file. Loaded before the main parse so CLI flags still override.
     parser.add_argument("--config", type=str, default="",
                         help="Path to a YAML experiment config. Values are applied as argparse defaults; "
                              "any CLI flag given on the command line overrides the config.")
 
-    # Mode selection
     parser.add_argument("--model-type", type=str, default="swin_unetr",
                         choices=["swin_unetr",
                                  "efficientnet_b0_2d", "densenet121_2d", "resnet50_2d",
-                                 "swin_tiny_2d", "swinv2_base_2d", "swinv2_tiny_2d", "resnet50_2d_rin", "densenet121_2d_rin",
-                                 "mil_resnet50", "mil_swin_tiny", "mil_swinv2_base", "mil_swinv2_tiny"],
-                        help="Model architecture to use. '_2d' uses the per-slice 2D pipeline; "
-                             "'_2d_rin' uses the RadImageNet-pretrained 2D variants "
-                             "(ResNet50 / DenseNet121); 'mil_resnet50' / 'mil_swin_tiny' use the "
-                             "MIL pipeline (whole-slice per-slice DAPT + attention-MIL bag "
-                             "finetune); 'swin_unetr' uses the full 3D pipeline.")
+                                 "swinv2_tiny_2d",
+                                 "mil_swinv2_tiny"],
+                        help="Model architecture. '_2d' uses the per-slice 2D pipeline; "
+                             "'mil_swinv2_tiny' is the attention-MIL bag pipeline "
+                             "(whole-slice DAPT + bag-level fine-tune); "
+                             "'swin_unetr' is the full 3D pipeline.")
     parser.add_argument("--mode", type=str, default="full", choices=["full", "dapt", "finetune", "inference"],
                         help="Pipeline mode")
-    
-    # Datasets
+
     parser.add_argument("--dapt-dataset", type=str, default="/home/data/Lung-PET-CT-Dx-Clean")
     parser.add_argument("--finetune-dataset", type=str, default="/home/data/TrainingData")
     parser.add_argument("--finetune-csv", type=str, default="/home/data/TrainingData/patients_parameters.csv")
-    
-    # Checkpoints
+
     parser.add_argument(
         "--initial-checkpoint",
         type=str,
@@ -438,8 +407,7 @@ def parse_args():
         default="",
         help="Checkpoint to load in --mode finetune or --mode inference (e.g., best DAPT checkpoint).",
     )
-    
-    # Hyperparameters
+
     parser.add_argument("--dapt-epochs", type=int, default=30)
     parser.add_argument("--dapt-lr", type=float, default=1e-4)
     parser.add_argument("--dapt-warmup-epochs", type=int, default=3,
@@ -500,18 +468,17 @@ def parse_args():
                         help="Number of highest pyramid levels to run TFPN on.")
     parser.add_argument("--disable-tfpn", action="store_true",
                         help="Disable TFPN blocks inside the advanced FPN neck.")
-    parser.add_argument("--weight-decay", type=float, default=1e-3) # Fine-tune weight decay
+    parser.add_argument("--weight-decay", type=float, default=1e-3,
+                        help="Fine-tune phase weight decay.")
     parser.add_argument("--dapt-weight-decay", type=float, default=3e-3,
-                        help="Weight decay for DAPT. Higher than fine-tune to combat scan-diversity overfitting. "
-                             "Round 3 used 1e-2 and under-fit; Round 4 dials back to 3e-3.")
+                        help="Weight decay for DAPT. Higher than fine-tune to combat scan-diversity overfitting.")
     parser.add_argument(
         "--monitor-rolling-window",
         type=int,
         default=3,
         help="Use rolling mean over last k validation epochs for checkpoint selection and early stopping. 1 disables smoothing.",
     )
-    
-    # System
+
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--output-dir", type=str, default="results/output")
     parser.add_argument("--checkpoint-dir", type=str, default="/home/data/trained_models")
@@ -527,7 +494,6 @@ def parse_args():
                              "(e.g. patient_081613/patient_081613_label_tc.nii.gz). Ignored for Lung-PET-CT-Dx, "
                              "which uses per-series '{series_uid}_mask.nii.gz' sidecars.")
 
-    # 2D pipeline knobs
     parser.add_argument("--img-size-2d", type=int, default=224,
                         help="In-plane size for the 2D tumor-centered slice crop.")
     parser.add_argument("--img-crop-2d", type=int, default=96,
@@ -560,7 +526,6 @@ def parse_args():
                              "Acts as bag-level cutout to mitigate attention collapse onto a single slice. "
                              "0 disables (default). Try 0.10-0.20.")
 
-    # MIL pipeline knobs
     parser.add_argument("--img-size-mil", type=int, default=224,
                         help="In-plane size for the whole-slice MIL pipeline (both DAPT per-slice and "
                              "BigLunge MIL-bag phases). Larger than the 2D default (224) because the "
@@ -589,16 +554,14 @@ def parse_args():
         help="Path pattern to a per-fold DAPT checkpoint whose backbone weights are transferred "
              "into the MIL model before fine-tuning, skipping a redundant DAPT run. Use "
              "'{fold}' as a placeholder for the zero-based fold index "
-             "(e.g. '/home/data/trained_models_base/fold_{fold}/mil/mil_swinv2_base/model_dapt_best.pth'). "
+             "(e.g. '/home/data/trained_models_base/fold_{fold}/mil/mil_swinv2_tiny/model_dapt_best.pth'). "
              "Only effective when --mode finetune; ignored otherwise. "
              "If the resolved path does not exist, a warning is logged and training continues from "
              "initial weights."
     )
 
-    # Two-pass parse: peek at --config first, apply it as defaults, then the
-    # real parse lets CLI flags override config values. This keeps a single
-    # source of truth for argument definitions (here), and makes YAML a thin
-    # "set a bunch of defaults" layer.
+    # Two-pass: peek at --config, apply as defaults, then real parse lets
+    # CLI flags still override. Single source of truth stays this parser.
     pre_parser = argparse.ArgumentParser(add_help=False)
     pre_parser.add_argument("--config", type=str, default="")
     pre_args, _ = pre_parser.parse_known_args()
@@ -607,7 +570,7 @@ def parse_args():
         applied = _apply_config_to_parser(parser, pre_args.config)
 
     args = parser.parse_args()
-    args._config_applied = applied  # stashed so main() can log what came from the file
+    args._config_applied = applied
     return args
 
 
@@ -615,12 +578,9 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
                        cv_fold: int = -1):
     """Build train/val/test DataLoaders for the current phase.
 
-    ``phase`` matters only for the MIL pipeline, which uses different datasets
-    for DAPT (per-slice whole-slice) vs fine-tune / inference (bag-level).
-    All other pipelines ignore ``phase``.
-
-    ``cv_fold`` selects a specific stratified k-fold split when >= 0 (the
-    number of folds comes from ``args.cv_folds``). -1 uses the original fixed split.
+    `phase` only matters for the MIL pipeline (separate DAPT vs fine-tune
+    datasets). `cv_fold >= 0` picks a stratified k-fold split; `-1` uses the
+    original fixed 70/15/15 split.
     """
     pipeline = get_pipeline(args.model_type)
     include_mask = bool(getattr(args, "use_det_seg", False))
@@ -646,7 +606,8 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
                 cv_folds=n_folds,
             )
             collate_fn = simple_collate_fn_mil
-        else:  # dapt — bag-level dataset on Lung-PET-CT-Dx
+        else:
+            # DAPT branch: bag-level dataset on Lung-PET-CT-Dx.
             train_ds, val_ds, test_ds = create_dataset_mil_bag_dapt(
                 data_path=data_path,
                 img_size=args.img_size_mil,
@@ -706,14 +667,11 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
         class_counts = Counter(train_labels)
         num_samples = len(train_labels)
 
-        # Invert class frequencies to create weights
         class_weights_dict = {cls: num_samples / count for cls, count in class_counts.items()}
         sample_weights = [class_weights_dict[label] for label in train_labels]
 
-        # Make the oversampling effect visible. The factor is the ratio of
-        # the most-oversampled to the least-oversampled class — i.e. how
-        # many times more often a minority sample is drawn relative to the
-        # majority sample. 1.0 means WRS is a no-op (perfectly balanced).
+        # Log the oversample factor (max/min weight) so the WRS effect is
+        # observable; 1.0 means balanced and WRS is effectively a no-op.
         if class_weights_dict:
             w_max = max(class_weights_dict.values())
             w_min = min(class_weights_dict.values())
@@ -725,7 +683,6 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
             )
 
         sampler = WeightedRandomSampler(weights=sample_weights, num_samples=num_samples, replacement=True)
-        # Note: shuffle must be False when using a sampler
         train_loader = DataLoader(train_ds, batch_size=args.batch_size, sampler=sampler, collate_fn=collate_fn, num_workers=args.num_workers)
     else:
         train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn, num_workers=args.num_workers)
@@ -733,8 +690,8 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
     val_loader = DataLoader(val_ds, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn, num_workers=args.num_workers)
     test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn, num_workers=args.num_workers)
 
-    # Sanity: every class must be present in the training split.
-    # This catches the "stale --testing cache froze training on 12 non-SCLC samples" bug loudly.
+    # Fail loud if any class is missing from the training split — stale caches
+    # have previously left training with zero SCLC samples.
     if hasattr(train_ds, "data") and len(train_ds.data) > 0 and "scan_label" in train_ds.data[0]:
         train_counts = Counter(int(item["scan_label"]) for item in train_ds.data)
         missing = [c for c in range(3) if train_counts.get(c, 0) == 0]
@@ -754,40 +711,25 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
     return train_loader, val_loader, test_loader
 
 
+# Head module / tensor names across all wrappers. Any new randomly-initialised
+# head must be listed here, otherwise LP-FT's freeze step would route it into
+# the backbone group and loss.backward() fails (no grad on any param).
 _HEAD_PREFIXES = (
     "classification_head", "dense_1", "dense_2",
-    # MIL wrapper: attention and myfc are the bag-level classifier; both are
-    # freshly initialized when we load a DAPT backbone, so they belong in the
-    # "head" group for differential LR.
     "mil.attention", "mil.myfc",
-    # FPN / multi-task variants (use_advanced_fpn / use_det_seg). All of the
-    # submodules below are randomly initialised at construction time and must
-    # train during the LP-FT freeze window; without them in this list, the
-    # freeze step puts every parameter into the backbone group and loss.backward()
-    # fails with "element 0 of tensors does not require grad".
-    #   fpn.          AdvancedFPNNeck (2D / RIN / MIL / 3D classifiers)
-    #   head.         MultiTaskHead in 2D and RIN classifiers (cls/seg/box subheads)
-    #   fpn_head.     MultiTaskHead in SwinUNETRClassifier
-    #   box_head.     auxiliary regression head in SwinUNETRClassifier (non-FPN det)
-    #   instance_head. per-instance head in MIL FPN (cls embed + seg/box)
-    #   att_pool.     bag-level attention pool + classifier in MIL FPN
     "fpn.", "head.", "fpn_head.", "box_head.",
     "instance_head.", "att_pool.",
 )
 _HEAD_TENSOR_SUFFIXES = (
-    "._fc.weight", "._fc.bias",  # MONAI EfficientNetBN
-    ".fc.weight", ".fc.bias",    # torchvision ResNet (via TorchVisionFCModel)
-    ".myfc.weight", ".myfc.bias",  # MONAI MILModel classifier
+    "._fc.weight", "._fc.bias",
+    ".fc.weight", ".fc.bias",
+    ".myfc.weight", ".myfc.bias",
 )
 
 
 def _is_head_param(name: str) -> bool:
-    """Heuristic match for 'this tensor belongs to the classification head'.
-
-    Single source of truth — used by both _set_backbone_frozen and the
-    differential-LR split in run_training_phase. Add new patterns here when
-    adding a backbone whose head has a different attribute name, and both
-    code paths stay consistent.
+    """Single source of truth shared by `_set_backbone_frozen` and the
+    differential-LR split.
     """
     if name.startswith(_HEAD_PREFIXES):
         return True
@@ -799,11 +741,7 @@ def _is_head_param(name: str) -> bool:
 
 
 def _set_backbone_frozen(model, frozen: bool, logger=None) -> int:
-    """Freeze/unfreeze every parameter that is NOT part of a classification head.
-
-    Returns the number of backbone parameters affected. See _is_head_param
-    for the head-detection heuristic.
-    """
+    """Freeze/unfreeze every non-head parameter; returns the backbone count."""
     n_backbone = 0
     n_head = 0
     for name, param in model.named_parameters():
@@ -821,12 +759,7 @@ def _set_backbone_frozen(model, frozen: bool, logger=None) -> int:
 
 
 def _build_scheduler(optimizer, epochs: int, warmup_epochs: int, warmup_start_lr: float, base_lr: float):
-    """Cosine schedule with an optional linear warmup prepended.
-
-    LinearLR uses start_factor=warmup_start_lr/base_lr so the effective LR
-    ramps from warmup_start_lr on epoch 1 to base_lr at the end of warmup.
-    After that, CosineAnnealingLR runs over the remaining epochs.
-    """
+    """Optional linear warmup (warmup_start_lr -> base_lr) then cosine anneal."""
     if warmup_epochs <= 0 or warmup_epochs >= epochs:
         return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
     start_factor = max(warmup_start_lr / base_lr, 1e-4)
@@ -840,7 +773,7 @@ def _build_scheduler(optimizer, epochs: int, warmup_epochs: int, warmup_start_lr
 
 
 def _ensure_writable_dir(path: str) -> Tuple[bool, str]:
-    """Create dir if needed and verify write access with a tiny probe file."""
+    """Create the dir if needed and probe write access with a temporary file."""
     try:
         os.makedirs(path, exist_ok=True)
         probe_name = f".write_test_{os.getpid()}"
@@ -854,7 +787,7 @@ def _ensure_writable_dir(path: str) -> Tuple[bool, str]:
 
 
 def _resolve_checkpoint_dir(checkpoint_dir: str, output_dir: str) -> Tuple[str, str]:
-    """Return a writable checkpoint dir and an optional warning message."""
+    """Return a writable checkpoint dir (falls back under `output_dir`)."""
     ok, err = _ensure_writable_dir(checkpoint_dir)
     if ok:
         return checkpoint_dir, ""
@@ -892,9 +825,8 @@ def run_training_phase(
     seg_loss_weight = max(0.0, float(seg_loss_weight))
     bbox_loss_weight = max(0.0, float(bbox_loss_weight))
 
-    # Differential LR for fine-tune stability:
-    # - backbone updates are gentle (pretrained features)
-    # - head updates are faster (fresh classifier layers)
+    # Differential LR keeps pretrained backbone updates gentle while the
+    # fresh head trains faster.
     diff_lr_active = bool(differential_lr)
     if diff_lr_active:
         backbone_params = []
@@ -928,19 +860,15 @@ def run_training_phase(
                 f"head_lr={lr:.2e}, backbone_tensors={len(backbone_params)}, head_tensors={len(head_params)}"
             )
     else:
-        # All params go into the optimizer up front. Frozen params have
-        # requires_grad=False, so AdamW skips their step entirely (no weight
-        # decay leak), and unfreezing is a pure requires_grad flip — no optimizer
-        # rebuild, no state loss on the head.
+        # All params join the optimizer up front so unfreezing is a pure
+        # requires_grad flip (no rebuild, no head state loss). AdamW skips
+        # requires_grad=False params, so no weight-decay leak on frozen ones.
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     if diff_lr_active:
-        # Cosine over the full run for the head group. During the freeze
-        # window, the backbone group has requires_grad=False so its scheduled
-        # LR does not matter; after unfreeze, both groups follow the same
-        # cosine schedule from their base LRs onward (with partial decay
-        # already applied — accepted trade-off for keeping the scheduler
-        # logic simple). See flaws.md 1.6.
+        # Single cosine schedule across both groups: the backbone group's
+        # scheduled LR is inert while frozen, then resumes mid-cosine on
+        # unfreeze (accepted trade-off vs. a per-group restart).
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
         if warmup_epochs > 0:
             logger.info(
@@ -965,10 +893,6 @@ def run_training_phase(
     monitor_window = max(1, int(monitor_window))
     phase_prefix = phase_name.lower().replace(' ', '_').replace('_phase', '')
     stamp_day_month = datetime.now().strftime("%h_%d_%m")
-    # Checkpoints live under {checkpoint_dir}/{pipeline}/{model_type}/, mirroring
-    # the output tree. The filename drops the model_type prefix since the
-    # directory already encodes it; phase ("dapt" / "dapt_lp" / "finetune") stays
-    # in the filename so DAPT and finetune checkpoints don't overwrite each other.
     pipeline_dir = get_pipeline(model_type)
     ckpt_save_dir = os.path.join(checkpoint_dir, pipeline_dir, model_type)
     os.makedirs(ckpt_save_dir, exist_ok=True)
@@ -982,11 +906,8 @@ def run_training_phase(
         "macro_f1": deque(maxlen=monitor_window),
     }
 
-    # Dual-best tracking. `_pbest_raw.pth` is the single-epoch peak (the
-    # conventional "best" reported in the thesis); `_pbest_roll.pth` is the
-    # rolling-window peak that drives early stopping. The function returns
-    # the raw checkpoint so downstream phases load the cleaner peak. See
-    # flaws.md 1.1 for the original ambiguity this resolves.
+    # Dual-best: `_pbest_raw` is the single-epoch peak (returned for downstream
+    # phases); `_pbest_roll` is the rolling-window peak driving early stopping.
     best_raw_macro_f1 = -1.0
     best_roll_macro_f1 = -1.0
     best_raw_ckpt = None
@@ -999,8 +920,6 @@ def run_training_phase(
         logger.info(f"[{phase_name}] Detection/segmentation enabled with bbox_loss_weight={bbox_loss_weight:.3f}")
 
     for epoch in range(1, epochs + 1):
-        # Unfreeze exactly once, at the boundary. Same boundary regardless of
-        # whether diff_lr is on (LP-FT case) or off (single-LR freeze case).
         if freeze_backbone_epochs > 0 and epoch == freeze_backbone_epochs + 1:
             _set_backbone_frozen(model, frozen=False, logger=logger)
             logger.info(f"[{phase_name}] Backbone unfrozen at epoch {epoch}.")
@@ -1015,7 +934,7 @@ def run_training_phase(
             current_lr = optimizer.param_groups[0]["lr"]
             logger.info(f"[{phase_name}] Epoch {epoch}/{epochs} | lr={current_lr:.2e}")
             print(f"\n--- {phase_name} Epoch {epoch}/{epochs} | lr={current_lr:.2e} ---")
-        
+
         train_loss, train_macro_f1 = train_fn(
             model=model,
             loader=train_loader,
@@ -1026,7 +945,7 @@ def run_training_phase(
             scaler=scaler,
             use_segmentation=use_segmentation,
             use_det_seg=use_det_seg,
-            accumulation_steps=accumulation_steps, # Pass down here
+            accumulation_steps=accumulation_steps,
             seg_loss_weight=seg_loss_weight,
             bbox_loss_weight=bbox_loss_weight,
             mixup_alpha=mixup_alpha,
@@ -1072,9 +991,8 @@ def run_training_phase(
         print(rolling_msg)
         logger.info(rolling_msg)
 
-        # Per-epoch metrics row for post-hoc plotting. Schema stays stable:
-        # one object per epoch, new pipelines append their extras inside
-        # val_patient / val_slice sub-objects rather than polluting the root.
+        # New pipeline metrics append into val_patient / val_slice sub-objects
+        # so the per-epoch row schema stays stable for post-hoc plotting.
         row: Dict[str, Any] = {
             "timestamp": datetime.now().isoformat(timespec="seconds"),
             "phase": phase_name,
@@ -1084,9 +1002,8 @@ def run_training_phase(
             "lr_head": float(optimizer.param_groups[1]["lr"]) if len(optimizer.param_groups) > 1 else None,
             "train_loss": float(train_loss),
             "train_macro_f1": float(train_macro_f1),
-            # When mixup_active is True, train_macro_f1 is dominant-label
-            # agreement on mixed inputs (lam>=0.5), not a real classifier F1.
-            # See flaws.md 1.2.
+            # When mixup_active, train_macro_f1 is dominant-label agreement on
+            # mixed inputs (lam>=0.5), not a real classifier F1.
             "mixup_alpha": float(mixup_alpha),
             "mixup_active": bool(mixup_alpha > 0.0),
             "val_loss": float(val_metrics["loss"]),
@@ -1108,15 +1025,11 @@ def run_training_phase(
 
         scheduler.step()
 
-        # Save raw-best (single-epoch peak) and roll-best (rolling-window peak)
-        # as separate files. Early stopping still tracks rolling — it's the
-        # smoother monitor — but the canonical checkpoint we report is raw.
         if raw_macro_f1 > best_raw_macro_f1:
             best_raw_macro_f1 = raw_macro_f1
             best_raw_ckpt = os.path.join(ckpt_save_dir, f"{stamp_day_month}_{phase_prefix}_pbest_raw.pth")
             torch.save(model.state_dict(), best_raw_ckpt)
-            # Stable alias so other scripts can reference this checkpoint without
-            # knowing the date-stamped filename (e.g. --dapt-backbone-pattern).
+            # Stable alias decouples downstream scripts from the date stamp.
             stable_alias = os.path.join(ckpt_save_dir, f"model_{phase_prefix}_best.pth")
             if os.path.lexists(stable_alias):
                 os.remove(stable_alias)
@@ -1136,8 +1049,7 @@ def run_training_phase(
             epochs_no_improve = 0
         else:
             epochs_no_improve += 1
-            
-        # Save periodic checkpoint every 10 epochs
+
         if epoch % 10 == 0:
             periodic_ckpt = os.path.join(
                 ckpt_save_dir,
@@ -1145,8 +1057,7 @@ def run_training_phase(
             )
             torch.save(model.state_dict(), periodic_ckpt)
             logger.info(f"[*] Periodic checkpoint saved at epoch {epoch}: {periodic_ckpt}")
-            
-        # Early stopping
+
         if epochs_no_improve >= patience:
             logger.info(
                 f"Early stopping triggered. No rolling macro-F1 improvement for {patience} epochs "
@@ -1166,45 +1077,22 @@ def run_training_phase(
 
 def main():
     args = parse_args()
-    
+
     if not args.initial_checkpoint and args.model_type == "swin_unetr":
         args.initial_checkpoint = "/home/data/pre_trained_models/model_swin_unetr_btcv_segmentation_v1.pt"
-    if not args.initial_checkpoint and args.model_type == "swin_tiny_2d":
-        # Default backbone init: RadImageNet-pretrained Swin-Tiny. The
-        # SwinTiny2DClassifier wrapper performs the MS->timm key remap and
-        # the 3-ch->1-ch stem averaging on load. Pass a different path via
-        # --initial-checkpoint to swap in the img2rin variant or an
-        # ImageNet-pretrained Swin-Tiny.
-        args.initial_checkpoint = "/home/hansstem/RadImageNet_swin/rin_swintf.pth"
-    if not args.initial_checkpoint and args.model_type == "mil_swin_tiny":
-        # mil_swin_tiny: same RadImageNet-pretrained Swin-Tiny init as swin_tiny_2d.
-        # MILSwinTinyClassifier loads this directly in its constructor.
-        args.initial_checkpoint = "/home/hansstem/RadImageNet_swin/rin_swintf.pth"
-    if not args.initial_checkpoint and args.model_type == "resnet50_2d_rin":
-        args.initial_checkpoint = "/home/data/RadImageNet/ResNet50/ResNet50.pt"
-    if not args.initial_checkpoint and args.model_type == "densenet121_2d_rin":
-        args.initial_checkpoint = "/home/data/RadImageNet/DenseNet/DenseNet121.pt"
-        
-    # Organize outputs as: {output_dir}/{pipeline}/{model_type}/
+
     pipeline_dir = get_pipeline(args.model_type)
     args.output_dir = os.path.join(args.output_dir, pipeline_dir, args.model_type)
     os.makedirs(args.output_dir, exist_ok=True)
     args.checkpoint_dir, checkpoint_msg = _resolve_checkpoint_dir(args.checkpoint_dir, args.output_dir)
 
-    # --clear-cache is now scoped: each create_dataset_* builder rmtree's
-    # only its own run-specific cache parent (the parameterized subdir
-    # for THIS run's img_size / depth_size / bag_size / etc.). Sibling
-    # caches keep their entries. Plumbed via the clear_cache kwarg
-    # passed into each create_* call by create_dataloaders below.
-
-
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
     random.seed(args.seed)
-    
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     scaler = GradScaler(enabled=not args.disable_amp and device.type == "cuda")
-    
+
     logger = create_logger(output_dir=args.output_dir, dist_rank=-1, name=f"{args.model_type}")
     logger.info(f"Running {args.model_type} 3D Classification Pipeline")
     logger.info(f"Mode: {args.mode} | Testing: {args.testing} | Device: {device} | AMP: {not args.disable_amp}")
@@ -1222,20 +1110,14 @@ def main():
             "--model-checkpoint is ignored in modes 'full' and 'dapt'. "
             "It is only used in modes 'finetune' and 'inference'."
         )
-    
-    # Segmentation auxiliary loss is only meaningful for SwinUNETR (its decoder
-    # actually consumes the gradient); all other wrappers return a zero-tensor
-    # seg output. The 2.5D/2D/MIL EfficientNet paths have no seg output at all.
-    #
-    # Dataset gating: the loss is only useful when tumor masks are available
-    # in the data list. Lung-PET-CT-Dx (DAPT source) has per-series masks;
-    # BigLunge's 3D path has only lung masks (no tumor masks), so during
-    # BigLunge fine-tune the loss is permanently inert — but if we still pass
-    # use_segmentation=True we'd pay the full decoder forward+backward each
-    # step for nothing. Phase-specific flags below collapse that waste.
+
+    # Seg-aux loss is meaningful only for SwinUNETR (only its decoder consumes
+    # the gradient) and only when tumor masks exist. BigLunge's 3D path has
+    # lung masks only, so finetune_use_seg=False avoids paying the decoder
+    # forward+backward for nothing.
     use_segmentation_loss = (args.model_type == "swin_unetr")
-    dapt_use_seg = use_segmentation_loss          # Lung-PET-CT-Dx has tumor masks
-    finetune_use_seg = False                       # BigLunge 3D path has no tumor masks
+    dapt_use_seg = use_segmentation_loss
+    finetune_use_seg = False
     use_det_seg = bool(getattr(args, "use_det_seg", False))
     tfpn_enabled = not bool(getattr(args, "disable_tfpn", False))
     if args.bbox_source != "mask":
@@ -1244,12 +1126,8 @@ def main():
             "falling back to mask-derived boxes."
         )
 
-    # Pipeline dispatch. For MIL the train/validate fns are phase-specific:
-    # DAPT runs as per-slice whole-slice classification (shares the 2D loop);
-    # fine-tune / inference runs as bag-level MIL.
     pipeline = get_pipeline(args.model_type)
     if pipeline == "mil":
-        # DAPT now uses bag-level dataset → bag-level train/validate loops.
         dapt_train_fn, dapt_validate_fn = train_epoch_mil, validate_epoch_mil
         ft_train_fn, ft_validate_fn = train_epoch_mil, validate_epoch_mil
     elif pipeline == "2d":
@@ -1260,12 +1138,8 @@ def main():
         ft_train_fn, ft_validate_fn = train_epoch, validate_epoch
     logger.info(f"Pipeline: {pipeline} (model_type={args.model_type})")
 
-    # Model construction. get_sclc_model handles all pipelines including MIL.
-    # For MIL, the model is built as a full MIL model from the start; DAPT
-    # uses bag-level training via create_dataset_mil_bag_dapt so no 2D
-    # classifier intermediary is needed.
-    # Save construction kwargs so CV folds can rebuild a fresh model without
-    # trying to clone UninitializedParameter tensors (LazyConv FPN laterals).
+    # Save construction kwargs so each CV fold can rebuild a fresh model
+    # (cloning a state_dict fails on the FPN's UninitializedParameters).
     _model_kwargs = dict(
         checkpoint_path=args.initial_checkpoint,
         model_type=args.model_type,
@@ -1283,8 +1157,8 @@ def main():
         tfpn_levels=args.tfpn_levels,
     )
     model = get_sclc_model(**_model_kwargs).to(device)
-    # LazyConv lateral projections in AdvancedFPNNeck are UninitializedParameter
-    # until the first forward pass; skip the count rather than crash.
+    # FPN LazyConv params materialise on first forward; skip the count
+    # rather than crash on UninitializedParameter.
     if any(isinstance(p, torch.nn.parameter.UninitializedParameter)
            for p in model.parameters()):
         logger.info(f"Initialized {args.model_type} Classifier (FPN LazyConv params "
@@ -1299,7 +1173,7 @@ def main():
 
     n_folds = int(getattr(args, "cv_folds", 1))
     fold_test_results: List[Dict[str, Any]] = []
-    best_dapt_ckpt = None  # set inside fold loop; used by --mode dapt reporting
+    best_dapt_ckpt = None
 
     fold_index_override = getattr(args, "cv_fold_index", None)
     if fold_index_override is not None:
@@ -1317,11 +1191,9 @@ def main():
         _log_rss(logger, f"fold {fold_idx} start")
 
         if fold_idx > 0:
-            # Rebuild from scratch rather than cloning state_dict: models with
-            # AdvancedFPN have UninitializedParameter (LazyConv laterals) that
-            # cannot be cloned before a forward pass materialises them.
-            # Free the previous fold's model on both CPU and GPU before the new
-            # allocation, otherwise both live in memory simultaneously.
+            # Free the previous fold's model on both CPU and GPU before
+            # rebuilding from scratch (cloning state_dict fails on
+            # FPN UninitializedParameters before a forward pass).
             del model
             gc.collect()
             if torch.cuda.is_available():
@@ -1337,7 +1209,7 @@ def main():
             if n_folds > 1 else args.checkpoint_dir
         )
 
-        # --- PHASE 1: DAPT ---
+        # PHASE 1: DAPT
         if args.mode in ["full", "dapt"]:
             logger.info(f"Setting up DAPT Datasets from: {args.dapt_dataset}")
             train_loader, val_loader, dapt_test_loader = create_dataloaders(
@@ -1346,8 +1218,8 @@ def main():
                 cv_fold=cv_fold,
             )
 
-            # Linear-probe DAPT: freeze backbone for the entire run, use a higher
-            # head LR, tag checkpoint as dapt_lp.
+            # --linear-probe freezes backbone for the whole run, uses the head LR,
+            # and tags checkpoints `dapt_lp` so they don't shadow full-DAPT runs.
             dapt_phase_name = "dapt_lp" if args.linear_probe else "dapt"
             dapt_lr = args.linear_probe_lr if args.linear_probe else args.dapt_lr
             dapt_freeze_epochs = args.dapt_epochs + 1 if args.linear_probe else 0
@@ -1378,8 +1250,8 @@ def main():
             )
             current_checkpoint = best_dapt_ckpt
 
-            # DAPT test-set inference: clean read of DAPT generalization before
-            # BigLunge fine-tune perturbations.
+            # DAPT test set runs before fine-tune so the metric isolates DAPT
+            # generalization from BigLunge adaptation.
             logger.info(f"\n{'='*60}\nRunning DAPT Test Set Inference\n{'='*60}")
             if best_dapt_ckpt and os.path.isfile(best_dapt_ckpt):
                 model.load_state_dict(torch.load(best_dapt_ckpt, map_location=device))
@@ -1402,15 +1274,10 @@ def main():
                 prob_file_suffix=f"dapt_fold{fold_idx}" if n_folds > 1 else "dapt",
             )
 
-        # --- PHASE 2: FINETUNE ---
+        # PHASE 2: FINETUNE
         if args.mode in ["full", "finetune"]:
-            is_already_mil = isinstance(
-                model, (MILResNet50Classifier, MILSwinTinyClassifier, MILSwinV2BaseClassifier, MILSwinV2TinyClassifier)
-            )
+            is_already_mil = isinstance(model, MILSwinV2TinyClassifier)
             if pipeline == "mil" and not is_already_mil:
-                # Should not be reached with the current factory (get_sclc_model
-                # always builds a MIL model for mil_* types), but kept as a
-                # safety net in case a checkpoint from an older run is loaded.
                 logger.warning(
                     "[MIL] Model is not a MIL type before finetune — this is unexpected. "
                     "Proceeding with current model weights."
@@ -1435,12 +1302,9 @@ def main():
                     sd = torch.load(args.model_checkpoint, map_location=device)
                     if isinstance(sd, dict) and "state_dict" in sd:
                         sd = sd["state_dict"]
-                    # Route DAPT-side checkpoints through backbone transfer.
-                    if isinstance(model, MILResNet50Classifier) and any(
-                        k.startswith("backbone.features.") for k in sd.keys()
-                    ):
-                        model.load_backbone_from_dapt(sd, logger=logger)
-                    elif isinstance(model, (MILSwinTinyClassifier, MILSwinV2BaseClassifier, MILSwinV2TinyClassifier)) and any(
+                    # DAPT 2D SwinV2-Tiny keys are prefixed `swin.` — route those
+                    # through backbone transfer; anything else is a full MIL ckpt.
+                    if isinstance(model, MILSwinV2TinyClassifier) and any(
                         k.startswith("swin.") for k in sd.keys()
                     ):
                         model.load_backbone_from_dapt(sd, logger=logger)
@@ -1482,12 +1346,12 @@ def main():
                 metrics_path=metrics_path,
             )
 
-            if args.mode == "full":
+            if args.mode in ("full", "finetune"):
                 if best_finetune_ckpt and os.path.isfile(best_finetune_ckpt):
                     model.load_state_dict(torch.load(best_finetune_ckpt, map_location=device))
                     logger.info("Loaded best FineTune checkpoint for inference.")
                 elif best_dapt_ckpt and os.path.isfile(best_dapt_ckpt):
-                    if not isinstance(model, (MILResNet50Classifier, MILSwinTinyClassifier, MILSwinV2BaseClassifier, MILSwinV2TinyClassifier)):
+                    if not isinstance(model, MILSwinV2TinyClassifier):
                         model.load_state_dict(torch.load(best_dapt_ckpt, map_location=device))
                         logger.info("Loaded best DAPT checkpoint for final inference (no finetune ckpt).")
                     else:
@@ -1512,23 +1376,20 @@ def main():
                 if n_folds > 1:
                     fold_test_results.append(fold_metrics)
 
-        # End-of-fold cleanup: drop loader references and run gc before the
-        # next fold's BL fine-tune cache construction piles on top of this
-        # fold's residual loader memory. Mitigates the OOM observed at fold 3
-        # BL test cache validation on baseline 2D models (2026-05-13).
+        # Drop loader refs + gc before the next fold's BL cache construction.
+        # Residual loader memory otherwise OOMs at fold 3 BL test on the 2D path.
         train_loader = val_loader = dapt_test_loader = test_loader = None
         gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
         _log_rss(logger, f"fold {fold_idx} end (post-cleanup)")
 
-    # Aggregate CV metrics into a single 'test' row after all folds.
-    # Skip when running a single fold via --cv-fold-index (would aggregate over n=1).
+    # Skip the CV aggregate row when running a single fold (n=1 is meaningless).
     if (n_folds > 1 and fold_test_results and args.mode == "full"
             and fold_index_override is None):
         _save_cv_aggregate_metrics(fold_test_results, metrics_path, args.model_type, n_folds, logger)
 
-    # --- PHASE 3: INFERENCE (standalone --mode inference only) ---
+    # PHASE 3: INFERENCE (only for --mode inference)
     if args.mode == "inference":
         logger.info(f"\n{'='*60}\nStarting Inference Phase\n{'='*60}")
 
@@ -1536,13 +1397,7 @@ def main():
             sd = torch.load(args.model_checkpoint, map_location=device)
             if isinstance(sd, dict) and "state_dict" in sd:
                 sd = sd["state_dict"]
-            # Route DAPT-side checkpoints through backbone transfer; load
-            # full MIL checkpoints with strict=False.
-            if isinstance(model, MILResNet50Classifier) and any(
-                k.startswith("backbone.features.") for k in sd.keys()
-            ):
-                model.load_backbone_from_dapt(sd, logger=logger)
-            elif isinstance(model, (MILSwinTinyClassifier, MILSwinV2BaseClassifier)) and any(
+            if isinstance(model, MILSwinV2TinyClassifier) and any(
                 k.startswith("swin.") for k in sd.keys()
             ):
                 model.load_backbone_from_dapt(sd, logger=logger)
@@ -1570,7 +1425,7 @@ def main():
             phase="test",
             prob_file_suffix="",
         )
-            
+
     logger.info("Pipeline Execution Complete!")
 
 if __name__ == "__main__":
