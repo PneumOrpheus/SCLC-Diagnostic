@@ -152,6 +152,9 @@ OUTPUT_ROOTS_PER_COHORT: Dict[str, Dict[str, Path]] = {
         "biglunge": REPO_ROOT / "results" / "output_master_fpn_biglunge",
     },
 }
+# Per-(arm, cohort, pipeline) directory overrides. Both base and FPN 3D LPCD
+# now read from their canonical post-fix locations; no overrides needed.
+PIPELINE_ROOT_OVERRIDES: Dict[Tuple[str, str, str], Path] = {}
 # Pipelines whose (arm, pipeline) subtrees are physically split per cohort.
 SPLIT_PIPELINES = ("2d", "3d")
 # Back-compat aliases for older imports.
@@ -179,23 +182,34 @@ def _model_dir(cfg: Config) -> Path:
 def _model_dir_for_cohort(cfg: Config, cohort: str) -> Path:
     """Per-cohort dir for split pipelines; falls through to the primary dir otherwise."""
     if _is_split_2d(cfg):
-        return (OUTPUT_ROOTS_PER_COHORT[cfg.arm][cohort]
-                / cfg.pipeline / cfg.model_type)
+        root_override = PIPELINE_ROOT_OVERRIDES.get((cfg.arm, cohort, cfg.pipeline))
+        root = root_override if root_override is not None else OUTPUT_ROOTS_PER_COHORT[cfg.arm][cohort]
+        return root / cfg.pipeline / cfg.model_type
     return _model_dir(cfg)
 
 
 def _load_metrics_for_cfg(cfg: Config) -> List[Dict[str, Any]]:
     """Load + concatenate metrics.jsonl rows from every dir that holds them.
 
-    For split pipelines this means merging the LPCD dir's ``dapt_*`` rows with
-    the BigLunge dir's ``test_*`` / ``finetune_*`` rows. Each file's rows are
-    in their own training-run order; downstream consumers filter by
-    ``phase`` so concatenation order does not matter."""
+    For split pipelines (per-cohort output layout) the LPCD and BigLunge dirs
+    each carry their own metrics.jsonl. The BigLunge dir's file historically
+    accumulated cross-phase rows from earlier sweeps (DAPT, dapt_test, etc.)
+    that pre-date the post-cv_fold-leak-fix re-runs. To keep downstream
+    selection (best-val per fold, training-curve splitting) reading only the
+    canonical lineage, we filter the contribution from each cohort dir:
+    LPCD-dir rows are kept only for ``dapt`` / ``dapt_test_*`` phases, and
+    BigLunge-dir rows only for ``finetune`` / ``test_*`` phases."""
     if _is_split_2d(cfg):
         rows: List[Dict[str, Any]] = []
         for cohort in ("lpcd", "biglunge"):
             d = _model_dir_for_cohort(cfg, cohort)
-            rows.extend(_load_metrics_jsonl(d / "metrics.jsonl"))
+            for r in _load_metrics_jsonl(d / "metrics.jsonl"):
+                ph = (r.get("phase") or "")
+                is_lpcd_phase = ph.startswith("dapt")
+                if cohort == "lpcd" and is_lpcd_phase:
+                    rows.append(r)
+                elif cohort == "biglunge" and not is_lpcd_phase:
+                    rows.append(r)
         return rows
     return _load_metrics_jsonl(_model_dir(cfg) / "metrics.jsonl")
 
@@ -763,8 +777,8 @@ def _bold_mask(values: List[Optional[float]]) -> List[bool]:
 # =============================================================================
 
 # Section header in LaTeX bodies — distinguishes the two test cohorts.
-_LPCD_HEADER = r"\multicolumn{{COLS}}{@{}l}{\textit{Lung-PET-CT-Dx test (DAPT-internal generalisation)}} \\"
-_BL_HEADER   = r"\multicolumn{{COLS}}{@{}l}{\textit{BigLunge test (target generalisation)}} \\"
+_LPCD_HEADER = r"\multicolumn{{COLS}}{@{}l}{\textit{Lung-PET-CT-Dx test }} \\"
+_BL_HEADER   = r"\multicolumn{{COLS}}{@{}l}{\textit{BigLunge test }} \\"
 
 
 def _table_rows_for_arm(results: List[ConfigResult], arm: str) -> List[ConfigResult]:
@@ -982,29 +996,45 @@ def write_per_class_auc_table(results: List[ConfigResult], out_dir: Path) -> Non
 
 
 def write_fpn_ablation_table(results: List[ConfigResult], out_dir: Path) -> None:
-    """One row per (pipeline, backbone) showing baseline vs FPN deltas on BL."""
+    """One row per (pipeline, backbone, cohort) showing baseline vs FPN deltas.
+
+    Reports both Lung-PET-CT-Dx  and BigLunge
+     in a single table grouped by cohort.
+
+    TODO: base 2D SwinV2-Tiny BigLunge is still 2/5 folds (F0, F3, n=208) at
+    the data cut-off; the matched FPN row is 5/5. The BL row for that
+    backbone is therefore comparing across an unbalanced fold coverage in
+    the pooled view. Re-running the missing F1/F2/F4 base-arm SwinV2-Tiny
+    BigLunge folds via scripts/runners/run_2d_lpcd_dapt_and_bl_gaps.sh (or
+    a dedicated BL-only follow-up runner) is the prerequisite for a clean
+    paired comparison on that backbone.
+    """
     by_key: Dict[Tuple[str, str, str], Dict[str, ConfigResult]] = {}
     for r in results:
         key = (r.cfg.pipeline, r.cfg.model_type, r.cfg.backbone_label)
         by_key.setdefault(key, {})[r.cfg.arm] = r
 
+    cohorts = [("lpcd", "Lung-PET-CT-Dx test "),
+               ("biglunge", "BigLunge test ")]
+
     csv_path = out_dir / "table_fpn_ablation.csv"
     with csv_path.open("w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["pipeline", "backbone",
+        w.writerow(["cohort", "pipeline", "backbone",
                     "macro_f1_base", "macro_f1_fpn", "delta_macro_f1",
                     "macro_auc_base", "macro_auc_fpn", "delta_macro_auc",
                     "bal_acc_base", "bal_acc_fpn", "delta_bal_acc"])
-        for key, arm_map in by_key.items():
-            base_m = (arm_map.get("base") or ConfigResult(_dummy_cfg(), {}, {}, {}, {}, {})).union_metrics.get("biglunge", {})
-            fpn_m = (arm_map.get("fpn") or ConfigResult(_dummy_cfg(), {}, {}, {}, {}, {})).union_metrics.get("biglunge", {})
-            row = [key[0], key[2]]
-            for metric in ["macro_f1", "macro_auc", "balanced_accuracy"]:
-                bv = base_m.get(metric); fv = fpn_m.get(metric)
-                delta = (fv - bv) if (bv is not None and fv is not None
-                                      and np.isfinite(bv) and np.isfinite(fv)) else None
-                row += [bv, fv, delta]
-            w.writerow(row)
+        for cohort, _ in cohorts:
+            for key, arm_map in by_key.items():
+                base_m = (arm_map.get("base") or ConfigResult(_dummy_cfg(), {}, {}, {}, {}, {})).union_metrics.get(cohort, {})
+                fpn_m = (arm_map.get("fpn") or ConfigResult(_dummy_cfg(), {}, {}, {}, {}, {})).union_metrics.get(cohort, {})
+                row = [cohort, key[0], key[2]]
+                for metric in ["macro_f1", "macro_auc", "balanced_accuracy"]:
+                    bv = base_m.get(metric); fv = fpn_m.get(metric)
+                    delta = (fv - bv) if (bv is not None and fv is not None
+                                          and np.isfinite(bv) and np.isfinite(fv)) else None
+                    row += [bv, fv, delta]
+                w.writerow(row)
 
     lines: List[str] = [
         r"% Auto-generated by scripts/build_final_results.py — do not edit by hand.",
@@ -1017,20 +1047,24 @@ def write_fpn_ablation_table(results: List[ConfigResult], out_dir: Path) -> None
         r"\textbf{Baseline} & \textbf{FPN} & \textbf{$\Delta$} \\",
         r"\midrule",
     ]
-    for key, arm_map in by_key.items():
-        base_m = arm_map.get("base").union_metrics.get("biglunge", {}) if arm_map.get("base") else {}
-        fpn_m  = arm_map.get("fpn").union_metrics.get("biglunge", {}) if arm_map.get("fpn") else {}
-        cells = [key[0], key[2]]
-        for metric in ["macro_f1", "macro_auc"]:
-            bv = base_m.get(metric); fv = fpn_m.get(metric)
-            cells.append(_fmt_ci_tex(bv, *_ci(base_m, metric)))
-            cells.append(_fmt_ci_tex(fv, *_ci(fpn_m, metric)))
-            if bv is not None and fv is not None and np.isfinite(bv) and np.isfinite(fv):
-                d = fv - bv
-                cells.append(f"${d:+.3f}$")
-            else:
-                cells.append("--")
-        lines.append(" & ".join(cells) + r" \\")
+    for ci, (cohort, header) in enumerate(cohorts):
+        lines.append(r"\multicolumn{8}{@{}l}{\textit{" + header + r"}} \\")
+        for key, arm_map in by_key.items():
+            base_m = arm_map.get("base").union_metrics.get(cohort, {}) if arm_map.get("base") else {}
+            fpn_m  = arm_map.get("fpn").union_metrics.get(cohort, {}) if arm_map.get("fpn") else {}
+            cells = [key[0], key[2]]
+            for metric in ["macro_f1", "macro_auc"]:
+                bv = base_m.get(metric); fv = fpn_m.get(metric)
+                cells.append(_fmt_ci_tex(bv, *_ci(base_m, metric)))
+                cells.append(_fmt_ci_tex(fv, *_ci(fpn_m, metric)))
+                if bv is not None and fv is not None and np.isfinite(bv) and np.isfinite(fv):
+                    d = fv - bv
+                    cells.append(f"${d:+.3f}$")
+                else:
+                    cells.append("--")
+            lines.append(" & ".join(cells) + r" \\")
+        if ci < len(cohorts) - 1:
+            lines.append(r"\midrule")
     lines.append(r"\bottomrule")
     lines.append(r"\end{tabular}")
     (out_dir / "table_fpn_ablation.tex").write_text("\n".join(lines) + "\n")
@@ -1041,63 +1075,69 @@ def _dummy_cfg() -> Config:
 
 
 def write_fpn_paired_table(results: List[ConfigResult], out_dir: Path) -> None:
-    """Per-fold ΔMF1 (FPN − baseline) on BigLunge for each backbone.
+    """Per-fold ΔMF1 (FPN − baseline) per (cohort, backbone).
 
-    Pairs the baseline and FPN ``per_fold_metrics.json`` entries on
-    matching fold indices, computes the per-fold delta, and reports
-    the mean ± SE across folds present in BOTH arms. This is the
-    methodologically defensible comparison when one arm's pooled
-    union is over a different fold set than the other's (e.g. when
-    the baseline arm is missing a fold that the FPN arm has, or
-    vice versa) — see the auxiliary diagnostic adjunct to
-    ``table_fpn_ablation``.
+    Reports the per-fold paired comparison on both Lung-PET-CT-Dx and
+    BigLunge. Pairs the baseline and FPN ``per_fold_metrics.json`` entries
+    on matching fold indices, computes the per-fold delta, and reports the
+    mean ± SE across folds present in BOTH arms.
+
+    TODO: base 2D SwinV2-Tiny BigLunge is still 2/5 folds (F0, F3) at the
+    data cut-off, so the BL paired comparison for that backbone collapses
+    to two paired folds. Re-running F1/F2/F4 of base 2D SwinV2-Tiny on
+    BigLunge is the prerequisite for restoring the full five-fold paired
+    comparison on that row.
     """
     by_key: Dict[Tuple[str, str, str], Dict[str, ConfigResult]] = {}
     for r in results:
         key = (r.cfg.pipeline, r.cfg.model_type, r.cfg.backbone_label)
         by_key.setdefault(key, {})[r.cfg.arm] = r
 
+    cohorts = [("lpcd", "Lung-PET-CT-Dx test "),
+               ("biglunge", "BigLunge test ")]
+
     csv_path = out_dir / "table_fpn_paired.csv"
     with csv_path.open("w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["pipeline", "backbone",
+        w.writerow(["cohort", "pipeline", "backbone",
                     *[f"fold{k}_delta_macro_f1" for k in range(N_FOLDS)],
                     "mean_delta_macro_f1", "se_delta_macro_f1",
                     *[f"fold{k}_delta_macro_auc" for k in range(N_FOLDS)],
                     "mean_delta_macro_auc", "se_delta_macro_auc",
                     "n_paired_folds"])
-        for key, arm_map in by_key.items():
-            base = arm_map.get("base")
-            fpn  = arm_map.get("fpn")
-            if base is None or fpn is None:
-                continue
-            base_pf = base.per_fold_metrics.get("biglunge", {})
-            fpn_pf  = fpn.per_fold_metrics.get("biglunge", {})
-            mf1_deltas: List[Optional[float]] = []
-            auc_deltas: List[Optional[float]] = []
-            for k in range(N_FOLDS):
-                bv = base_pf.get(k, {}).get("macro_f1")
-                fv = fpn_pf.get(k, {}).get("macro_f1")
-                bavu = base_pf.get(k, {}).get("macro_auc")
-                favu = fpn_pf.get(k, {}).get("macro_auc")
-                d_mf1 = (fv - bv) if (bv is not None and fv is not None
-                                      and np.isfinite(bv) and np.isfinite(fv)) else None
-                d_auc = (favu - bavu) if (bavu is not None and favu is not None
-                                          and np.isfinite(bavu) and np.isfinite(favu)) else None
-                mf1_deltas.append(d_mf1)
-                auc_deltas.append(d_auc)
-            mf1_mean, mf1_se, n_paired = _mean_se(mf1_deltas)
-            auc_mean, auc_se, _        = _mean_se(auc_deltas)
-            w.writerow([
-                key[0], key[2],
-                *[(v if v is not None else "") for v in mf1_deltas],
-                mf1_mean if mf1_mean is not None else "",
-                mf1_se if mf1_se is not None else "",
-                *[(v if v is not None else "") for v in auc_deltas],
-                auc_mean if auc_mean is not None else "",
-                auc_se if auc_se is not None else "",
-                n_paired,
-            ])
+        for cohort, _ in cohorts:
+            for key, arm_map in by_key.items():
+                base = arm_map.get("base")
+                fpn  = arm_map.get("fpn")
+                if base is None or fpn is None:
+                    continue
+                base_pf = base.per_fold_metrics.get(cohort, {})
+                fpn_pf  = fpn.per_fold_metrics.get(cohort, {})
+                mf1_deltas: List[Optional[float]] = []
+                auc_deltas: List[Optional[float]] = []
+                for k in range(N_FOLDS):
+                    bv = base_pf.get(k, {}).get("macro_f1")
+                    fv = fpn_pf.get(k, {}).get("macro_f1")
+                    bavu = base_pf.get(k, {}).get("macro_auc")
+                    favu = fpn_pf.get(k, {}).get("macro_auc")
+                    d_mf1 = (fv - bv) if (bv is not None and fv is not None
+                                          and np.isfinite(bv) and np.isfinite(fv)) else None
+                    d_auc = (favu - bavu) if (bavu is not None and favu is not None
+                                              and np.isfinite(bavu) and np.isfinite(favu)) else None
+                    mf1_deltas.append(d_mf1)
+                    auc_deltas.append(d_auc)
+                mf1_mean, mf1_se, n_paired = _mean_se(mf1_deltas)
+                auc_mean, auc_se, _        = _mean_se(auc_deltas)
+                w.writerow([
+                    cohort, key[0], key[2],
+                    *[(v if v is not None else "") for v in mf1_deltas],
+                    mf1_mean if mf1_mean is not None else "",
+                    mf1_se if mf1_se is not None else "",
+                    *[(v if v is not None else "") for v in auc_deltas],
+                    auc_mean if auc_mean is not None else "",
+                    auc_se if auc_se is not None else "",
+                    n_paired,
+                ])
 
     lines: List[str] = [
         r"% Auto-generated by scripts/build_final_results.py — do not edit by hand.",
@@ -1110,35 +1150,39 @@ def write_fpn_paired_table(results: List[ConfigResult], out_dir: Path) -> None:
         r"\textbf{Mean $\pm$ SE} & \textbf{Paired folds} \\",
         r"\midrule",
     ]
-    for key, arm_map in by_key.items():
-        base = arm_map.get("base")
-        fpn  = arm_map.get("fpn")
-        if base is None or fpn is None:
-            continue
-        base_pf = base.per_fold_metrics.get("biglunge", {})
-        fpn_pf  = fpn.per_fold_metrics.get("biglunge", {})
-        deltas: List[Optional[float]] = []
-        for k in range(N_FOLDS):
-            bv = base_pf.get(k, {}).get("macro_f1")
-            fv = fpn_pf.get(k, {}).get("macro_f1")
-            d = (fv - bv) if (bv is not None and fv is not None
-                              and np.isfinite(bv) and np.isfinite(fv)) else None
-            deltas.append(d)
-        mean, se, n_paired = _mean_se(deltas)
-        cells = [
-            (f"${d:+.3f}$" if d is not None and np.isfinite(d) else "--")
-            for d in deltas
-        ]
-        if mean is not None and np.isfinite(mean):
-            if se is not None and np.isfinite(se):
-                mean_cell = f"${mean:+.3f} \\pm {se:.3f}$"
+    for ci, (cohort, header) in enumerate(cohorts):
+        lines.append(r"\multicolumn{9}{@{}l}{\textit{" + header + r"}} \\")
+        for key, arm_map in by_key.items():
+            base = arm_map.get("base")
+            fpn  = arm_map.get("fpn")
+            if base is None or fpn is None:
+                continue
+            base_pf = base.per_fold_metrics.get(cohort, {})
+            fpn_pf  = fpn.per_fold_metrics.get(cohort, {})
+            deltas: List[Optional[float]] = []
+            for k in range(N_FOLDS):
+                bv = base_pf.get(k, {}).get("macro_f1")
+                fv = fpn_pf.get(k, {}).get("macro_f1")
+                d = (fv - bv) if (bv is not None and fv is not None
+                                  and np.isfinite(bv) and np.isfinite(fv)) else None
+                deltas.append(d)
+            mean, se, n_paired = _mean_se(deltas)
+            cells = [
+                (f"${d:+.3f}$" if d is not None and np.isfinite(d) else "--")
+                for d in deltas
+            ]
+            if mean is not None and np.isfinite(mean):
+                if se is not None and np.isfinite(se):
+                    mean_cell = f"${mean:+.3f} \\pm {se:.3f}$"
+                else:
+                    mean_cell = f"${mean:+.3f}$"
             else:
-                mean_cell = f"${mean:+.3f}$"
-        else:
-            mean_cell = "--"
-        lines.append(" & ".join([
-            key[0], key[2], *cells, mean_cell, f"${n_paired}/{N_FOLDS}$",
-        ]) + r" \\")
+                mean_cell = "--"
+            lines.append(" & ".join([
+                key[0], key[2], *cells, mean_cell, f"${n_paired}/{N_FOLDS}$",
+            ]) + r" \\")
+        if ci < len(cohorts) - 1:
+            lines.append(r"\midrule")
     lines.append(r"\bottomrule")
     lines.append(r"\end{tabular}")
     (out_dir / "table_fpn_paired.tex").write_text("\n".join(lines) + "\n")
@@ -1170,15 +1214,23 @@ def write_per_fold_variance_table(results: List[ConfigResult], out_dir: Path) ->
 
     lines: List[str] = [
         r"% Auto-generated by scripts/build_final_results.py — do not edit by hand.",
-        r"\begin{tabular}{@{} l l c c c c c c c @{}}",
+        r"\begin{tabular}{@{} l l c c c c c c @{}}",
         r"\toprule",
-        r"\textbf{Pipeline} & \textbf{Backbone} & \textbf{Cohort} & "
+        r"\textbf{Pipeline} & \textbf{Backbone} & "
         r"\textbf{F0} & \textbf{F1} & \textbf{F2} & \textbf{F3} & \textbf{F4} & "
         r"\textbf{Mean $\pm$ SE} \\",
-        r"\midrule",
     ]
-    for r in base:
-        for cohort in ("lpcd", "biglunge"):
+    cohort_headers = [
+        ("lpcd",     "Lung-PET-CT-Dx test "),
+        ("biglunge", "BigLunge test "),
+    ]
+    for ci, (cohort, header) in enumerate(cohort_headers):
+        if ci == 0:
+            lines.append(r"\midrule")
+        else:
+            lines.append(r"\midrule")
+        lines.append(r"\multicolumn{8}{@{}l}{\textit{" + header + r"}} \\")
+        for r in base:
             pf = r.per_fold_metrics.get(cohort, {})
             vals = [pf.get(k, {}).get("macro_f1") for k in range(N_FOLDS)]
             finite = [v for v in vals if v is not None and np.isfinite(v)]
@@ -1190,9 +1242,8 @@ def write_per_fold_variance_table(results: List[ConfigResult], out_dir: Path) ->
                 mean_cell = f"${mean:.3f} \\pm {se:.3f}$"
             else:
                 mean_cell = "--"
-            cohort_label = "LPCD" if cohort == "lpcd" else "BigLunge"
             lines.append(" & ".join([
-                r.cfg.pipeline_label, r.cfg.backbone_label, cohort_label,
+                r.cfg.pipeline_label, r.cfg.backbone_label,
                 *fold_cells, mean_cell,
             ]) + r" \\")
     lines.append(r"\bottomrule")
@@ -1200,7 +1251,7 @@ def write_per_fold_variance_table(results: List[ConfigResult], out_dir: Path) ->
     (out_dir / "table_per_fold_variance.tex").write_text("\n".join(lines) + "\n")
 
 
-# LPCD literature anchors (Honda, Dunn): hard-coded reference numbers from
+# LPCD DL Literature anchors (Honda, Dunn): hard-coded reference numbers from
 # the SLR — our row is built from the baseline matrix on LPCD at runtime.
 LITERATURE_ANCHORS: List[Dict[str, Any]] = [
     {"study": r"Honda et al.\ \cite{Honda2024} (image-only)",
@@ -1267,7 +1318,7 @@ def write_literature_anchor_table(results: List[ConfigResult], out_dir: Path) ->
             _fmt_ci_tex(m.get("macro_f1"), *_ci(m, "macro_f1")),
         ]) + r" \\")
     lines.append(r"\midrule")
-    lines.append(r"\multicolumn{5}{@{}l}{\textit{Literature anchors on Lung-PET-CT-Dx}} \\")
+    lines.append(r"\multicolumn{5}{@{}l}{\textit{DL Literature anchors on Lung-PET-CT-Dx}} \\")
     for row in LITERATURE_ANCHORS:
         acc = f"${row['accuracy']:.3f}$" if row.get("accuracy") is not None else "--"
         f1 = f"${row['macro_f1']:.3f}$" if row.get("macro_f1") is not None else "--"
@@ -1297,8 +1348,13 @@ def _best_val_row_per_fold(
     present but degenerate``.
     """
     runs = _split_metrics_into_folds(rows, phase)
+    # Take the MOST-RECENT N_FOLDS sub-runs. The BigLunge-side metrics.jsonl
+    # for some configs (notably the post-cv_fold-leak-fix swinv2 re-runs)
+    # accumulated multiple fine-tune lifetimes; the canonical lineage is the
+    # latest one. For configs that ran only once, len(runs) == N_FOLDS so
+    # the slice is a no-op.
     out: List[Dict[str, Any]] = []
-    for run in runs[:N_FOLDS]:
+    for run in runs[-N_FOLDS:]:
         best_mf1: Optional[float] = None
         best_acc: Optional[float] = None
         best_epoch: Optional[int] = None
@@ -1505,7 +1561,7 @@ def fig_overall_macro_f1(results: List[ConfigResult], out_dir: Path) -> None:
     ax.set_xticks(xs)
     ax.set_xticklabels([_short_label(r.cfg) for r in base], rotation=25, ha="right")
     ax.set_ylabel("Macro-F1 (95% bootstrap CI)"); ax.set_ylim(0, 1)
-    ax.set_title("Macro-F1 across the dimensionality ladder (baseline arm)")
+    ax.set_title("Macro-F1 across the dimensionality ladder ")
     ax.grid(axis="y", alpha=0.3, linestyle=":")
     ax.legend(loc="upper right", frameon=False)
     fig.savefig(out_dir / "fig_overall_macro_f1.pdf"); plt.close(fig)
@@ -1540,7 +1596,7 @@ def fig_per_class_f1(results: List[ConfigResult], out_dir: Path) -> None:
     ax.set_xticks(xs)
     ax.set_xticklabels([_short_label(r.cfg) for r in base], rotation=25, ha="right")
     ax.set_ylabel("Per-class F1 (95% bootstrap CI)"); ax.set_ylim(0, 1)
-    ax.set_title("Per-class F1 — BigLunge test (baseline arm)")
+    ax.set_title("Per-class F1 — BigLunge test ")
     ax.grid(axis="y", alpha=0.3, linestyle=":")
     ax.legend(loc="upper right", frameon=False)
     fig.savefig(out_dir / "fig_per_class_f1.pdf"); plt.close(fig)
@@ -1576,7 +1632,7 @@ def fig_per_class_auc(results: List[ConfigResult], out_dir: Path) -> None:
     ax.set_xticks(xs)
     ax.set_xticklabels([_short_label(r.cfg) for r in base], rotation=25, ha="right")
     ax.set_ylabel("Per-class AUC, one-vs-rest (95% CI)"); ax.set_ylim(0, 1)
-    ax.set_title("Per-class AUC — BigLunge test (baseline arm)")
+    ax.set_title("Per-class AUC — BigLunge test ")
     ax.grid(axis="y", alpha=0.3, linestyle=":")
     ax.legend(loc="lower right", frameon=False)
     fig.savefig(out_dir / "fig_per_class_auc.pdf"); plt.close(fig)
@@ -1725,6 +1781,59 @@ def fig_training_curves(results: List[ConfigResult], out_dir: Path) -> None:
                           frameon=False, fontsize=7)
     fig.tight_layout()
     fig.savefig(out_dir / "fig_training_curves.pdf"); plt.close(fig)
+
+
+def fig_training_curves_acc(results: List[ConfigResult], out_dir: Path) -> None:
+    """Validation-accuracy companion to ``fig_training_curves``. Same layout
+    (rows = configs, columns = DAPT / fine-tune, baseline solid vs FPN dashed,
+    per-fold colour) but reads ``val_accuracy`` from each metrics.jsonl row
+    instead of the macro-F1 rolling/raw fields."""
+    base = _table_rows_for_arm(results, "base")
+    fpn_by_key: Dict[Tuple[str, str], ConfigResult] = {
+        (r.cfg.pipeline, r.cfg.model_type): r
+        for r in results if r.cfg.arm == "fpn"}
+    rows = len(base)
+    if rows == 0:
+        return
+    fig, axes = plt.subplots(rows, 2, figsize=(11, 2.5 * rows), squeeze=False)
+    cmap = plt.cm.tab10
+    for ri, r in enumerate(base):
+        base_rows = _load_metrics_for_cfg(r.cfg)
+        fpn_r = fpn_by_key.get((r.cfg.pipeline, r.cfg.model_type))
+        fpn_rows = (_load_metrics_for_cfg(fpn_r.cfg)
+                    if fpn_r is not None else [])
+        for ci, (phase, title) in enumerate([("dapt", "DAPT (Lung-PET-CT-Dx)"),
+                                              ("finetune", "Fine-tune (BigLunge)")]):
+            ax = axes[ri][ci]
+            for arm_rows, linestyle, alpha in [(base_rows, "-", 0.80),
+                                                (fpn_rows, "--", 0.60)]:
+                if not arm_rows:
+                    continue
+                runs = _split_metrics_into_folds(arm_rows, phase)
+                for fk, run in enumerate(runs[:N_FOLDS]):
+                    ep = [int(rr.get("epoch") or 0) for rr in run]
+                    va = [rr.get("val_accuracy") for rr in run]
+                    if not ep or not va:
+                        continue
+                    xs = [e for e, v in zip(ep, va) if v is not None]
+                    ys = [v for v in va if v is not None]
+                    if not xs:
+                        continue
+                    ax.plot(xs, ys, linewidth=1.1, alpha=alpha,
+                            color=cmap(fk), linestyle=linestyle)
+            ax.set_title(f"{_short_label(r.cfg)} — {title}", fontsize=9)
+            ax.set_xlabel("Epoch")
+            if ci == 0:
+                ax.set_ylabel("val accuracy")
+            ax.set_ylim(0, 1)
+            ax.grid(alpha=0.3, linestyle=":")
+            if ri == 0 and ci == 1:
+                handles = [Line2D([0], [0], color="#444", linestyle="-", label="Baseline"),
+                           Line2D([0], [0], color="#444", linestyle="--", label="FPN")]
+                ax.legend(handles=handles, loc="lower right",
+                          frameon=False, fontsize=7)
+    fig.tight_layout()
+    fig.savefig(out_dir / "fig_training_curves_acc.pdf"); plt.close(fig)
 
 
 def fig_fpn_delta(results: List[ConfigResult], out_dir: Path) -> None:
@@ -1880,7 +1989,7 @@ def fig_mil_attention(results: List[ConfigResult], out_dir: Path) -> None:
         ax.grid(axis="y", alpha=0.3, linestyle=":")
     axes[0].set_ylim(0, float(np.log(bag_size)) * 1.15)
     axes[1].set_ylim(0, 1.0)
-    fig.suptitle("MIL pipeline attention diagnostics (baseline arm)", y=1.02)
+    fig.suptitle("MIL pipeline attention diagnostics ", y=1.02)
     fig.tight_layout()
     fig.savefig(out_dir / "fig_mil_attention.pdf"); plt.close(fig)
 
@@ -2075,6 +2184,7 @@ def main() -> None:
         fig_dapt_test_gap(results, figs_dir)
         fig_confusion_matrices(results, figs_dir)
         fig_training_curves(results, figs_dir)
+        fig_training_curves_acc(results, figs_dir)
         fig_fpn_delta(results, figs_dir)
         fig_2d_per_class(results, figs_dir)
         fig_mil_attention(results, figs_dir)
