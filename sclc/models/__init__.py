@@ -1,31 +1,21 @@
-"""Model factory + per-family classifier wrappers.
+"""Model factory + per-family classifier wrappers."""
 
-Public re-exports keep the historical ``from sclc.models import X`` flat surface
-intact, even though the wrappers now live in topic-specific submodules.
-"""
-
+from .classifiers_2d import (
+    DenseNet2DClassifier,
+    EfficientNet2DClassifier,
+    SwinV2Tiny2DClassifier,
+    TorchVisionResNet2DClassifier,
+)
+from .classifiers_mil import MILSwinV2TinyClassifier
 from .factory import (
-    get_sclc_model,
+    MIL_MODEL_TYPES,
+    TWO_D_MODEL_TYPES,
     get_pipeline,
+    get_sclc_model,
     is_2d_model_type,
     is_mil_model_type,
-    TWO_D_MODEL_TYPES,
-    MIL_MODEL_TYPES,
 )
 from .swin_unetr import SwinUNETRClassifier
-from .classifiers_2d import (
-    EfficientNet2DClassifier,
-    DenseNet2DClassifier,
-    TorchVisionResNet2DClassifier,
-    SwinTiny2DClassifier,
-    SwinV2Base2DClassifier,
-    SwinV2Tiny2DClassifier,
-)
-from .classifiers_rin import (
-    RadImageNetResNet502DClassifier,
-    RadImageNetDenseNet1212DClassifier,
-)
-from .classifiers_mil import MILResNet50Classifier, MILSwinTinyClassifier, MILSwinV2BaseClassifier, MILSwinV2TinyClassifier
 
 __all__ = [
     "get_sclc_model",
@@ -38,13 +28,6 @@ __all__ = [
     "EfficientNet2DClassifier",
     "DenseNet2DClassifier",
     "TorchVisionResNet2DClassifier",
-    "SwinTiny2DClassifier",
-    "SwinV2Base2DClassifier",
     "SwinV2Tiny2DClassifier",
-    "RadImageNetResNet502DClassifier",
-    "RadImageNetDenseNet1212DClassifier",
-    "MILResNet50Classifier",
-    "MILSwinTinyClassifier",
-    "MILSwinV2BaseClassifier",
     "MILSwinV2TinyClassifier",
 ]

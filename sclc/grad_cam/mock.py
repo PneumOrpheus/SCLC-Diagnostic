@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -12,7 +11,6 @@ import torch
 import torch.nn.functional as F
 
 from sclc.grad_cam.colorize import colorize_heatmap, colorize_overlay, save_rgb_nifti
-
 
 DEFAULT_PATIENT_DIR = "/home/data/Lung-PET-CT-Dx-Clean/Lung_Dx-A0043"
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "mock"
@@ -43,7 +41,7 @@ def _robust_norm_ct(ct: np.ndarray, eps: float = 1e-8) -> np.ndarray:
 
 
 def _gaussian_blur3d(volume: np.ndarray, sigma: float) -> np.ndarray:
-    """Small separable Gaussian blur using torch conv3d to avoid scipy dependency."""
+    # Separable conv3d avoids depending on scipy for a single blur call.
     if sigma <= 0:
         return volume.astype(np.float32)
 
@@ -77,7 +75,6 @@ def _elliptical_gaussian(shape: Tuple[int, int, int], center: Tuple[float, float
 
 
 def _connected_components(mask_bin: np.ndarray) -> List[np.ndarray]:
-    """Return a list of boolean 3D arrays, one per connected component."""
     try:
         from scipy.ndimage import label as ndi_label  # type: ignore
     except ImportError:
@@ -88,13 +85,8 @@ def _connected_components(mask_bin: np.ndarray) -> List[np.ndarray]:
 
 def _build_mock_gradcam(ct: np.ndarray, mask: np.ndarray, rng: np.random.Generator) -> Tuple[np.ndarray, Dict[str, float]]:
     """Mock a Grad-CAM-looking heatmap:
-      - One ellipsoidal Gaussian blob per connected component of ``mask``, sized
-        from the component's bbox so the FWHM roughly matches the lesion.
-      - Low-frequency noise modulation so the blob has organic, wavy edges
-        instead of a textbook ellipse.
-      - Body-mask gating so intensity stays inside the patient.
-    The old blurred-bbox terms are dropped entirely — they were the reason the
-    output looked rectangular, because bbox masks are axis-aligned boxes.
+    one ellipsoidal Gaussian blob per connected component of `mask`,
+    modulated by low-frequency noise and gated to the body silhouette.
     """
     ct_norm = _robust_norm_ct(ct)
     mask_bin = (mask > 0.5).astype(np.float32)
@@ -112,29 +104,25 @@ def _build_mock_gradcam(ct: np.ndarray, mask: np.ndarray, rng: np.random.Generat
             maxs = nz.max(axis=0).astype(np.float32)
             extents = np.maximum((maxs - mins + 1), 3.0)
             center = nz.mean(axis=0).astype(np.float32)
-            # sigma ~ 0.55 * extent makes the blob ~lesion-sized at its FWHM
-            # while fading smoothly outside — same order across X/Y/Z so the
-            # blob is near-spherical when extents are isotropic.
+            # sigma ~ 0.55 * extent: FWHM ~ lesion size, smooth fade outside.
             sigma_xyz = tuple(float(max(4.0, e * 0.55)) for e in extents)
             blob = _elliptical_gaussian(mask_bin.shape, tuple(center.tolist()), sigma_xyz)
             cam = np.maximum(cam, blob)
             blob_count += 1
     else:
-        # No mask: drop a plausible central hotspot so the mock still renders.
+        # No mask: place a central hotspot so the mock still renders.
         shape = np.array(ct_norm.shape, dtype=np.float32)
         center = tuple((shape * np.array([0.52, 0.48, 0.50])).tolist())
         sigma_xyz = tuple(float(s * 0.10) for s in shape)
         cam = _elliptical_gaussian(ct_norm.shape, center, sigma_xyz)
 
-    # Body mask keeps attention inside the patient silhouette.
     body_mask = (ct > np.percentile(ct, 5.0)).astype(np.float32)
     body_soft = _norm_01(_gaussian_blur3d(body_mask, sigma=2.0))
 
-    # Low-frequency noise modulation: multiplies the blob by 1 ± ~35%, breaking
-    # the perfect-ellipse look without changing its rough circular footprint.
+    # Multiplies the blob by 1 ± ~35% to break the perfect-ellipse look.
     noise = rng.normal(loc=0.0, scale=1.0, size=ct_norm.shape).astype(np.float32)
     noise = _gaussian_blur3d(noise, sigma=3.0)
-    noise = _norm_01(noise) - 0.5  # centered on 0, range ~[-0.5, 0.5]
+    noise = _norm_01(noise) - 0.5
     cam = cam * (1.0 + 0.35 * noise)
 
     cam = cam * body_soft

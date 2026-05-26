@@ -1,13 +1,14 @@
 """Bootstrap confidence intervals for classification metrics on small val sets.
 
-Used for the 52-patient Lung-PET-CT-Dx validation split, where a 2-3 percentage
-point difference in MacroF1 is well inside sampling noise. Reporting point
-estimates without a CI on a set that small is not defensible.
+On the 52-patient Lung-PET-CT-Dx validation split, a 2-3 pp MacroF1 difference
+is within sampling noise — point estimates alone are not defensible.
 """
 from __future__ import annotations
+
 from typing import Callable, Dict, List, Tuple
 
 import numpy as np
+from sklearn.metrics import f1_score
 
 
 def bootstrap_ci(
@@ -22,9 +23,8 @@ def bootstrap_ci(
     """Return (point, lo, hi) where lo/hi are alpha/2 and 1-alpha/2 quantiles.
 
     stratified=True resamples within each class so rare classes (SC=6, Sq=9
-    on the DAPT val split) are always represented in every resample. For macro
-    metrics this is the correct default — unstratified resamples can drop a
-    rare class entirely and blow up the CI.
+    on the DAPT val split) are always represented — unstratified resamples
+    can drop a rare class entirely and blow up macro CIs.
     """
     y_true_arr = np.asarray(y_true)
     y_pred_arr = np.asarray(y_pred)
@@ -67,12 +67,9 @@ def per_class_f1_ci(
 ) -> List[Tuple[float, float]]:
     """Stratified bootstrap CIs for per-class F1. Returns [(lo, hi), ...].
 
-    Each class's F1 is a function of the full prediction array (needs false
-    positives from *other* classes), so we resample the full vector and
-    recompute all class F1s per replicate rather than resampling per class.
+    F1 for each class depends on false positives from other classes, so we
+    resample the full vector and recompute all F1s per replicate.
     """
-    from sklearn.metrics import f1_score
-
     y_true_arr = np.asarray(y_true)
     y_pred_arr = np.asarray(y_pred)
     n = len(y_true_arr)

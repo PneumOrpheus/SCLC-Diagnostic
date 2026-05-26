@@ -5,7 +5,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 # -----------------------------------------------------------------------------
 # Utilities
 # -----------------------------------------------------------------------------
@@ -73,7 +72,7 @@ class ScalePerceptionModule(nn.Module):
         self.conv_large = Conv(channels, channels, kernel_size=3, padding=1, bias=False)
         self.act = nn.ReLU(inplace=True)
         self.pool = _adaptive_pool(spatial_dims, mode="avg")(1)
-        # Produce 2 * C channel gates; softmax over the branch dimension.
+        # 2 * C channel gates: softmax over the 2 branches (small vs large conv).
         self.gate = Conv(channels, channels * 2, kernel_size=1, bias=True)
         self.gate_kernel = gate_kernel
 
@@ -82,7 +81,6 @@ class ScalePerceptionModule(nn.Module):
         x2 = self.act(self.conv_large(x1))
         pooled = self.pool(x1 + x2)
         gates = self.gate(pooled)
-        # Reshape to (B, 2, C, 1, 1[, 1]) and softmax over the 2 branches.
         B, C2 = gates.shape[:2]
         C = C2 // 2
         view_shape = (B, 2, C) + (1,) * (gates.ndim - 2)
@@ -210,14 +208,12 @@ class MBFFM(nn.Module):
         ])
 
     def forward(self, feats: List[torch.Tensor]) -> List[torch.Tensor]:
-        # Top-down
         td = [None] * len(feats)
         td[-1] = feats[-1]
         for i in range(len(feats) - 2, -1, -1):
             up = _interpolate(td[i + 1], size=feats[i].shape[2:], spatial_dims=self.spatial_dims)
             td[i] = feats[i] + up
 
-        # Bottom-up
         out = [None] * len(feats)
         out[0] = td[0]
         for i in range(1, len(feats)):

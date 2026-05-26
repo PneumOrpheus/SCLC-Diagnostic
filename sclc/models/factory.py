@@ -1,37 +1,24 @@
 import os
+
 import torch
 import torch.nn as nn
 
-from .swin_unetr import SwinUNETRClassifier
 from .classifiers_2d import (
-    EfficientNet2DClassifier,
     DenseNet2DClassifier,
-    TorchVisionResNet2DClassifier,
-    SwinTiny2DClassifier,
-    SwinV2Base2DClassifier,
+    EfficientNet2DClassifier,
     SwinV2Tiny2DClassifier,
+    TorchVisionResNet2DClassifier,
 )
-from .classifiers_rin import (
-    RadImageNetResNet502DClassifier,
-    RadImageNetDenseNet1212DClassifier,
-)
-from .classifiers_mil import MILResNet50Classifier, MILSwinTinyClassifier, MILSwinV2BaseClassifier, MILSwinV2TinyClassifier
-
+from .classifiers_mil import MILSwinV2TinyClassifier
+from .swin_unetr import SwinUNETRClassifier
 
 TWO_D_MODEL_TYPES = (
     "efficientnet_b0_2d",
     "densenet121_2d",
     "resnet50_2d",
-    "swin_tiny_2d",
-    "swinv2_base_2d",
     "swinv2_tiny_2d",
-    "resnet50_2d_rin",
-    "densenet121_2d_rin",
 )
 MIL_MODEL_TYPES = (
-    "mil_resnet50",
-    "mil_swin_tiny",
-    "mil_swinv2_base",
     "mil_swinv2_tiny",
 )
 
@@ -68,125 +55,6 @@ def get_sclc_model(
     tfpn_layers: int = 1,
     tfpn_levels: int = 1,
 ) -> nn.Module:
-    if model_type.lower() == "mil_resnet50":
-        # MIL model for the BigLunge fine-tune / inference phase with ResNet50 backbone. DAPT for this model_type uses ResNet50_2DClassifier
-        model = MILResNet50Classifier(
-            num_classes=3, mil_mode=mil_mode,
-            trans_blocks=mil_trans_blocks, trans_dropout=mil_trans_dropout,
-            use_advanced_fpn=use_advanced_fpn,
-            use_det_seg=use_det_seg,
-            fpn_channels=fpn_channels,
-            tfpn_enabled=tfpn_enabled,
-            tfpn_heads=tfpn_heads,
-            tfpn_layers=tfpn_layers,
-            tfpn_levels=tfpn_levels,
-        )
-        if checkpoint_path and os.path.exists(checkpoint_path):
-            state_dict = torch.load(checkpoint_path, map_location="cpu")
-            if isinstance(state_dict, dict) and "state_dict" in state_dict:
-                state_dict = state_dict["state_dict"]
-            # Two possibilities for checkpoint_path:
-            #   (a) a DAPT TorchVisionResNet2DClassifier checkpoint — keys
-            #       prefixed 'backbone.features.' ; load only the backbone.
-            #   (b) a prior MIL checkpoint — full MILResNet50Classifier state
-            #       dict; load strict=False.
-            probe_keys = list(state_dict.keys())
-            is_dapt_ckpt = any(k.startswith("backbone.features.") for k in probe_keys)
-            if is_dapt_ckpt:
-                print(f"[*] Loading DAPT ResNet50 backbone into MIL model from {checkpoint_path}")
-                model.load_backbone_from_dapt(state_dict)
-            else:
-                print(f"[*] Loading MIL checkpoint from {checkpoint_path}")
-                missing, unexpected = model.load_state_dict(state_dict, strict=False)
-                matched = len(state_dict) - len(unexpected)
-                print(f"[*] Matched {matched}/{len(state_dict)} keys (missing={len(missing)}).")
-        return model
-    if model_type.lower() == "mil_swin_tiny":
-        # MIL model for the BigLunge fine-tune / inference phase, Swin-Tiny
-        # backbone variant. DAPT for this model_type uses SwinTiny2DClassifier
-        # (routed via main.py); this branch builds the MIL classifier and
-        # accepts either a DAPT SwinTiny2DClassifier checkpoint (keys prefixed
-        # 'swin.') or a prior MIL-Swin checkpoint.
-        #
-        # checkpoint_path semantics here mirror the ``swin_tiny_2d`` branch:
-        # an empty string falls back to the RadImageNet default inside
-        # MILSwinTinyClassifier; a non-empty path is detected as either
-        # RadImageNet or DAPT/MIL by inspecting the state_dict keys.
-        is_radimagenet = bool(checkpoint_path) and "radimagenet" in checkpoint_path.lower()
-        if is_radimagenet or not checkpoint_path:
-            # Let MILSwinTinyClassifier load RadImageNet directly (uses default
-            # path when checkpoint_path is empty).
-            model = MILSwinTinyClassifier(
-                num_classes=3, mil_mode=mil_mode,
-                radimagenet_ckpt=checkpoint_path,
-                trans_blocks=mil_trans_blocks, trans_dropout=mil_trans_dropout,
-                use_advanced_fpn=use_advanced_fpn,
-                use_det_seg=use_det_seg,
-                fpn_channels=fpn_channels,
-                tfpn_enabled=tfpn_enabled,
-                tfpn_heads=tfpn_heads,
-                tfpn_layers=tfpn_layers,
-                tfpn_levels=tfpn_levels,
-            )
-            return model
-
-        # Non-RadImageNet checkpoint: build a fresh model (with default RIN
-        # init) and overlay the user-supplied state dict.
-        model = MILSwinTinyClassifier(
-            num_classes=3, mil_mode=mil_mode,
-            trans_blocks=mil_trans_blocks, trans_dropout=mil_trans_dropout,
-            use_advanced_fpn=use_advanced_fpn,
-            use_det_seg=use_det_seg,
-            fpn_channels=fpn_channels,
-            tfpn_enabled=tfpn_enabled,
-            tfpn_heads=tfpn_heads,
-            tfpn_layers=tfpn_layers,
-            tfpn_levels=tfpn_levels,
-        )
-        if os.path.exists(checkpoint_path):
-            state_dict = torch.load(checkpoint_path, map_location="cpu")
-            if isinstance(state_dict, dict) and "state_dict" in state_dict:
-                state_dict = state_dict["state_dict"]
-            probe_keys = list(state_dict.keys())
-            is_dapt_ckpt = any(k.startswith("swin.") for k in probe_keys)
-            if is_dapt_ckpt:
-                print(f"[*] Loading DAPT SwinTiny backbone into MIL-Swin model from {checkpoint_path}")
-                model.load_backbone_from_dapt(state_dict)
-            else:
-                print(f"[*] Loading MIL-Swin checkpoint from {checkpoint_path}")
-                missing, unexpected = model.load_state_dict(state_dict, strict=False)
-                matched = len(state_dict) - len(unexpected)
-                print(f"[*] Matched {matched}/{len(state_dict)} keys (missing={len(missing)}).")
-        return model
-    if model_type.lower() == "mil_swinv2_base":
-        model = MILSwinV2BaseClassifier(
-            num_classes=3,
-            mil_mode=mil_mode,
-            trans_blocks=mil_trans_blocks,
-            trans_dropout=mil_trans_dropout,
-            use_advanced_fpn=use_advanced_fpn,
-            use_det_seg=use_det_seg,
-            fpn_channels=fpn_channels,
-            tfpn_enabled=tfpn_enabled,
-            tfpn_heads=tfpn_heads,
-            tfpn_layers=tfpn_layers,
-            tfpn_levels=tfpn_levels,
-        )
-        if checkpoint_path and os.path.exists(checkpoint_path):
-            state_dict = torch.load(checkpoint_path, map_location="cpu")
-            if isinstance(state_dict, dict) and "state_dict" in state_dict:
-                state_dict = state_dict["state_dict"]
-            probe_keys = list(state_dict.keys())
-            is_dapt_ckpt = any(k.startswith("swin.") for k in probe_keys)
-            if is_dapt_ckpt:
-                print(f"[*] Loading DAPT SwinV2-Base backbone into MIL-SwinV2 model from {checkpoint_path}")
-                model.load_backbone_from_dapt(state_dict)
-            else:
-                print(f"[*] Loading MIL-SwinV2 checkpoint from {checkpoint_path}")
-                missing, unexpected = model.load_state_dict(state_dict, strict=False)
-                matched = len(state_dict) - len(unexpected)
-                print(f"[*] Matched {matched}/{len(state_dict)} keys (missing={len(missing)}).")
-        return model
     if model_type.lower() == "mil_swinv2_tiny":
         model = MILSwinV2TinyClassifier(
             num_classes=3,
@@ -267,182 +135,6 @@ def get_sclc_model(
             matched = len(state_dict) - len(unexpected)
             print(f"[*] Matched {matched}/{len(state_dict)} keys.")
         return model
-    if model_type.lower() == "resnet50_2d_rin":
-        # checkpoint_path here is overloaded: a Microsoft-style RadImageNet
-        # ResNet50 dump (keys like ``backbone.<idx>.<...>``) or a previously
-        # saved SCLC checkpoint (``backbone.<torchvision_name>.<...>`` plus
-        # ``classification_head.*``). Detected by inspecting key prefixes.
-        rin_default = "/home/data/RadImageNet/ResNet50/ResNet50.pt"
-        rin_path = checkpoint_path if checkpoint_path else rin_default
-        loaded_via_constructor = False
-        sd_for_after_build = None
-        if rin_path and os.path.exists(rin_path):
-            probe = torch.load(rin_path, map_location="cpu", weights_only=False)
-            if isinstance(probe, dict) and "state_dict" in probe:
-                probe = probe["state_dict"]
-            keys = list(probe.keys()) if isinstance(probe, dict) else []
-            is_ms_rin = any(k.startswith("backbone.") and k.split(".", 2)[1].isdigit() for k in keys)
-            if is_ms_rin:
-                model = RadImageNetResNet502DClassifier(
-                    num_classes=3,
-                    in_channels=in_channels,
-                    radimagenet_ckpt=rin_path,
-                    use_advanced_fpn=use_advanced_fpn,
-                    use_det_seg=use_det_seg,
-                    fpn_channels=fpn_channels,
-                    tfpn_enabled=tfpn_enabled,
-                    tfpn_heads=tfpn_heads,
-                    tfpn_layers=tfpn_layers,
-                    tfpn_levels=tfpn_levels,
-                )
-                loaded_via_constructor = True
-            else:
-                model = RadImageNetResNet502DClassifier(
-                    num_classes=3,
-                    in_channels=in_channels,
-                    radimagenet_ckpt="",
-                    use_advanced_fpn=use_advanced_fpn,
-                    use_det_seg=use_det_seg,
-                    fpn_channels=fpn_channels,
-                    tfpn_enabled=tfpn_enabled,
-                    tfpn_heads=tfpn_heads,
-                    tfpn_layers=tfpn_layers,
-                    tfpn_levels=tfpn_levels,
-                )
-                sd_for_after_build = probe
-        else:
-            print(f"[!] resnet50_2d_rin: checkpoint not found at {rin_path}; backbone is random-initialized.")
-            model = RadImageNetResNet502DClassifier(
-                num_classes=3,
-                in_channels=in_channels,
-                radimagenet_ckpt="",
-                use_advanced_fpn=use_advanced_fpn,
-                use_det_seg=use_det_seg,
-                fpn_channels=fpn_channels,
-                tfpn_enabled=tfpn_enabled,
-                tfpn_heads=tfpn_heads,
-                tfpn_layers=tfpn_layers,
-                tfpn_levels=tfpn_levels,
-            )
-        if not loaded_via_constructor and sd_for_after_build is not None:
-            print(f"[*] Loading SCLC checkpoint into resnet50_2d_rin from {rin_path}")
-            missing, unexpected = model.load_state_dict(sd_for_after_build, strict=False)
-            matched = len(sd_for_after_build) - len(unexpected)
-            print(f"[*] Matched {matched}/{len(sd_for_after_build)} keys (missing={len(missing)}).")
-        return model
-    if model_type.lower() == "densenet121_2d_rin":
-        rin_default = "/home/data/RadImageNet/DenseNet/DenseNet121.pt"
-        rin_path = checkpoint_path if checkpoint_path else rin_default
-        loaded_via_constructor = False
-        sd_for_after_build = None
-        if rin_path and os.path.exists(rin_path):
-            probe = torch.load(rin_path, map_location="cpu", weights_only=False)
-            if isinstance(probe, dict) and "state_dict" in probe:
-                probe = probe["state_dict"]
-            keys = list(probe.keys()) if isinstance(probe, dict) else []
-            is_ms_rin = any(k.startswith("backbone.0.") for k in keys)
-            if is_ms_rin:
-                model = RadImageNetDenseNet1212DClassifier(
-                    num_classes=3,
-                    in_channels=in_channels,
-                    radimagenet_ckpt=rin_path,
-                    use_advanced_fpn=use_advanced_fpn,
-                    use_det_seg=use_det_seg,
-                )
-                loaded_via_constructor = True
-            else:
-                model = RadImageNetDenseNet1212DClassifier(
-                    num_classes=3,
-                    in_channels=in_channels,
-                    radimagenet_ckpt="",
-                    use_advanced_fpn=use_advanced_fpn,
-                    use_det_seg=use_det_seg,
-                )
-                sd_for_after_build = probe
-        else:
-            print(f"[!] densenet121_2d_rin: checkpoint not found at {rin_path}; backbone is random-initialized.")
-            model = RadImageNetDenseNet1212DClassifier(
-                num_classes=3,
-                in_channels=in_channels,
-                radimagenet_ckpt="",
-                use_advanced_fpn=use_advanced_fpn,
-                use_det_seg=use_det_seg,
-            )
-        if not loaded_via_constructor and sd_for_after_build is not None:
-            print(f"[*] Loading SCLC checkpoint into densenet121_2d_rin from {rin_path}")
-            missing, unexpected = model.load_state_dict(sd_for_after_build, strict=False)
-            matched = len(sd_for_after_build) - len(unexpected)
-            print(f"[*] Matched {matched}/{len(sd_for_after_build)} keys (missing={len(missing)}).")
-        return model
-    if model_type.lower() == "swin_tiny_2d":
-        # checkpoint_path here is overloaded: it may be either the RadImageNet
-        # pretrain (untouched 165-class head, MS-style layer keys) or a
-        # previously saved SCLC checkpoint (3-class head, timm-style keys).
-        # We route RadImageNet through the wrapper's key-remapping loader;
-        # an SCLC checkpoint is loaded after construction the same way the
-        # other 2D branches do it.
-        is_radimagenet = bool(checkpoint_path) and "radimagenet" in checkpoint_path.lower()
-        if not is_radimagenet and checkpoint_path and os.path.exists(checkpoint_path):
-            # Quick peek: if top-level has a 'model' key with 'head.weight'
-            # shape[0] != 3, it's a RadImageNet-style dump; otherwise SCLC.
-            probe = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
-            probe_sd = probe.get("model", probe) if isinstance(probe, dict) else probe
-            head_w = probe_sd.get("head.weight") if isinstance(probe_sd, dict) else None
-            if head_w is not None and int(head_w.shape[0]) != 3:
-                is_radimagenet = True
-
-        if is_radimagenet:
-            model = SwinTiny2DClassifier(
-                num_classes=3,
-                radimagenet_ckpt=checkpoint_path,
-                use_advanced_fpn=use_advanced_fpn,
-                use_det_seg=use_det_seg,
-                fpn_channels=fpn_channels,
-                tfpn_enabled=tfpn_enabled,
-                tfpn_heads=tfpn_heads,
-                tfpn_layers=tfpn_layers,
-                tfpn_levels=tfpn_levels,
-            )
-        else:
-            model = SwinTiny2DClassifier(
-                num_classes=3,
-                use_advanced_fpn=use_advanced_fpn,
-                use_det_seg=use_det_seg,
-                fpn_channels=fpn_channels,
-                tfpn_enabled=tfpn_enabled,
-                tfpn_heads=tfpn_heads,
-                tfpn_layers=tfpn_layers,
-                tfpn_levels=tfpn_levels,
-            )
-            if checkpoint_path and os.path.exists(checkpoint_path):
-                print(f"[*] Loading SCLC checkpoint from {checkpoint_path}")
-                state_dict = torch.load(checkpoint_path, map_location="cpu")
-                if isinstance(state_dict, dict) and "state_dict" in state_dict:
-                    state_dict = state_dict["state_dict"]
-                missing, unexpected = model.load_state_dict(state_dict, strict=False)
-                matched = len(state_dict) - len(unexpected)
-                print(f"[*] Matched {matched}/{len(state_dict)} keys.")
-        return model
-    if model_type.lower() == "swinv2_base_2d":
-        model = SwinV2Base2DClassifier(
-            num_classes=3,
-            use_advanced_fpn=use_advanced_fpn,
-            use_det_seg=use_det_seg,
-            fpn_channels=fpn_channels,
-            tfpn_enabled=tfpn_enabled,
-            tfpn_heads=tfpn_heads,
-            tfpn_layers=tfpn_layers,
-            tfpn_levels=tfpn_levels,
-        )
-        if checkpoint_path and os.path.exists(checkpoint_path):
-            print(f"[*] Loading SwinV2-Base checkpoint from {checkpoint_path}")
-            state_dict = torch.load(checkpoint_path, map_location="cpu")
-            if isinstance(state_dict, dict) and "state_dict" in state_dict:
-                state_dict = state_dict["state_dict"]
-            missing, unexpected = model.load_state_dict(state_dict, strict=False)
-            matched = len(state_dict) - len(unexpected)
-            print(f"[*] Matched {matched}/{len(state_dict)} keys.")
-        return model
     if model_type.lower() == "swinv2_tiny_2d":
         model = SwinV2Tiny2DClassifier(
             num_classes=3,
@@ -479,50 +171,17 @@ def get_sclc_model(
             if os.path.exists(checkpoint_path):
                 print(f"[*] Loading SwinUNETR weights from {checkpoint_path}")
                 state_dict = torch.load(checkpoint_path, map_location="cpu")
-                # MONAI checkpoints sometimes wrap the weights in a 'state_dict' key
                 if "state_dict" in state_dict:
                     state_dict = state_dict["state_dict"]
-
-                # Two valid formats sit under this branch:
-                #   (a) BTCV pretrained — keys live inside the SwinUNETR module
-                #       (``swinViT.*``, ``encoder*.*``, ``decoder*.*``, ``out.*``).
-                #       Load into ``model.swin_unetr`` and drop the segmentation
-                #       head conv (``out.conv.conv.*``) which doesn't match our
-                #       1-channel output.
-                #   (b) SCLC-trained ``SwinUNETRClassifier`` checkpoint — keys are
-                #       prefixed with the wrapper's attribute names
-                #       (``swin_unetr.*`` for the encoder/decoder, plus
-                #       ``classification_head.*`` for the trained head). Load into
-                #       the full module so the head actually loads.
-                # Detected by inspecting key prefixes; mirrors the same DAPT-vs-
-                # full-MIL detection used by the ``mil_resnet50`` branch above.
-                probe_keys = list(state_dict.keys())
-                is_full_classifier = any(
-                    k.startswith("swin_unetr.") or k.startswith("classification_head.")
-                    for k in probe_keys
-                )
-
-                if is_full_classifier:
-                    missing, unexpected = model.load_state_dict(state_dict, strict=False)
-                    target_n = len(model.state_dict())
-                    matched = target_n - len(missing)
-                    print(
-                        f"[*] SwinUNETRClassifier weights loaded. Matched "
-                        f"{matched}/{target_n} target keys (source had "
-                        f"{len(state_dict)}, missing={len(missing)}, "
-                        f"unexpected={len(unexpected)})."
-                    )
-                else:
-                    state_dict.pop('out.conv.conv.weight', None)
-                    state_dict.pop('out.conv.conv.bias', None)
-                    missing, unexpected = model.swin_unetr.load_state_dict(state_dict, strict=False)
-                    matched = len(state_dict) - len(unexpected)
-                    print(f"[*] Pretrained SwinUNETR weights loaded. Matched {matched}/{len(state_dict)} keys.")
-
-                # Hard fail on a zero-match load — silent random-init was the
-                # original failure mode of this branch (see grad_cam reload
-                # 2026-05-02). Any caller that hands us a checkpoint clearly
-                # expects it to take effect.
+                # MONAI BTCV checkpoint's seg head has 14 output channels; drop
+                # so our 3-class head loads strict=False without a shape clash.
+                if 'out.conv.conv.weight' in state_dict:
+                    state_dict.pop('out.conv.conv.weight')
+                if 'out.conv.conv.bias' in state_dict:
+                    state_dict.pop('out.conv.conv.bias')
+                missing, unexpected = model.swin_unetr.load_state_dict(state_dict, strict=False)
+                matched = len(state_dict) - len(unexpected)
+                print(f"[*] Pretrained weights loaded. Matched {matched}/{len(state_dict)} keys.")
                 if matched == 0:
                     raise RuntimeError(
                         f"Loaded 0 keys from {checkpoint_path}; checkpoint format "

@@ -2,14 +2,16 @@ import time
 import warnings
 from typing import Any, Dict, List, Optional
 
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
 from monai.losses import DiceLoss
 from sklearn.metrics import balanced_accuracy_score, f1_score
 
-warnings.filterwarnings("ignore", message="y_pred contains classes not in y_true", category=UserWarning)
 from sclc.training.bbox_utils import bbox_loss_3d
+from sclc.training.bootstrap import bootstrap_ci, per_class_f1_ci
+
+warnings.filterwarnings("ignore", message="y_pred contains classes not in y_true", category=UserWarning)
 
 NUM_CLASSES = 3
 CLASS_NAMES = ["Adenocarcinoma", "Small Cell", "Squamous"]
@@ -23,7 +25,6 @@ def _bacc(yt, yp):
     return float(balanced_accuracy_score(yt, yp))
 
 class AverageMeter(object):
-    """Computes and stores the average and current value"""
     def __init__(self):
         self.reset()
 
@@ -41,7 +42,6 @@ class AverageMeter(object):
 
 
 def _compute_classification_metrics(targets, preds, min_num_classes=NUM_CLASSES):
-    """Compute confusion-matrix-derived metrics for multiclass single-label data."""
     if len(targets) == 0 or len(preds) == 0:
         num_classes = int(min_num_classes)
         conf_matrix = np.zeros((num_classes, num_classes), dtype=np.int64)
@@ -93,20 +93,11 @@ def _compute_classification_metrics(targets, preds, min_num_classes=NUM_CLASSES)
 
 
 def _extract_volume_id(item: Dict[str, Any]) -> Optional[str]:
-    """Best-effort extraction of a string volume identifier post-load.
+    """Return a JSON-serializable volume identifier post-load.
 
-    Order of preference:
-      1. Explicit string ``volume_id`` field set upstream (2D / MIL pipelines).
-      2. ``image`` field if it's still a string (pre-transform).
-      3. MONAI MetaTensor's ``filename_or_obj`` metadata (post-transform).
-      4. ``None`` — caller falls back to a synthetic id.
-
-    Why this exists: in the 3D pipeline the data list entry has
-    ``"image": "<path>.nii.gz"`` as a string, but by the time the collate
-    function sees it the LoadNifti transform has replaced ``"image"`` with
-    a ``MetaTensor``. The previous fallback ``item.get("volume_id") or
-    item.get("image")`` then returned the Tensor — JSON-unserializable —
-    and crashed the inference-probabilities dump at end of DAPT-test.
+    After LoadNifti the `image` field is a MetaTensor, so naively using it
+    as the volume id crashes JSON dumps. We fall back through `volume_id`,
+    a string `image` (pre-transform), then MetaTensor's `filename_or_obj`.
     """
     vid = item.get("volume_id")
     if isinstance(vid, str):
@@ -127,12 +118,9 @@ def _extract_volume_id(item: Dict[str, Any]) -> Optional[str]:
 
 
 def _collect_meta(batch):
-    """Per-sample metadata for patient/volume-level eval aggregation.
-
-    ``patient_id`` is set in the data list (data_loader.py) for both
-    Lung-PET-CT-Dx and BigLunge. ``volume_id`` defaults to the original image
-    path so multi-scan patients still produce distinct volume buckets in
-    validate_epoch's slice→volume→patient rollup.
+    """Per-sample (patient_id, volume_id) for the volume->patient rollup in
+    `validate_epoch`. Multi-scan patients keep distinct volume buckets via
+    the image-path-derived `volume_id`.
     """
     meta: List[Dict[str, Any]] = []
     for item in batch:
@@ -144,19 +132,16 @@ def _collect_meta(batch):
 
 
 def simple_collate_fn(batch):
-    """Collate volumes + labels (+ optional masks) + per-sample meta.
-
-    Always emits the ``meta`` list as the last tuple element so validate_epoch
-    can aggregate multi-scan patients to a single patient-level prediction.
+    """Collate volumes + labels (+ optional masks/bboxes) + per-sample meta.
+    `meta` is always the last tuple element so validate_epoch can aggregate
+    multi-scan patients into a single patient-level prediction.
     """
-    # Extract the volume and the single target class logic
     scans = torch.stack([item["image"] for item in batch], dim=0)
 
-    # We want a 1D tensor of class indices for CrossEntropyLoss
     labels = torch.tensor([item["scan_label"] for item in batch], dtype=torch.long)
     meta = _collect_meta(batch)
 
-    # Extract segmentation masks if available, filling missing ones with zeros
+    # Pad missing masks with zeros so the batch tensor stays rectangular.
     masks = None
     has_mask = None
     if any("mask" in item for item in batch):
@@ -195,12 +180,9 @@ def simple_collate_fn(batch):
 
 
 def _mixup_3d(x: torch.Tensor, y: torch.Tensor, alpha: float):
-    """Bag-style mixup for 3D volumes. Mixes (B, C, D, H, W) along B.
-
-    Same convention as the 2D / MIL mixup helpers: ``lam ~ Beta(alpha, alpha)``,
-    flipped to ``lam = max(lam, 1-lam)`` so y_a is the dominant target.
-    Resamples the permutation up to 8 times to avoid identity perms at
-    small B (sleeper bug for B=2).
+    """Mixup for (B, C, D, H, W) along B. `lam = max(lam, 1-lam)` so `y_a`
+    is the dominant target. Resamples up to 8 times to avoid identity perms
+    at small B (a sleeper bug at B=2).
     """
     if alpha <= 0.0 or x.size(0) < 2:
         return x, y, y, 1.0
@@ -232,7 +214,7 @@ def train_epoch(
     seg_loss_weight=0.1,
     bbox_loss_weight: float = 0.1,
     mixup_alpha=0.0,
-    **_unused,  # keep signature tolerant of pipeline-specific kwargs (bag_dropout, etc.)
+    **_unused,
 ):
     model.train()
     start_time = time.time()
@@ -245,16 +227,14 @@ def train_epoch(
     all_preds = []
     all_targets = []
 
-    # Apply label smoothing due to visual overlap in NSCLC/SCLC subtypes
+    # Label smoothing reflects visual overlap between NSCLC/SCLC subtypes.
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
-    # Tumor masks are extremely sparse; raw BCE pushes the decoder toward
-    # "predict all zeros". Combining BCE with Dice gives a foreground-aware
-    # signal that actually teaches the encoder *where* the lesion is —
-    # which is the whole reason DAPT exists (BigLunge has no masks).
+    # Tumor masks are extremely sparse — raw BCE collapses to "predict zero".
+    # BCE + Dice gives a foreground-aware signal during DAPT (the only phase
+    # where masks exist).
     dice_loss_fn = DiceLoss(sigmoid=True)
 
-    # Mixup is applied to classification only — when seg/det losses are
-    # active we skip mixup entirely (mixing would desync image and mask/box).
+    # Mixup desyncs image-vs-mask, so skip it whenever seg/det loss is on.
     mixup_active = float(mixup_alpha) > 0.0 and not use_segmentation and not use_det_seg
     if mixup_active and epoch == 1:
         logger.info(f"[3D] Mixup active with alpha={mixup_alpha:.3f}")
@@ -264,7 +244,7 @@ def train_epoch(
             f"seg/det loss active (image/mask desync would corrupt aux loss)."
         )
 
-    optimizer.zero_grad()  # 1. Zero gradients before the loop starts
+    optimizer.zero_grad()
 
     for idx, batch_data in enumerate(loader):
         has_mask_tensor = None
@@ -286,10 +266,9 @@ def train_epoch(
         else:
             data, target = batch_data
             masks = None
-            
+
         data, target = data.to(device), target.to(device)
 
-        # Mixup only when seg-aux loss is OFF — see mixup_active gate above.
         if mixup_active:
             data, y_a, y_b, lam = _mixup_3d(data, target, alpha=float(mixup_alpha))
         else:
@@ -359,35 +338,31 @@ def train_epoch(
             all_preds.extend(preds.cpu().tolist())
             all_targets.extend(y_a.detach().cpu().tolist())
             
-            unscaled_loss = loss.item()  # Save true loss value for metric tracking
-            loss = loss / accumulation_steps  # 2. Scale the loss down
+            unscaled_loss = loss.item()
+            loss = loss / accumulation_steps
 
-        # 3. Accumulate gradients (no optimizer.zero_grad() before this!)
         if scaler is not None:
             scaler.scale(loss).backward()
         else:
             loss.backward()
-            
-        # 4. Only step the optimizer after 'accumulation_steps' batches OR at the end of the loader
+
         if (idx + 1) % accumulation_steps == 0 or (idx + 1) == len(loader):
             if scaler is not None:
                 scaler.unscale_(optimizer)
-            
-            # Clip gradients to prevent exploding gradients
+
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-            
+
             if scaler is not None:
                 scaler.step(optimizer)
                 scaler.update()
             else:
                 optimizer.step()
-            optimizer.zero_grad()  # Zero gradients AFTER stepping
-            
+            optimizer.zero_grad()
+
         run_loss.update(unscaled_loss, n=data.size(0))
         run_cls_loss.update(cls_loss.item(), n=data.size(0))
         run_seg_loss.update(seg_loss_val, n=data.size(0))
-        
-        # Log every 10 steps and on the last step
+
         if (idx + 1) % 20 == 0 or (idx + 1) == len(loader):
             if use_segmentation or use_det_seg:
                 msg = (f"Epoch {epoch} [{idx + 1}/{len(loader)}] "
@@ -421,16 +396,9 @@ def validate_epoch(
     compute_ci: bool = True,
     n_boot: int = 1000,
 ):
-    """Validate the 3D pipeline at volume level AND aggregate to patient level.
-
-    Volume-level metrics: argmax of per-volume logits — what historical 3D
-    runs reported. Patient-level metrics: mean of per-volume softmax over a
-    patient's volumes, then argmax. For Lung-PET-CT-Dx (max 2 scans/patient)
-    this collapses 100ish volumes to 52ish patients; for BigLunge (1 scan
-    per patient) volume-level == patient-level.
-
-    Bootstrap CIs (stratified, n_boot=1000) are computed on the patient-level
-    targets/preds for thesis-grade headline numbers.
+    """Validate the 3D pipeline at volume level and aggregate to patient level
+    (mean of per-volume softmax, then argmax). Bootstrap CIs are computed on
+    patient-level predictions for thesis headline metrics.
     """
     model.eval()
     run_loss = AverageMeter()
@@ -480,8 +448,7 @@ def validate_epoch(
                 all_patient_ids.append(None)
                 all_volume_ids.append(None)
             if not return_probabilities:
-                # Need probs for patient-level mean-of-softmax even if caller
-                # doesn't want the per-sample probability dump.
+                # Patient-level rollup needs per-volume probs regardless.
                 all_probs.append(probs[i].tolist())
 
     metrics = _compute_classification_metrics(all_targets, all_preds)
@@ -497,10 +464,8 @@ def validate_epoch(
     per_class_recall = metrics["per_class_recall"]
     per_class_f1 = metrics["per_class_f1"]
 
-    # Patient-level aggregation: mean of per-volume softmax over a patient's
-    # volumes, then argmax. Volumes with no patient_id get a synthetic
-    # per-index key so they contribute independently rather than collapsing
-    # into one fake "None" patient bucket.
+    # Volumes missing patient_id get a synthetic key so they don't collapse
+    # into a single fake "None" bucket.
     patient_prob_sum: Dict[Any, np.ndarray] = {}
     patient_volume_count: Dict[Any, int] = {}
     patient_label: Dict[Any, int] = {}
@@ -514,7 +479,6 @@ def validate_epoch(
             patient_prob_sum[key] = np.zeros(num_classes, dtype=np.float64)
             patient_volume_count[key] = 0
             patient_label[key] = int(all_targets[i])
-        # all_probs[i] is a list/array of length num_classes from this volume
         p = np.asarray(all_probs[i], dtype=np.float64)
         if p.shape[0] != num_classes:
             aligned = np.zeros(num_classes, dtype=np.float64)
@@ -549,7 +513,6 @@ def validate_epoch(
     print(val_msg); print(pat_msg)
     logger.info(val_msg); logger.info(pat_msg)
 
-    # Per-class breakdown — the actionable signal for the imbalanced val set.
     for c in range(num_classes):
         name = CLASS_NAMES[c] if c < len(CLASS_NAMES) else f"Class{c}"
         logger.info(
@@ -566,7 +529,6 @@ def validate_epoch(
         print(mem_msg)
         logger.info(mem_msg)
 
-    # Pretty-print the confusion matrix.
     if len(all_targets) > 0:
         display_names = [
             CLASS_NAMES[i] if i < len(CLASS_NAMES) else f"Class{i}"
@@ -603,10 +565,6 @@ def validate_epoch(
             if 0 <= int(pred_label) < num_classes:
                 pred_hist[int(pred_label)] += 1
 
-            # patient_id / volume_id come from all_patient_ids / all_volume_ids
-            # populated above. Including them brings the 3D samples up to parity
-            # with the MIL and 2D paths and lets the misclassifications CSV
-            # writer in main.py emit a clickable volume path per error row.
             pid = all_patient_ids[idx] if idx < len(all_patient_ids) else None
             vid = all_volume_ids[idx] if idx < len(all_volume_ids) else None
             samples.append({
@@ -677,10 +635,7 @@ def validate_epoch(
         },
     }
 
-    # Stratified bootstrap CIs on patient-level predictions. Lazy-imported so
-    # this file doesn't pull sklearn at module-load when bootstrap isn't used.
     if compute_ci and len(patient_targets) > 0:
-        from sclc.training.bootstrap import bootstrap_ci, per_class_f1_ci
         _, mf1_lo, mf1_hi = bootstrap_ci(
             patient_targets, patient_preds, _macro_f1, n_boot=n_boot, rng_seed=0,
         )

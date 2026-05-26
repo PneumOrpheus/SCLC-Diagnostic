@@ -1,27 +1,19 @@
 """MIL pipeline data builders.
 
-Two dataset kinds, sharing the 1 mm / 2 mm spacing + HU-windowed front-end
-defined in ``data/transforms.py``:
+Two dataset kinds share the 1 mm / 2 mm spacing + HU-windowed front-end
+from `sclc.data.transforms`:
 
-1. **Whole-slice DAPT** (``create_dataset_whole_slice``): one sample = one
-   tumor-containing axial slice from Lung-PET-CT-Dx. No in-plane tumor crop;
-   the backbone sees the full axial FOV at ``img_size`` × ``img_size``. Tumor
-   mask is only used to enumerate which slices carry tumor (we reuse the
-   ``tumor_slice_index`` cache from the 2D pipeline).
-
-2. **MIL bag** (``create_dataset_mil_bag``): one sample = one patient, output
-   shape ``(N, 1, img_size, img_size)``. ``N = bag_size`` slices are sampled
-   evenly across the lung mask's axial extent. **No tumor mask is used at
-   inference.** The attention head in MILModel decides which instances drive
-   the bag-level prediction.
-
-Both paths wrap ``PersistentDataset`` with their own cache directories keyed
-on the parameters that affect the cached tensor content.
+- whole-slice DAPT: per-slice samples at full axial FOV, tumor mask only
+  used to enumerate tumor-bearing slices (reuses the 2D pipeline's index).
+- MIL bag: one bag per patient at shape `(N, 1, H, W)`; bag instances are
+  selected from the lung-mask z-extent. No tumor mask at inference — the
+  attention head decides which instances drive the bag-level prediction.
 """
 from __future__ import annotations
 
 import json
 import os
+import shutil
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -34,11 +26,11 @@ from sclc.data.dataset_2d import (
     get_biglunge_2d_data_list,
     get_lung_pet_ct_dx_2d_data_list,
 )
+from sclc.data.exclusions import TRUNCATED_LUNG_MASK
 from sclc.data.loaders import (
     get_biglunge_data_list,
     get_lung_pet_ct_dx_data_list,
 )
-from sclc.data.exclusions import TRUNCATED_LUNG_MASK
 from sclc.data.transforms import (
     get_train_transforms_mil_bag,
     get_train_transforms_mil_bag_dapt,
@@ -47,7 +39,6 @@ from sclc.data.transforms import (
     get_val_transforms_mil_bag_dapt,
     get_val_transforms_whole_slice,
 )
-
 
 # -----------------------------------------------------------------------------
 # Whole-slice per-slice DAPT (reuses the 2D per-slice data lists)
@@ -76,12 +67,11 @@ def create_dataset_whole_slice(
     cv_fold: int = -1,
     cv_folds: int = 5,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
-    """Per-slice whole-slice datasets for DAPT.
+    """Per-slice whole-slice datasets for DAPT (full axial FOV per slice).
 
-    Same tumor-slice-index-based entry enumeration as the 2D pipeline, but the
-    transforms drop ``CropAroundTumord`` so each sample is the full axial slice
-    at ``img_size`` × ``img_size``. Cache is keyed on ``img_size`` only (the
-    crop is always "whole slice" here). Safe to coexist with the 2D cache.
+    Same tumor-slice-index entries as the 2D pipeline, with `CropAroundTumord`
+    removed. Cache is keyed on `img_size` only and lives separately from the
+    2D cache.
     """
     if dataset_type == "big_lunge":
         cache_name = "monai_biglunge_wholeslice"
@@ -90,16 +80,14 @@ def create_dataset_whole_slice(
     else:
         raise ValueError(f"Unknown dataset_type for whole-slice DAPT: '{dataset_type}'.")
 
-    # Cache path is SHARED across CV folds (see loaders.py for rationale).
     _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
     cache_root = os.path.join(
         "/home/data/.cache", cache_name,
         f"img{img_size}_mp{int(min_tumor_pixels)}{_mask_tag}{'_testing' if testing else ''}",
     )
     if clear_cache and cv_fold <= 0 and os.path.isdir(cache_root):
-        import shutil as _shutil
         print(f"[--clear-cache] Removing {cache_root}")
-        _shutil.rmtree(cache_root)
+        shutil.rmtree(cache_root)
     os.makedirs(cache_root, exist_ok=True)
 
     if dataset_type == "big_lunge":
@@ -112,6 +100,7 @@ def create_dataset_whole_slice(
             val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
             min_tumor_pixels=min_tumor_pixels,
             max_slices_per_volume=max_slices_per_volume,
+            cv_fold=cv_fold, cv_folds=cv_folds,
         )
     else:
         all_splits = get_lung_pet_ct_dx_2d_data_list(
@@ -140,16 +129,19 @@ def create_dataset_whole_slice(
             )
         )
 
+        # Flat cache: MONAI's pickle_hashing is split-agnostic, so per-split
+        # subdirs would duplicate the same slice when a patient lands in train
+        # in fold k and test in fold j. Filename suffixes carry (fold, split).
         if cache_dir is None:
-            current_cache_dir = os.path.join(cache_root, split)
+            current_cache_dir = cache_root
         else:
-            current_cache_dir = os.path.join(cache_dir, split)
+            current_cache_dir = cache_dir
         os.makedirs(current_cache_dir, exist_ok=True)
-        print(f"[whole-slice] PersistentDataset cache_dir='{current_cache_dir}'")
+        print(f"[whole-slice] PersistentDataset cache_dir='{current_cache_dir}' (split='{split}')")
 
         _fold_suffix = f"_fold{cv_fold}" if cv_fold >= 0 else ""
-        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}.json")
-        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}.json")
+        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}_{split}.json")
+        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}_{split}.json")
         current_meta = {
             "pipeline": "whole_slice",
             "dataset_type": dataset_type,
@@ -244,24 +236,18 @@ def get_biglunge_mil_data_list(
     cv_fold: int = -1,
     cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """BigLunge data list for MIL. One entry per patient.
+    """BigLunge data list for MIL — one entry per patient.
 
-    Each entry carries ``image`` (CT), ``lung_mask`` (algorithmic lung-chamber
-    segmentation — reliable), ``scan_label``, ``patient_id``. Patients lacking
-    the lung mask are dropped (we rely on it to pick the bag's z-extent).
+    Patients lacking the lung mask are dropped: it's required to pick the
+    bag's z-extent. Truncated-lung-mask exclusions are shared with the 3D
+    pipeline via `data/exclusions.py`.
     """
-    # Reuse the 3D-splitting helper to get per-patient CT volumes + split.
-    # get_biglunge_data_list already attaches 'lung_mask' when the sidecar
-    # exists, so we only need to filter to entries with it.
     splits = get_biglunge_data_list(
         data_path=data_path, csv_path=csv_path,
         val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
         cv_fold=cv_fold, cv_folds=cv_folds,
     )
 
-    # Truncated-lung-mask exclusions live in data/exclusions.py so the 3D
-    # pipeline (which uses the same lung mask for its lung-bbox crop) drops
-    # the same patients.
     data_root = Path(data_path)
     out: Dict[str, List[Dict[str, Any]]] = {}
     for split, entries in splits.items():
@@ -277,9 +263,7 @@ def get_biglunge_mil_data_list(
             if pid in TRUNCATED_LUNG_MASK:
                 dropped_truncated += 1
                 continue
-            # Canonicalize: one entry per patient (first CT wins). The 3D data
-            # list may emit several .nii.gz per patient if multiple scans exist;
-            # MIL operates at patient granularity.
+            # MIL is patient-granular: first CT wins, drop duplicates.
             if pid in seen_patients:
                 dropped_dupe_patient += 1
                 continue
@@ -293,7 +277,6 @@ def get_biglunge_mil_data_list(
                 "lung_mask": lung_mask,
                 "scan_label": int(e["scan_label"]),
                 "patient_id": pid,
-                # volume_id mirrors image path so validate_epoch_mil can log it
                 "volume_id": e["image"],
             }
             if os.path.isfile(tumor_mask):
@@ -339,9 +322,8 @@ def create_dataset_mil_bag(
     cv_fold: int = -1,
     cv_folds: int = 5,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
-    """Create train/val/test MIL-bag PersistentDatasets for BigLunge.
-
-    Each sample: ``(N, 1, img_size, img_size)`` where ``N = bag_size``.
+    """Train/val/test MIL-bag `PersistentDataset`s for BigLunge.
+    Each sample has shape `(bag_size, 1, img_size, img_size)`.
     """
     if dataset_type != "big_lunge":
         raise ValueError(
@@ -351,16 +333,14 @@ def create_dataset_mil_bag(
         raise ValueError("csv_path is required for dataset_type='big_lunge'.")
 
     cache_name = "monai_biglunge_mil"
-    # Cache path is SHARED across CV folds (see loaders.py for rationale).
     _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
     cache_root = os.path.join(
         "/home/data/.cache", cache_name,
         f"img{img_size}_bag{int(bag_size)}{_mask_tag}{'_testing' if testing else ''}",
     )
     if clear_cache and cv_fold <= 0 and os.path.isdir(cache_root):
-        import shutil as _shutil
         print(f"[--clear-cache] Removing {cache_root}")
-        _shutil.rmtree(cache_root)
+        shutil.rmtree(cache_root)
     os.makedirs(cache_root, exist_ok=True)
 
     all_splits = get_biglunge_mil_data_list(
@@ -392,15 +372,15 @@ def create_dataset_mil_bag(
         )
 
         if cache_dir is None:
-            current_cache_dir = os.path.join(cache_root, split)
+            current_cache_dir = cache_root
         else:
-            current_cache_dir = os.path.join(cache_dir, split)
+            current_cache_dir = cache_dir
         os.makedirs(current_cache_dir, exist_ok=True)
-        print(f"[MIL bag] PersistentDataset cache_dir='{current_cache_dir}'")
+        print(f"[MIL bag] PersistentDataset cache_dir='{current_cache_dir}' (split='{split}')")
 
         _fold_suffix = f"_fold{cv_fold}" if cv_fold >= 0 else ""
-        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}.json")
-        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}.json")
+        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}_{split}.json")
+        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}_{split}.json")
         current_meta = {
             "pipeline": "mil_bag",
             "dataset_type": dataset_type,
@@ -490,12 +470,10 @@ def get_lung_pet_ct_dx_mil_data_list(
     cv_fold: int = -1,
     cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Lung-PET-CT-Dx data list for MIL bag DAPT.
+    """Lung-PET-CT-Dx data list for MIL bag DAPT — one entry per CT series.
 
-    One entry per CT series (volume). The tumour mask path is attached when the
-    sidecar exists; ``LungAxialBagSelectd`` uses it as ``source_key="mask"`` to
-    restrict the bag's z-extent to the tumour region, with graceful fallback to
-    the full CT z-extent when it is absent.  No lung mask is required here.
+    When the tumour mask exists, `LungAxialBagSelectd` uses it as `source_key`
+    to restrict the bag's z-extent; otherwise it falls back to the full CT.
     """
     splits = get_lung_pet_ct_dx_data_list(
         data_path=data_path,
@@ -553,22 +531,15 @@ def create_dataset_mil_bag_dapt(
     cv_fold: int = -1,
     cv_folds: int = 5,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
-    """MIL-bag PersistentDatasets for DAPT on Lung-PET-CT-Dx.
-
-    Uses ``get_train_transforms_mil_bag_dapt`` / ``get_val_transforms_mil_bag_dapt``
-    which select the bag's z-extent from the tumour mask (``source_key="mask"``)
-    and fall back to the full CT when no mask is present.
-    """
+    """MIL-bag `PersistentDataset`s for DAPT on Lung-PET-CT-Dx."""
     cache_name = "monai_lung_pet_ct_mil_dapt"
-    # Cache path is SHARED across CV folds (see loaders.py for rationale).
     cache_root = os.path.join(
         "/home/data/.cache", cache_name,
         f"img{img_size}_bag{int(bag_size)}{'_testing' if testing else ''}",
     )
     if clear_cache and cv_fold <= 0 and os.path.isdir(cache_root):
-        import shutil as _shutil
         print(f"[--clear-cache] Removing {cache_root}")
-        _shutil.rmtree(cache_root)
+        shutil.rmtree(cache_root)
     os.makedirs(cache_root, exist_ok=True)
 
     all_splits = get_lung_pet_ct_dx_mil_data_list(
@@ -592,15 +563,15 @@ def create_dataset_mil_bag_dapt(
         )
 
         if cache_dir is None:
-            current_cache_dir = os.path.join(cache_root, split)
+            current_cache_dir = cache_root
         else:
-            current_cache_dir = os.path.join(cache_dir, split)
+            current_cache_dir = cache_dir
         os.makedirs(current_cache_dir, exist_ok=True)
-        print(f"[MIL bag DAPT] PersistentDataset cache_dir='{current_cache_dir}'")
+        print(f"[MIL bag DAPT] PersistentDataset cache_dir='{current_cache_dir}' (split='{split}')")
 
         _fold_suffix = f"_fold{cv_fold}" if cv_fold >= 0 else ""
-        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}.json")
-        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}.json")
+        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}_{split}.json")
+        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}_{split}.json")
         current_meta = {
             "pipeline": "mil_bag_dapt",
             "dataset_type": "lung_pet_ct_dx",
