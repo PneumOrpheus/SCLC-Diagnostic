@@ -152,11 +152,18 @@ OUTPUT_ROOTS_PER_COHORT: Dict[str, Dict[str, Path]] = {
         "biglunge": REPO_ROOT / "results" / "output_master_fpn_biglunge",
     },
 }
-# Per-(arm, cohort, pipeline) directory overrides. Both base and FPN 3D LPCD
-# now read from their canonical post-fix locations; no overrides needed.
-PIPELINE_ROOT_OVERRIDES: Dict[Tuple[str, str, str], Path] = {}
+# Per-(arm, cohort, pipeline) directory overrides. The base-arm MIL BigLunge
+# fine-tune was re-run 2026-05-26 with the tumour-positive bag sampler
+# (transforms.py:TumorPositiveBagSelectd) into a separate output tree; LPCD
+# DAPT outputs for MIL stay in the unified output_master_{base,fpn}/ tree.
+PIPELINE_ROOT_OVERRIDES: Dict[Tuple[str, str, str], Path] = {
+    ("base", "lpcd",     "mil"): REPO_ROOT / "results" / "output_master_base",
+    ("base", "biglunge", "mil"): REPO_ROOT / "results" / "output_master_base_mil_tumor_pos",
+    ("fpn",  "lpcd",     "mil"): REPO_ROOT / "results" / "output_master_fpn",
+    ("fpn",  "biglunge", "mil"): REPO_ROOT / "results" / "output_master_fpn",
+}
 # Pipelines whose (arm, pipeline) subtrees are physically split per cohort.
-SPLIT_PIPELINES = ("2d", "3d")
+SPLIT_PIPELINES = ("2d", "3d", "mil")
 # Back-compat aliases for older imports.
 OUTPUT_ROOTS_2D_PER_COHORT = OUTPUT_ROOTS_PER_COHORT
 OUTPUT_ROOTS_BASE_2D_PER_COHORT = OUTPUT_ROOTS_PER_COHORT["base"]
@@ -174,8 +181,9 @@ def _model_dir(cfg: Config) -> Path:
     BigLunge side (where the long-lived metrics.jsonl + effective_config.yaml
     live); LPCD-specific lookups go through ``_model_dir_for_cohort``."""
     if _is_split_2d(cfg):
-        return (OUTPUT_ROOTS_PER_COHORT[cfg.arm]["biglunge"]
-                / cfg.pipeline / cfg.model_type)
+        root_override = PIPELINE_ROOT_OVERRIDES.get((cfg.arm, "biglunge", cfg.pipeline))
+        root = root_override if root_override is not None else OUTPUT_ROOTS_PER_COHORT[cfg.arm]["biglunge"]
+        return root / cfg.pipeline / cfg.model_type
     return OUTPUT_ROOTS[cfg.arm] / cfg.pipeline / cfg.model_type
 
 
