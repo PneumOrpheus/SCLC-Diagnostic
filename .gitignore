@@ -14,6 +14,7 @@ anaconda3/
 NIFTI_data/
 
 # Training artifacts (raw outputs, run logs, archived results)
+results/
 results/output/
 results/runs/
 results/thesis/_archive/

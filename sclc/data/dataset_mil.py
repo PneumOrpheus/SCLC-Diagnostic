@@ -227,7 +227,7 @@ def create_dataset_whole_slice(
 def get_biglunge_mil_data_list(
     data_path: str,
     csv_path: str,
-    lung_mask_suffix: str = "_label_lungs.nii.gz",
+    lung_mask_suffix: str = "_label_lungs.nii.gz",  # accepted for back-compat; unused
     tumor_mask_suffix: str = "_label_tc.nii.gz",
     val_frac: float = 0.15,
     test_frac: float = 0.15,
@@ -238,10 +238,19 @@ def get_biglunge_mil_data_list(
 ) -> Dict[str, List[Dict[str, Any]]]:
     """BigLunge data list for MIL — one entry per patient.
 
-    Patients lacking the lung mask are dropped: it's required to pick the
-    bag's z-extent. Truncated-lung-mask exclusions are shared with the 3D
-    pipeline via `data/exclusions.py`.
+    Patients lacking the tumour mask file are dropped: it defines the
+    bag's z-extent via `TumorPositiveBagSelectd` (every bag instance must
+    sit on a tumour-positive z-index). With the `EMPTY_TUMOR_MASK`
+    blocklist applied pre-split this should drop zero patients on the
+    current cohort. Truncated-lung-mask exclusions are shared with the
+    3D pipeline via `data/exclusions.py`.
+
+    `lung_mask_suffix` is retained in the signature for back-compat with
+    callers (main.py forwards `args.lung_mask_suffix`) but is no longer
+    consulted; the old apex-to-base lung-mask bag selection has been
+    retired.
     """
+    del lung_mask_suffix  # unused — see docstring
     splits = get_biglunge_data_list(
         data_path=data_path, csv_path=csv_path,
         val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
@@ -252,7 +261,7 @@ def get_biglunge_mil_data_list(
     out: Dict[str, List[Dict[str, Any]]] = {}
     for split, entries in splits.items():
         kept: List[Dict[str, Any]] = []
-        dropped_no_mask = 0
+        dropped_no_tumor_mask = 0
         dropped_dupe_patient = 0
         dropped_truncated = 0
         seen_patients = set()
@@ -267,20 +276,17 @@ def get_biglunge_mil_data_list(
             if pid in seen_patients:
                 dropped_dupe_patient += 1
                 continue
-            lung_mask = e.get("lung_mask") or str(data_root / pid / f"{pid}{lung_mask_suffix}")
-            if not os.path.isfile(lung_mask):
-                dropped_no_mask += 1
-                continue
             tumor_mask = str(data_root / pid / f"{pid}{tumor_mask_suffix}")
+            if not os.path.isfile(tumor_mask):
+                dropped_no_tumor_mask += 1
+                continue
             entry: Dict[str, Any] = {
                 "image": e["image"],
-                "lung_mask": lung_mask,
+                "tumor_mask": tumor_mask,
                 "scan_label": int(e["scan_label"]),
                 "patient_id": pid,
                 "volume_id": e["image"],
             }
-            if os.path.isfile(tumor_mask):
-                entry["tumor_mask"] = tumor_mask
             kept.append(entry)
             seen_patients.add(pid)
 
@@ -292,7 +298,7 @@ def get_biglunge_mil_data_list(
             cls_counts[e["scan_label"]] = cls_counts.get(e["scan_label"], 0) + 1
         print(
             f"[MIL bag big_lunge {split}] {len(kept)} patients "
-            f"(dropped no-lung-mask={dropped_no_mask}, dupe-patient={dropped_dupe_patient}, "
+            f"(dropped no-tumor-mask={dropped_no_tumor_mask}, dupe-patient={dropped_dupe_patient}, "
             f"truncated-lung={dropped_truncated}), "
             f"classes={cls_counts}"
         )
@@ -332,7 +338,12 @@ def create_dataset_mil_bag(
     if not csv_path:
         raise ValueError("csv_path is required for dataset_type='big_lunge'.")
 
-    cache_name = "monai_biglunge_mil"
+    # v2 bump: BigLunge MIL switched from `LungAxialBagSelectd` over the
+    # full apex-to-base lung extent to `TumorPositiveBagSelectd` over the
+    # tumour-positive z-list. Old `monai_biglunge_mil` caches are now
+    # semantically wrong and must not be reused — see also dataset_mil.py
+    # commentary and transforms.py:TumorPositiveBagSelectd.
+    cache_name = "monai_biglunge_mil_v2_tumor_pos"
     _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
     cache_root = os.path.join(
         "/home/data/.cache", cache_name,
@@ -390,7 +401,8 @@ def create_dataset_mil_bag(
             "seed": int(seed),
             "img_size": int(img_size),
             "bag_size": int(bag_size),
-            "lung_mask_suffix": lung_mask_suffix,
+            "tumor_mask_suffix": tumor_mask_suffix,
+            "bag_select": "tumor_positive_zs",
             "split": split,
             "include_mask": bool(include_mask),
             "include_bbox": bool(include_bbox),

@@ -1,2 +1,0 @@
-epoch,train_loss,train_macro_f1,val_macro_f1_raw,val_macro_f1_rolling,val_loss,val_accuracy,val_balanced_accuracy,lr_backbone,lr_head,mixup_alpha,mixup_active,epochs_no_improve,monitor_window,monitor_level,timestamp
-1,1.0977680449455047,0.33793429842791084,0.30479547870852225,0.30479547870852225,1.7840551039341448,0.3069306930693069,0.40087145969498916,1e-06,,0.2,True,0,3,patient,2026-05-01T20:08:50
