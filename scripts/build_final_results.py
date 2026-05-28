@@ -160,7 +160,7 @@ PIPELINE_ROOT_OVERRIDES: Dict[Tuple[str, str, str], Path] = {
     ("base", "lpcd",     "mil"): REPO_ROOT / "results" / "output_master_base",
     ("base", "biglunge", "mil"): REPO_ROOT / "results" / "output_master_base_mil_tumor_pos",
     ("fpn",  "lpcd",     "mil"): REPO_ROOT / "results" / "output_master_fpn",
-    ("fpn",  "biglunge", "mil"): REPO_ROOT / "results" / "output_master_fpn",
+    ("fpn",  "biglunge", "mil"): REPO_ROOT / "results" / "output_master_fpn_mil_tumor_pos",
 }
 # Pipelines whose (arm, pipeline) subtrees are physically split per cohort.
 SPLIT_PIPELINES = ("2d", "3d", "mil")

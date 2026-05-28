@@ -782,17 +782,6 @@ def get_val_transforms_2d(
     ))
 
 
-# -----------------------------------------------------------------------------
-# MIL pipeline: whole-slice DAPT + bag-level BigLunge
-# -----------------------------------------------------------------------------
-# Both pipelines share the front-end (load/orient/spacing/HU window/resize XY)
-# and intentionally omit CropAroundTumord so BigLunge inference can run
-# tumor-mask-free; the backbone sees the same visual scale across phases.
-# Bag samples are permuted (C,H,W,N) -> (N,1,H,W) at the end so DataLoader
-# stacking yields (B,N,1,H,W) for MILModel. Bag-axis rotate/translate/scale
-# are disabled so instances within a bag stay registered.
-
-
 class BagAsBatchDimd(MapTransform):
     """Permute a (C=1, H, W, N) bag volume to (N, 1, H, W), matching
     `MILModel`'s expected per-sample shape.
