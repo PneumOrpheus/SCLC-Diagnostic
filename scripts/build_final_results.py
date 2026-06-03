@@ -44,7 +44,8 @@ Writes to:
   │     ├── fig_per_class_f1.pdf
   │     ├── fig_per_class_auc.pdf
   │     ├── fig_dapt_test_gap.pdf
-  │     ├── fig_confusion_matrices.pdf
+  │     ├── fig_confusion_matrices.pdf          (BigLunge test)
+  │     ├── fig_confusion_matrices_lpcd.pdf     (Lung-PET-CT-Dx test)
   │     ├── fig_training_curves.pdf            baseline + FPN overlaid
   │     ├── fig_fpn_delta.pdf
   │     ├── fig_2d_per_class.pdf               2D pipeline-specific per-class F1
@@ -1686,10 +1687,13 @@ def fig_dapt_test_gap(results: List[ConfigResult], out_dir: Path) -> None:
     fig.savefig(out_dir / "fig_dapt_test_gap.pdf"); plt.close(fig)
 
 
-def fig_confusion_matrices(results: List[ConfigResult], out_dir: Path) -> None:
-    """Grid of patient-level CMs for baseline arm on BigLunge-test."""
-    base = [r for r in results if r.cfg.arm == "base" and r.confusion.get("biglunge") is not None
-            and r.confusion["biglunge"].sum() > 0]
+def _fig_confusion_matrices_for_cohort(
+    results: List[ConfigResult], out_dir: Path,
+    cohort: str, cohort_label: str, filename: str,
+) -> None:
+    """Grid of patient-level CMs for the baseline arm on one test cohort."""
+    base = [r for r in results if r.cfg.arm == "base" and r.confusion.get(cohort) is not None
+            and r.confusion[cohort].sum() > 0]
     if not base:
         return
     n = len(base)
@@ -1697,7 +1701,7 @@ def fig_confusion_matrices(results: List[ConfigResult], out_dir: Path) -> None:
     rows = (n + cols - 1) // cols
     fig, axes = plt.subplots(rows, cols, figsize=(3.6 * cols, 3.2 * rows), squeeze=False)
     for i, r in enumerate(base):
-        cm = r.confusion["biglunge"]
+        cm = r.confusion[cohort]
         rr, cc = divmod(i, cols)
         ax = axes[rr][cc]
         row_sum = cm.sum(axis=1, keepdims=True).astype(np.float64)
@@ -1717,9 +1721,21 @@ def fig_confusion_matrices(results: List[ConfigResult], out_dir: Path) -> None:
     for j in range(n, rows * cols):
         rr, cc = divmod(j, cols)
         axes[rr][cc].axis("off")
-    fig.suptitle("Patient-level confusion matrices — BigLunge test", fontsize=12, y=1.02)
+    fig.suptitle(f"Patient-level confusion matrices — {cohort_label} test", fontsize=12, y=1.02)
     fig.tight_layout()
-    fig.savefig(out_dir / "fig_confusion_matrices.pdf"); plt.close(fig)
+    fig.savefig(out_dir / filename); plt.close(fig)
+
+
+def fig_confusion_matrices(results: List[ConfigResult], out_dir: Path) -> None:
+    """Grid of patient-level CMs for the baseline arm on both test cohorts.
+
+    BigLunge keeps the historical ``fig_confusion_matrices.pdf`` filename;
+    Lung-PET-CT-Dx is emitted alongside as ``fig_confusion_matrices_lpcd.pdf``.
+    """
+    _fig_confusion_matrices_for_cohort(
+        results, out_dir, "biglunge", "BigLunge", "fig_confusion_matrices.pdf")
+    _fig_confusion_matrices_for_cohort(
+        results, out_dir, "lpcd", "Lung-PET-CT-Dx", "fig_confusion_matrices_lpcd.pdf")
 
 
 def _split_metrics_into_folds(rows: List[Dict[str, Any]], phase: str) -> List[List[Dict[str, Any]]]:
