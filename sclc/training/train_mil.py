@@ -13,6 +13,7 @@ from typing import Any, Dict, List
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from monai.losses import DiceLoss
 from sklearn.metrics import balanced_accuracy_score, f1_score
 
@@ -20,6 +21,7 @@ from sclc.training.bbox_utils import bbox_loss_2d
 from sclc.training.bootstrap import bootstrap_ci, per_class_f1_ci
 from sclc.training.train_3d import (
     CLASS_NAMES,
+    NUM_CLASSES,
     AverageMeter,
     _compute_classification_metrics,
 )
@@ -35,12 +37,19 @@ def _bacc(yt, yp):
     return float(balanced_accuracy_score(yt, yp))
 
 
-def simple_collate_fn_mil(batch):
+def simple_collate_fn_mil(batch, label_map=None):
     """Stack bag tensors + labels (+ optional masks/bboxes) + per-sample meta.
     Bag shape stays `(B, N, 1, H, W)`; meta carries `patient_id`/`volume_id`.
+
+    label_map: optional dict {orig_int → new_int} applied at collation time so
+    the MONAI cache (keyed on the original scan_label) is shared between ternary
+    and binary runs.  E.g. {0: 0, 1: 1, 2: 0} for SCLC-vs-non-SCLC.
     """
     images = torch.stack([item["image"] for item in batch], dim=0)
-    labels = torch.tensor([int(item["scan_label"]) for item in batch], dtype=torch.long)
+    raw_labels = [int(item["scan_label"]) for item in batch]
+    if label_map:
+        raw_labels = [label_map.get(l, l) for l in raw_labels]
+    labels = torch.tensor(raw_labels, dtype=torch.long)
 
     masks = None
     has_mask = None
@@ -122,6 +131,23 @@ def _mixup_bags(x: torch.Tensor, y: torch.Tensor, alpha: float):
     return x_mix, y, y[idx], lam
 
 
+def _focal_loss(logits: torch.Tensor, targets: torch.Tensor, gamma: float, weight=None) -> torch.Tensor:
+    """Multi-class focal loss (Lin et al. 2017).
+
+    loss_i = (1 - p_t)^γ * CE_i
+
+    p_t is the softmax probability assigned to the true class.  Down-weighting
+    easy examples (high p_t) keeps gradient focused on hard bags near the
+    decision boundary and removes the energy advantage of degenerate attractors
+    (all-SCLC / all-non-SCLC), where every bag is a confident-correct easy
+    example for the dominant class.
+    """
+    ce = F.cross_entropy(logits, targets, weight=weight, reduction="none")
+    p_t = torch.exp(-ce)
+    focal_weight = (1.0 - p_t) ** gamma
+    return (focal_weight * ce).mean()
+
+
 def train_epoch_mil(
     model,
     loader,
@@ -136,6 +162,9 @@ def train_epoch_mil(
     use_det_seg: bool = False,
     seg_loss_weight: float = 0.1,
     bbox_loss_weight: float = 0.1,
+    class_weights=None,
+    att_entropy_weight: float = 0.0,
+    focal_loss_gamma: float = 0.0,
     **_unused,
 ):
     model.train()
@@ -147,7 +176,18 @@ def train_epoch_mil(
     all_preds: List[int] = []
     all_targets: List[int] = []
 
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    _cw = class_weights.to(device) if (class_weights is not None and torch.is_tensor(class_weights)) else None
+    _focal_gamma = float(focal_loss_gamma) if focal_loss_gamma and focal_loss_gamma > 0.0 else 0.0
+    if _focal_gamma > 0.0:
+        criterion = None
+        if epoch == 1:
+            cw_str = f", class_weights={[f'{v:.3f}' for v in _cw.cpu().tolist()]}" if _cw is not None else ""
+            logger.info(f"[MIL] Focal loss active: gamma={_focal_gamma:.1f}{cw_str}")
+            print(f"[MIL] Focal loss active: gamma={_focal_gamma:.1f}{cw_str}")
+    else:
+        criterion = nn.CrossEntropyLoss(label_smoothing=0.1, weight=_cw)
+        if _cw is not None and epoch == 1:
+            logger.info(f"[MIL] Class-weighted CE (label_smoothing=0.1): {[f'{v:.3f}' for v in _cw.cpu().tolist()]}")
     dice_loss_fn = DiceLoss(sigmoid=True)
     optimizer.zero_grad()
     use_det_seg = bool(use_det_seg)
@@ -160,6 +200,8 @@ def train_epoch_mil(
         logger.info(f"[MIL] Mixup active with alpha={mixup_alpha:.3f} (Beta({mixup_alpha},{mixup_alpha}))")
     if bag_dropout > 0.0 and epoch == 1:
         logger.info(f"[MIL] Bag-instance dropout active: drop_prob={bag_dropout:.3f}")
+    if att_entropy_weight > 0.0 and epoch == 1:
+        logger.info(f"[MIL] Attention entropy regularisation active: weight={att_entropy_weight:.4f}")
     if float(mixup_alpha) > 0.0 and use_det_seg and epoch == 1:
         logger.info(
             f"[MIL] Mixup requested (alpha={mixup_alpha:.3f}) but suppressed because "
@@ -200,7 +242,10 @@ def train_epoch_mil(
                         box_pred = None
                 else:
                     logits, seg_logits, box_pred = outputs, None, None
-                cls_loss = criterion(logits, y_a)
+                cls_loss = (
+                    _focal_loss(logits, y_a, _focal_gamma, _cw)
+                    if _focal_gamma > 0.0 else criterion(logits, y_a)
+                )
                 loss = cls_loss
 
                 seg_loss_val = 0.0
@@ -244,11 +289,29 @@ def train_epoch_mil(
                 run_box_loss.update(box_loss_val, n=data.size(0))
             else:
                 logits = model(data_mix, return_segmentation=False)
-                if mixup_active:
-                    loss = lam * criterion(logits, y_a) + (1.0 - lam) * criterion(logits, y_b)
+                if _focal_gamma > 0.0:
+                    if mixup_active:
+                        loss = (lam * _focal_loss(logits, y_a, _focal_gamma, _cw)
+                                + (1.0 - lam) * _focal_loss(logits, y_b, _focal_gamma, _cw))
+                    else:
+                        loss = _focal_loss(logits, y_a, _focal_gamma, _cw)
                 else:
-                    loss = criterion(logits, y_a)
+                    if mixup_active:
+                        loss = lam * criterion(logits, y_a) + (1.0 - lam) * criterion(logits, y_b)
+                    else:
+                        loss = criterion(logits, y_a)
                 cls_loss = loss
+
+                if att_entropy_weight > 0.0:
+                    _att = getattr(model, "_last_attention", None)
+                    if _att is not None and _att.shape[1] >= 2:
+                        N = int(_att.shape[1])
+                        # Normalised Shannon entropy: 1.0 = uniform, 0.0 = one-hot
+                        norm_ent = (
+                            -(_att.clamp_min(1e-12) * _att.clamp_min(1e-12).log()).sum(dim=1)
+                            / math.log(N)
+                        )
+                        loss = cls_loss + att_entropy_weight * norm_ent.mean()
 
             preds = torch.argmax(logits.detach(), dim=1)
             all_preds.extend(preds.cpu().tolist())
@@ -327,6 +390,7 @@ def train_epoch_mil(
 @torch.no_grad()
 def validate_epoch_mil(
     model, loader, device, logger,
+    class_names=None,
     return_probabilities: bool = False,
     compute_ci: bool = True,
     n_boot: int = 1000,
@@ -391,7 +455,8 @@ def validate_epoch_mil(
             all_patient_ids.append(meta[i].get("patient_id"))
             all_volume_ids.append(meta[i].get("volume_id"))
 
-    metrics = _compute_classification_metrics(all_targets, all_preds)
+    _min_nc = len(list(class_names)) if class_names else NUM_CLASSES
+    metrics = _compute_classification_metrics(all_targets, all_preds, min_num_classes=_min_nc)
     num_classes = metrics["num_classes"]
 
     val_msg = (
@@ -403,8 +468,9 @@ def validate_epoch_mil(
     print(val_msg)
     logger.info(val_msg)
 
+    _names = list(class_names) if class_names else CLASS_NAMES
     display_names = [
-        CLASS_NAMES[i] if i < len(CLASS_NAMES) else f"Class{i}"
+        _names[i] if i < len(_names) else f"Class{i}"
         for i in range(num_classes)
     ]
     for c in range(num_classes):

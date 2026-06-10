@@ -649,6 +649,7 @@ def _build_2d_pipeline(
     crop_size: int = 96,
     include_mask: bool = False,
     include_bbox: bool = False,
+    spacing_z: float = 2.0,
 ) -> list:
     """Shared 2D pipeline: load CT + tumor mask, spacing, pick the slice from
     `slice_idx`, in-plane crop around the tumor bbox, scale, resize, squeeze
@@ -668,7 +669,7 @@ def _build_2d_pipeline(
         Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
         Spacingd(
             keys=load_keys,
-            pixdim=(1.0, 1.0, 2.0),
+            pixdim=(1.0, 1.0, float(spacing_z)),
             mode=["bilinear", "nearest"],
             allow_missing_keys=True,
         ),
@@ -756,6 +757,7 @@ def get_train_transforms_2d(
     crop_size: int = 96,
     include_mask: bool = False,
     include_bbox: bool = False,
+    spacing_z: float = 2.0,
 ) -> Compose:
     return Compose(_build_2d_pipeline(
         img_size=img_size,
@@ -764,6 +766,7 @@ def get_train_transforms_2d(
         crop_size=crop_size,
         include_mask=include_mask,
         include_bbox=include_bbox,
+        spacing_z=float(spacing_z),
     ))
 
 
@@ -772,6 +775,7 @@ def get_val_transforms_2d(
     crop_size: int = 96,
     include_mask: bool = False,
     include_bbox: bool = False,
+    spacing_z: float = 2.0,
 ) -> Compose:
     return Compose(_build_2d_pipeline(
         img_size=img_size,
@@ -779,6 +783,7 @@ def get_val_transforms_2d(
         crop_size=crop_size,
         include_mask=include_mask,
         include_bbox=include_bbox,
+        spacing_z=float(spacing_z),
     ))
 
 
@@ -820,6 +825,112 @@ class BagAsBatchDimd(MapTransform):
         return d
 
 
+class TumorPositiveBagSelectd(Randomizable, MapTransform):
+    """Sample `num_slices` axial slices from the z-indices where `source_key`
+    has at least one non-zero voxel.
+
+    Picks indices by `linspace(0, len(positive_zs) - 1, num_slices)` over the
+    positive-z list, so every bag instance contains tumour by construction.
+    Multifocal masks (~70-80% of BigLunge auto-seg) are handled by the
+    positive list itself: each component contributes z-indices proportional
+    to its z-extent, with no empty-parenchyma instances wasted between
+    far-apart components.
+
+    `jitter=True` (train only) shifts the linspace grid by a uniform random
+    offset in `[-stride/2, +stride/2]` (in positive-list index space) per
+    call — same offset across keyed volumes.
+
+    Empty/missing `source_key`: warns and falls back to the full Z extent
+    (same safety net as `LungAxialBagSelectd`). With the BigLunge
+    `EMPTY_TUMOR_MASK` blocklist applied pre-split this should not fire,
+    but a noisy warning is better than silently sampling abdomen slices.
+    """
+
+    def __init__(
+        self,
+        keys: KeysCollection,
+        source_key: str = "tumor_mask",
+        num_slices: int = 16,
+        jitter: bool = False,
+        allow_missing_keys: bool = False,
+    ) -> None:
+        MapTransform.__init__(self, keys, allow_missing_keys)
+        self.source_key = source_key
+        self.num_slices = int(num_slices)
+        self.jitter = bool(jitter)
+        self._offset_frac: float = 0.0
+
+    def randomize(self, data=None) -> None:
+        self._offset_frac = float(self.R.uniform(-0.5, 0.5)) if self.jitter else 0.0
+
+    @staticmethod
+    def _positive_zs(mask) -> Optional[list]:
+        if mask is None:
+            return None
+        if isinstance(mask, torch.Tensor):
+            m = mask > 0.5
+            reduce_axes = tuple(range(m.ndim - 1))
+            per_z = m.any(dim=reduce_axes) if reduce_axes else m
+            nz = torch.nonzero(per_z, as_tuple=False).flatten()
+            if nz.numel() == 0:
+                return None
+            return [int(z) for z in nz.tolist()]
+        arr = np.asarray(mask) > 0.5
+        reduce_axes = tuple(range(arr.ndim - 1))
+        per_z = arr.any(axis=reduce_axes) if reduce_axes else arr
+        nz = np.where(per_z)[0]
+        if nz.size == 0:
+            return None
+        return [int(z) for z in nz.tolist()]
+
+    def __call__(self, data: Mapping[Hashable, Any]) -> Dict[Hashable, Any]:
+        d: Dict[Hashable, Any] = dict(data)
+        self.randomize()
+        pos_zs = self._positive_zs(d.get(self.source_key))
+
+        ref_vol = None
+        for k in self.key_iterator(d):
+            ref_vol = d[k]
+            break
+        if ref_vol is None:
+            return d
+        Z = int(ref_vol.shape[-1])
+
+        if pos_zs is None or len(pos_zs) == 0:
+            print(
+                f"[TumorPositiveBagSelectd] WARNING: empty/missing "
+                f"'{self.source_key}', falling back to full Z extent (Z={Z}). "
+                "Bag will include non-tumour slices."
+            )
+            pos_zs = list(range(Z)) if Z > 0 else [0]
+
+        if self.num_slices <= 0:
+            raise ValueError(f"num_slices must be >= 1, got {self.num_slices}")
+
+        n_pos = len(pos_zs)
+        if n_pos > 1:
+            base = np.linspace(0, n_pos - 1, self.num_slices)
+            if self.jitter and self.num_slices > 1:
+                stride = (n_pos - 1) / (self.num_slices - 1)
+                base = base + (self._offset_frac * stride)
+                base = np.clip(base, 0, n_pos - 1)
+            list_idxs = base.round().astype(int).tolist()
+        else:
+            list_idxs = [0] * self.num_slices
+
+        idxs = [pos_zs[i] for i in list_idxs]
+        idxs = [max(0, min(Z - 1, int(i))) for i in idxs]
+
+        for key in self.key_iterator(d):
+            vol = d[key]
+            if isinstance(vol, torch.Tensor):
+                idx_t = torch.tensor(idxs, dtype=torch.long, device=vol.device)
+                d[key] = torch.index_select(vol, dim=-1, index=idx_t).contiguous()
+            else:
+                d[key] = np.take(np.asarray(vol), indices=idxs, axis=-1)
+        return d
+
+
 class LungAxialBagSelectd(Randomizable, MapTransform):
     """Sample `num_slices` evenly-spaced axial slices from `source_key`'s z-extent.
 
@@ -831,6 +942,12 @@ class LungAxialBagSelectd(Randomizable, MapTransform):
 
     Empty/missing mask: warns and falls back to full Z extent. Silent
     fallback would let MIL sample the abdomen on truncated lung masks.
+
+    Used by the LPCD MIL DAPT pipeline (source_key = tumour mask, which on
+    LPCD is contiguous so the span and the positive-z list coincide). The
+    BigLunge MIL pipeline uses `TumorPositiveBagSelectd` instead, which
+    handles multifocal masks without wasting bag instances on the
+    parenchyma gap between components.
     """
 
     def __init__(
@@ -1051,11 +1168,23 @@ def _build_mil_bag_pipeline(
     include_mask: bool = False,
     include_bbox: bool = False,
 ) -> list:
-    """MIL bag pipeline. Output shape `(bag_size, 1, img_size, img_size)`."""
+    """MIL bag pipeline. Output shape `(bag_size, 1, img_size, img_size)`.
+
+    Bag selection samples `bag_size` slices evenly spaced across the set of
+    tumour-positive z-indices (`TumorPositiveBagSelectd`), so every bag
+    instance contains tumour by construction. This matches the
+    positive-instance fraction of the LPCD MIL DAPT pipeline (whose
+    tumour mask is contiguous) and avoids the apex-to-base lung-mask
+    span that left ~1-3 of 16 instances tumour-positive on BigLunge.
+    The tumour mask is always loaded for bag selection; with
+    `keep_mask=False` it is dropped right after the sampler.
+    """
     keep_mask = bool(include_mask or include_bbox)
-    load_keys = ["image", "lung_mask"] + (["tumor_mask"] if keep_mask else [])
-    _spacing_modes = ["bilinear", "nearest"] + (["nearest"] if keep_mask else [])
-    _resize_modes  = ["trilinear", "nearest"] + (["nearest"] if keep_mask else [])
+    # tumor_mask is always loaded — needed by the sampler. lung_mask is no
+    # longer used (the old apex-to-base bag-extent path lived here).
+    load_keys = ["image", "tumor_mask"]
+    _spacing_modes = ["bilinear", "nearest"]
+    _resize_modes  = ["trilinear", "nearest"]
     _aug_keys = ["image"] + (["tumor_mask"] if keep_mask else [])
     _aug_spatial_modes = ["bilinear"] + (["nearest"] if keep_mask else [])
     transforms: list = [
@@ -1075,15 +1204,17 @@ def _build_mil_bag_pipeline(
             mode=_resize_modes,
             allow_missing_keys=True,
         ),
-        LungAxialBagSelectd(
+        TumorPositiveBagSelectd(
             keys=["image"] + (["tumor_mask"] if keep_mask else []),
-            source_key="lung_mask",
+            source_key="tumor_mask",
             num_slices=bag_size,
             jitter=train,
             allow_missing_keys=True,
         ),
-        DeleteItemsd(keys=["lung_mask"]),
     ]
+    if not keep_mask:
+        # Loaded only for the sampler; drop before augmentation / permute.
+        transforms.append(PopKeysd(keys=["tumor_mask"]))
 
     if train and not strong_augs:
         transforms += [
