@@ -57,6 +57,63 @@ def _log_rss(logger, label: str) -> None:
         pass
 
 
+def _parse_class_weights_ce(s: str, device=None):
+    """Parse '1.0,2.0' into a torch.Tensor on device. Returns None if empty."""
+    if not s or not s.strip():
+        return None
+    import torch
+    weights = [float(x.strip()) for x in s.strip().split(",") if x.strip()]
+    if not weights:
+        return None
+    t = torch.tensor(weights, dtype=torch.float32)
+    return t.to(device) if device is not None else t
+
+
+def _extract_monitor_val(monitor_source: dict, metric: str) -> float:
+    """Extract a scalar monitor value from a val_metrics (or patient_level) dict.
+
+    Supported metric names:
+      macro_f1       — macro-averaged F1 (default)
+      sclc_recall    — per-class recall for class index 1 (SCLC in binary/ternary)
+      sclc_f1        — per-class F1 for class index 1 (SCLC)
+    """
+    if metric == "sclc_recall":
+        pcr = monitor_source.get("per_class_recall") or []
+        return float(pcr[1]) if len(pcr) > 1 else 0.0
+    if metric == "sclc_f1":
+        pcf = monitor_source.get("per_class_f1") or []
+        return float(pcf[1]) if len(pcf) > 1 else 0.0
+    if metric == "recall_gated_f1":
+        pcr = monitor_source.get("per_class_recall") or []
+        sclc_recall = float(pcr[1]) if len(pcr) > 1 else 0.0
+        if sclc_recall < 0.50:
+            return 0.0
+        return float(monitor_source.get("macro_f1", 0.0))
+    return float(monitor_source.get("macro_f1", 0.0))
+
+
+def _parse_label_map(s: str):
+    """Parse '0:0,1:1,2:0' → {0: 0, 1: 1, 2: 0}. Returns None if empty."""
+    if not s or not s.strip():
+        return None
+    result = {}
+    for pair in s.strip().split(","):
+        pair = pair.strip()
+        if not pair:
+            continue
+        k, v = pair.split(":", 1)
+        result[int(k.strip())] = int(v.strip())
+    return result or None
+
+
+def _parse_class_names(s: str):
+    """Parse 'non-SCLC,SCLC' → ['non-SCLC', 'SCLC']. Returns None if empty."""
+    if not s or not s.strip():
+        return None
+    names = [n.strip() for n in s.strip().split(",") if n.strip()]
+    return names or None
+
+
 def _dump_effective_config(output_dir: str, args: argparse.Namespace, logger) -> str:
     """Persist the resolved argparse namespace at startup so a crashed run
     still leaves behind a reproducible record of its inputs.
@@ -394,6 +451,18 @@ def parse_args():
     parser.add_argument("--dapt-dataset", type=str, default="/home/data/Lung-PET-CT-Dx-Clean")
     parser.add_argument("--finetune-dataset", type=str, default="/home/data/TrainingData")
     parser.add_argument("--finetune-csv", type=str, default="/home/data/TrainingData/patients_parameters.csv")
+    parser.add_argument(
+        "--swap-datasets",
+        action="store_true",
+        default=False,
+        help=(
+            "Swap the DAPT/FT dataset assignment: DAPT runs on BigLunge "
+            "(args.finetune_dataset + args.finetune_csv) and fine-tune runs on "
+            "Lung-PET-CT-Dx (args.dapt_dataset, no CSV). "
+            "Hypothesis: a backbone pre-adapted to BigLunge's domain and uniform "
+            "class distribution is a better starting point for cross-cohort transfer."
+        ),
+    )
 
     parser.add_argument(
         "--initial-checkpoint",
@@ -439,6 +508,10 @@ def parse_args():
                              "as for the full --cv-folds run, so fold-k here matches fold-k in "
                              "a full sweep. Skips writing the aggregated 'test' row. Used by "
                              "resume scripts.")
+    parser.add_argument("--cv-fold-start", type=int, default=0,
+                        help="Zero-based first fold to run in --cv-folds mode. Folds 0 … N-1 "
+                             "are skipped, allowing a run to resume after a crash without "
+                             "redoing already-completed folds. Incompatible with --cv-fold-index.")
     parser.add_argument("--finetune-freeze-backbone-epochs", type=int, default=0,
                         help="LP-FT recipe: freeze the backbone for the first N fine-tune epochs (head trains "
                              "alone), then unfreeze and apply differential LR. 0 disables (full diff-LR from "
@@ -478,6 +551,12 @@ def parse_args():
         default=3,
         help="Use rolling mean over last k validation epochs for checkpoint selection and early stopping. 1 disables smoothing.",
     )
+    parser.add_argument(
+        "--early-stopping-patience",
+        type=int,
+        default=10,
+        help="Number of epochs with no rolling macro-F1 improvement before early stopping. Default: 10.",
+    )
 
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--output-dir", type=str, default="results/output")
@@ -496,6 +575,11 @@ def parse_args():
 
     parser.add_argument("--img-size-2d", type=int, default=224,
                         help="In-plane size for the 2D tumor-centered slice crop.")
+    parser.add_argument("--img-spacing-z", type=float, default=2.0,
+                        help="Axial voxel spacing (mm) for the 2D pipeline Spacingd step and "
+                             "the tumor-slice index scanner. Default 2.0 matches all existing "
+                             "caches. Use 1.0 for isotropic-ish BigLunge resampling — creates "
+                             "a new cache dir (_sp1.0mm) so existing caches are untouched.")
     parser.add_argument("--img-crop-2d", type=int, default=96,
                         help="In-plane size of CropAroundTumord BEFORE Resized. Default 96 matches the "
                              "original DAPT setup on Lung-PET-CT-Dx. BigLunge tumors are larger and "
@@ -559,6 +643,48 @@ def parse_args():
              "If the resolved path does not exist, a warning is logged and training continues from "
              "initial weights."
     )
+    parser.add_argument("--class-weights-ce", type=str, default="",
+                        help="Comma-separated per-class CrossEntropy weights, e.g. '1.0,2.0' "
+                             "gives non-SCLC weight=1 and SCLC weight=2. Empty string = uniform. "
+                             "Applied during fine-tune training only. Use to upweight minority "
+                             "class gradient without touching the WRS sampling balance.")
+    parser.add_argument("--monitor-metric", type=str, default="macro_f1",
+                        choices=["macro_f1", "sclc_recall", "sclc_f1", "recall_gated_f1"],
+                        help="Validation metric used for checkpoint selection and early stopping. "
+                             "'macro_f1' (default) is appropriate for ternary classification. "
+                             "'sclc_recall' maximises SCLC sensitivity — use for the binary arm "
+                             "where missing SCLC is the worst error. "
+                             "'sclc_f1' balances SCLC precision and recall. "
+                             "'recall_gated_f1' returns MacroF1 only when sclc_recall>=0.50, "
+                             "else 0 — prevents checkpointing degenerate collapsed states.")
+    parser.add_argument("--valid-data-tag", type=str, default="",
+                        help="Suffix inserted into valid_data / meta JSON filenames "
+                             "(e.g. '_binary' → valid_data_binary_fold0_train.json). "
+                             "Use to avoid collision when two runs share the same .pt cache "
+                             "but have different patient lists (e.g. ternary vs binary model).")
+    parser.add_argument("--num-classes", type=int, default=3,
+                        help="Number of output classes. Default 3 (ADC / SCLC / SCC). "
+                             "Set to 2 for binary SCLC-vs-non-SCLC; pair with --label-map.")
+    parser.add_argument("--label-map", type=str, default="",
+                        help="Label remapping applied at collation time, format 'src:dst,...' "
+                             "(e.g. '0:0,1:1,2:0' maps ADC→non-SCLC=0, SCLC→1, SCC→non-SCLC=0). "
+                             "Original scan_label in data dicts is unchanged — existing .pt cache "
+                             "files remain valid and are shared with the ternary model.")
+    parser.add_argument("--class-names", type=str, default="",
+                        help="Comma-separated class names that override the default CLASS_NAMES "
+                             "in confusion-matrix display and inference-probability JSON keys "
+                             "(e.g. 'non-SCLC,SCLC' for binary mode).")
+    parser.add_argument("--att-entropy-weight", type=float, default=0.0,
+                        help="MIL FPN mode only: weight λ for the attention entropy regularisation "
+                             "term added to the training loss. λ * H(attention) penalises uniform "
+                             "attention, encouraging the model to focus on discriminative slices. "
+                             "0 disables (default). Recommended range: 0.01–0.05.")
+    parser.add_argument("--focal-loss-gamma", type=float, default=0.0,
+                        help="MIL training only: focal loss focusing parameter γ. "
+                             "0 disables focal loss and uses standard cross-entropy (default). "
+                             "γ=2 is the standard value from Lin et al. 2017; down-weights easy "
+                             "examples so gradient focuses on hard bags near the decision boundary, "
+                             "breaking the all-SCLC / all-non-SCLC degenerate attractors.")
 
     # Two-pass: peek at --config, apply as defaults, then real parse lets
     # CLI flags still override. Single source of truth stays this parser.
@@ -604,21 +730,44 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
                 include_bbox=include_bbox,
                 cv_fold=cv_fold,
                 cv_folds=n_folds,
+                valid_data_tag=str(getattr(args, "valid_data_tag", "") or ""),
             )
-            collate_fn = simple_collate_fn_mil
+            _lm = _parse_label_map(getattr(args, "label_map", "") or "")
+            from functools import partial as _partial
+            collate_fn = _partial(simple_collate_fn_mil, label_map=_lm) if _lm else simple_collate_fn_mil
         else:
-            # DAPT branch: bag-level dataset on Lung-PET-CT-Dx.
-            train_ds, val_ds, test_ds = create_dataset_mil_bag_dapt(
-                data_path=data_path,
-                img_size=args.img_size_mil,
-                bag_size=args.bag_size,
-                testing=args.testing,
-                cache_workers=args.cache_workers,
-                strong_augs=bool(getattr(args, "strong_augs", False)),
-                clear_cache=bool(getattr(args, "clear_cache", False)),
-                cv_fold=cv_fold,
-                cv_folds=n_folds,
-            )
+            if dataset_type == "big_lunge":
+                train_ds, val_ds, test_ds = create_dataset_mil_bag(
+                    data_path=data_path,
+                    csv_path=csv_path,
+                    dataset_type="big_lunge",
+                    img_size=args.img_size_mil,
+                    bag_size=args.bag_size,
+                    lung_mask_suffix=args.lung_mask_suffix,
+                    tumor_mask_suffix=args.tumor_mask_suffix,
+                    testing=args.testing,
+                    cache_workers=args.cache_workers,
+                    strong_augs=bool(getattr(args, "strong_augs", False)),
+                    clear_cache=bool(getattr(args, "clear_cache", False)),
+                    include_mask=include_mask,
+                    include_bbox=include_bbox,
+                    cv_fold=cv_fold,
+                    cv_folds=n_folds,
+                    valid_data_tag=str(getattr(args, "valid_data_tag", "") or ""),
+                )
+            else:
+                train_ds, val_ds, test_ds = create_dataset_mil_bag_dapt(
+                    data_path=data_path,
+                    img_size=args.img_size_mil,
+                    bag_size=args.bag_size,
+                    testing=args.testing,
+                    cache_workers=args.cache_workers,
+                    strong_augs=bool(getattr(args, "strong_augs", False)),
+                    clear_cache=bool(getattr(args, "clear_cache", False)),
+                    cv_fold=cv_fold,
+                    cv_folds=n_folds,
+                )
+
             collate_fn = simple_collate_fn_mil
     elif pipeline == "2d":
         max_slices = args.max_slices_per_volume if args.max_slices_per_volume and args.max_slices_per_volume > 0 else None
@@ -637,6 +786,7 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
             clear_cache=bool(getattr(args, "clear_cache", False)),
             include_mask=include_mask,
             include_bbox=include_bbox,
+            spacing_z=float(getattr(args, "img_spacing_z", 2.0)),
             cv_fold=cv_fold,
             cv_folds=n_folds,
         )
@@ -663,7 +813,12 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
         collate_fn = simple_collate_fn
 
     if hasattr(train_ds, "data") and len(train_ds.data) > 0:
-        train_labels = [item["scan_label"] for item in train_ds.data]
+        _wrs_lm = _parse_label_map(getattr(args, "label_map", "") or "")
+        train_labels = [
+            _wrs_lm.get(int(item["scan_label"]), int(item["scan_label"]))
+            if _wrs_lm else int(item["scan_label"])
+            for item in train_ds.data
+        ]
         class_counts = Counter(train_labels)
         num_samples = len(train_labels)
 
@@ -693,8 +848,14 @@ def create_dataloaders(args, dataset_type, data_path, csv_path="", depth_size=64
     # Fail loud if any class is missing from the training split — stale caches
     # have previously left training with zero SCLC samples.
     if hasattr(train_ds, "data") and len(train_ds.data) > 0 and "scan_label" in train_ds.data[0]:
-        train_counts = Counter(int(item["scan_label"]) for item in train_ds.data)
-        missing = [c for c in range(3) if train_counts.get(c, 0) == 0]
+        _check_lm = _parse_label_map(getattr(args, "label_map", "") or "")
+        _n_check = int(getattr(args, "num_classes", 3))
+        train_counts = Counter(
+            _check_lm.get(int(item["scan_label"]), int(item["scan_label"]))
+            if _check_lm else int(item["scan_label"])
+            for item in train_ds.data
+        )
+        missing = [c for c in range(_n_check) if train_counts.get(c, 0) == 0]
         if missing:
             msg = (
                 f"[{dataset_type}] Training split is missing classes {missing}. "
@@ -821,6 +982,10 @@ def run_training_phase(
     train_fn=train_epoch,
     validate_fn=validate_epoch,
     metrics_path: str = "",
+    monitor_metric: str = "macro_f1",
+    class_weights_ce=None,
+    att_entropy_weight: float = 0.0,
+    focal_loss_gamma: float = 0.0,
 ):
     seg_loss_weight = max(0.0, float(seg_loss_weight))
     bbox_loss_weight = max(0.0, float(bbox_loss_weight))
@@ -866,13 +1031,12 @@ def run_training_phase(
         optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     if diff_lr_active:
-        # Single cosine schedule across both groups: the backbone group's
-        # scheduled LR is inert while frozen, then resumes mid-cosine on
-        # unfreeze (accepted trade-off vs. a per-group restart).
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+        scheduler = _build_scheduler(optimizer, epochs, warmup_epochs, warmup_start_lr, lr)
         if warmup_epochs > 0:
             logger.info(
-                f"[{phase_name}] Ignoring warmup_epochs={warmup_epochs} because differential_lr=True."
+                f"[{phase_name}] Differential LR with linear warmup: "
+                f"{warmup_start_lr:.1e} → head={lr:.2e} / backbone={lr * backbone_lr_scale:.2e} "
+                f"over {warmup_epochs} epochs, then cosine anneal."
             )
         if freeze_backbone_epochs > 0:
             logger.info(
@@ -909,7 +1073,9 @@ def run_training_phase(
     # Dual-best: `_pbest_raw` is the single-epoch peak (returned for downstream
     # phases); `_pbest_roll` is the rolling-window peak driving early stopping.
     best_raw_macro_f1 = -1.0
-    best_roll_macro_f1 = -1.0
+    best_raw_monitor_val = -1.0
+    best_roll_monitor_val = -1.0
+    monitor_val_history: deque = deque(maxlen=monitor_window)
     best_raw_ckpt = None
     best_roll_ckpt = None
     epochs_no_improve = 0
@@ -950,6 +1116,9 @@ def run_training_phase(
             bbox_loss_weight=bbox_loss_weight,
             mixup_alpha=mixup_alpha,
             bag_dropout=bag_dropout,
+            class_weights=class_weights_ce,
+            att_entropy_weight=att_entropy_weight,
+            focal_loss_gamma=focal_loss_gamma,
         )
         val_metrics = validate_fn(model, val_loader, device, logger)
 
@@ -971,11 +1140,22 @@ def run_training_phase(
         raw_macro_recall = float(monitor_source.get("macro_recall", val_metrics["macro_recall"]))
         raw_macro_f1 = float(monitor_source.get("macro_f1", val_metrics["macro_f1"]))
         rolling_macro_f1 = float(rolling_metrics["macro_f1"])
+        raw_monitor_val = _extract_monitor_val(monitor_source, monitor_metric)
+        monitor_val_history.append(raw_monitor_val)
+        rolling_monitor_val = float(np.mean(monitor_val_history))
+        monitor_suffix = (
+            f" [{monitor_metric}={raw_monitor_val:.4f}/roll={rolling_monitor_val:.4f}]"
+            if monitor_metric != "macro_f1" else ""
+        )
+
+        _pcr = monitor_source.get("per_class_recall") or val_metrics.get("per_class_recall") or []
+        sclc_recall_str = f" sclc_recall={float(_pcr[1]):.4f}" if len(_pcr) > 1 else ""
 
         train_val_msg = (
             f"[{phase_name}] Epoch {epoch} Summary => "
             f"TrainLoss: {train_loss:.4f}, TrainMacroF1: {train_macro_f1:.4f}, "
             f"ValMacroF1({monitor_level}): {raw_macro_f1:.4f}/{rolling_macro_f1:.4f} (cur/roll{monitor_window})"
+            f"{sclc_recall_str}{monitor_suffix}"
         )
         print(train_val_msg)
         logger.info(train_val_msg)
@@ -1013,6 +1193,9 @@ def run_training_phase(
             "val_macro_recall": float(val_metrics["macro_recall"]),
             "val_macro_f1": raw_macro_f1,
             "val_macro_f1_rolling": rolling_macro_f1,
+            "monitor_metric": monitor_metric,
+            "monitor_val": raw_monitor_val,
+            "monitor_val_rolling": rolling_monitor_val,
             "monitor_level": monitor_level,
             "monitor_window": int(monitor_window),
             "epochs_no_improve": int(epochs_no_improve),
@@ -1027,6 +1210,9 @@ def run_training_phase(
 
         if raw_macro_f1 > best_raw_macro_f1:
             best_raw_macro_f1 = raw_macro_f1
+
+        if raw_monitor_val > best_raw_monitor_val:
+            best_raw_monitor_val = raw_monitor_val
             best_raw_ckpt = os.path.join(ckpt_save_dir, f"{stamp_day_month}_{phase_prefix}_pbest_raw.pth")
             torch.save(model.state_dict(), best_raw_ckpt)
             # Stable alias decouples downstream scripts from the date stamp.
@@ -1034,18 +1220,25 @@ def run_training_phase(
             if os.path.lexists(stable_alias):
                 os.remove(stable_alias)
             os.symlink(os.path.basename(best_raw_ckpt), stable_alias)
-            logger.info(
-                f"[*] New raw-best @ ep{epoch}: {monitor_level}_macro_f1={raw_macro_f1:.4f} -> {best_raw_ckpt}"
+            ckpt_msg = (
+                f"[ckpt] NEW RAW-BEST  ep{epoch}: "
+                f"{monitor_level}_{monitor_metric}={raw_monitor_val:.4f} "
+                f"macro_f1={raw_macro_f1:.4f} -> {os.path.basename(best_raw_ckpt)}"
             )
+            print(ckpt_msg)
+            logger.info(ckpt_msg)
 
-        if rolling_macro_f1 > best_roll_macro_f1:
-            best_roll_macro_f1 = rolling_macro_f1
+        if rolling_monitor_val > best_roll_monitor_val:
+            best_roll_monitor_val = rolling_monitor_val
             best_roll_ckpt = os.path.join(ckpt_save_dir, f"{stamp_day_month}_{phase_prefix}_pbest_roll.pth")
             torch.save(model.state_dict(), best_roll_ckpt)
-            logger.info(
-                f"[*] New roll-best @ ep{epoch}: rolling_macro_f1({monitor_window})={best_roll_macro_f1:.4f} "
-                f"(current_raw={raw_macro_f1:.4f}) -> {best_roll_ckpt}"
+            roll_msg = (
+                f"[ckpt] NEW ROLL-BEST ep{epoch}: "
+                f"rolling_{monitor_metric}(w={monitor_window})={best_roll_monitor_val:.4f} "
+                f"cur={raw_monitor_val:.4f} -> {os.path.basename(best_roll_ckpt)}"
             )
+            print(roll_msg)
+            logger.info(roll_msg)
             epochs_no_improve = 0
         else:
             epochs_no_improve += 1
@@ -1056,21 +1249,26 @@ def run_training_phase(
                 f"{stamp_day_month}_{phase_prefix}_epoch_{epoch}.pth",
             )
             torch.save(model.state_dict(), periodic_ckpt)
-            logger.info(f"[*] Periodic checkpoint saved at epoch {epoch}: {periodic_ckpt}")
+            periodic_msg = f"[ckpt] Periodic checkpoint ep{epoch} -> {os.path.basename(periodic_ckpt)}"
+            print(periodic_msg)
+            logger.info(periodic_msg)
 
         if epochs_no_improve >= patience:
-            logger.info(
-                f"Early stopping triggered. No rolling macro-F1 improvement for {patience} epochs "
-                f"(window={monitor_window})."
+            stop_msg = (
+                f"[early-stop] No rolling {monitor_metric} improvement for {patience} epochs "
+                f"(window={monitor_window}). Stopping."
             )
+            print(stop_msg)
+            logger.info(stop_msg)
             break
 
     if best_raw_ckpt is None and best_roll_ckpt is None:
         logger.warning(f"[{phase_name}] No checkpoint saved — val macro-F1 never improved.")
     if best_raw_ckpt is not None:
         logger.info(
-            f"[{phase_name}] Final best: raw={best_raw_macro_f1:.4f} -> {best_raw_ckpt} | "
-            f"roll{monitor_window}={best_roll_macro_f1:.4f} -> {best_roll_ckpt}"
+            f"[{phase_name}] Final best: {monitor_metric}_raw={best_raw_monitor_val:.4f}"
+            f" (macro_f1={best_raw_macro_f1:.4f}) -> {best_raw_ckpt} | "
+            f"roll{monitor_window}={best_roll_monitor_val:.4f} -> {best_roll_ckpt}"
         )
     return best_raw_ckpt or best_roll_ckpt
 
@@ -1126,10 +1324,18 @@ def main():
             "falling back to mask-derived boxes."
         )
 
+    _label_map = _parse_label_map(getattr(args, "label_map", "") or "")
+    _class_names = _parse_class_names(getattr(args, "class_names", "") or "")
+
     pipeline = get_pipeline(args.model_type)
     if pipeline == "mil":
+        from functools import partial
         dapt_train_fn, dapt_validate_fn = train_epoch_mil, validate_epoch_mil
-        ft_train_fn, ft_validate_fn = train_epoch_mil, validate_epoch_mil
+        ft_train_fn = train_epoch_mil
+        ft_validate_fn = (
+            partial(validate_epoch_mil, class_names=_class_names)
+            if _class_names else validate_epoch_mil
+        )
     elif pipeline == "2d":
         dapt_train_fn, dapt_validate_fn = train_epoch_2d, validate_epoch_2d
         ft_train_fn, ft_validate_fn = train_epoch_2d, validate_epoch_2d
@@ -1155,6 +1361,7 @@ def main():
         tfpn_heads=args.tfpn_heads,
         tfpn_layers=args.tfpn_layers,
         tfpn_levels=args.tfpn_levels,
+        num_classes=int(getattr(args, "num_classes", 3)),
     )
     model = get_sclc_model(**_model_kwargs).to(device)
     # FPN LazyConv params materialise on first forward; skip the count
@@ -1176,13 +1383,23 @@ def main():
     best_dapt_ckpt = None
 
     fold_index_override = getattr(args, "cv_fold_index", None)
+    fold_start = int(getattr(args, "cv_fold_start", 0) or 0)
     if fold_index_override is not None:
+        if fold_start > 0:
+            raise ValueError("--cv-fold-index and --cv-fold-start are mutually exclusive.")
         if fold_index_override < 0 or fold_index_override >= n_folds:
             raise ValueError(
                 f"--cv-fold-index {fold_index_override} out of range for --cv-folds {n_folds}"
             )
         fold_range: List[int] = [fold_index_override]
         logger.info(f"[CV] Single-fold mode: running only fold {fold_index_override}/{n_folds-1}.")
+    elif fold_start > 0:
+        if fold_start >= n_folds:
+            raise ValueError(
+                f"--cv-fold-start {fold_start} >= --cv-folds {n_folds}; nothing to run."
+            )
+        fold_range = list(range(fold_start, n_folds))
+        logger.info(f"[CV] Resuming from fold {fold_start} (skipping folds 0–{fold_start-1}).")
     else:
         fold_range = list(range(n_folds))
 
@@ -1211,9 +1428,17 @@ def main():
 
         # PHASE 1: DAPT
         if args.mode in ["full", "dapt"]:
-            logger.info(f"Setting up DAPT Datasets from: {args.dapt_dataset}")
+            if getattr(args, "swap_datasets", False):
+                _dapt_type = "big_lunge"
+                _dapt_path = args.finetune_dataset
+                _dapt_csv  = args.finetune_csv
+            else:
+                _dapt_type = "lung_pet_ct_dx"
+                _dapt_path = args.dapt_dataset
+                _dapt_csv  = ""
+            logger.info(f"Setting up DAPT Datasets from: {_dapt_path} (type={_dapt_type})")
             train_loader, val_loader, dapt_test_loader = create_dataloaders(
-                args, "lung_pet_ct_dx", args.dapt_dataset,
+                args, _dapt_type, _dapt_path, _dapt_csv,
                 depth_size=args.depth_size, phase="dapt",
                 cv_fold=cv_fold,
             )
@@ -1233,6 +1458,7 @@ def main():
                 model, train_loader, val_loader, device,
                 args.dapt_epochs, dapt_lr, args.dapt_weight_decay, fold_ckpt_dir, logger,
                 dapt_phase_name, scaler=scaler,
+                patience=int(getattr(args, "early_stopping_patience", 10)),
                 use_segmentation=dapt_use_seg and not args.linear_probe,
                 use_det_seg=use_det_seg and not args.linear_probe,
                 accumulation_steps=args.accumulation_steps,
@@ -1317,9 +1543,17 @@ def main():
                 else:
                     logger.info("Fine-tuning from initial in-memory weights (no DAPT checkpoint).")
 
-            logger.info(f"Setting up FineTuning Datasets from: {args.finetune_dataset}")
+            if getattr(args, "swap_datasets", False):
+                _ft_type = "lung_pet_ct_dx"
+                _ft_path = args.dapt_dataset
+                _ft_csv  = ""
+            else:
+                _ft_type = "big_lunge"
+                _ft_path = args.finetune_dataset
+                _ft_csv  = args.finetune_csv
+            logger.info(f"Setting up FineTuning Datasets from: {_ft_path} (type={_ft_type})")
             train_loader, val_loader, test_loader = create_dataloaders(
-                args, "big_lunge", args.finetune_dataset, args.finetune_csv,
+                args, _ft_type, _ft_path, _ft_csv,
                 depth_size=args.depth_size, phase="finetune",
                 cv_fold=cv_fold,
             )
@@ -1328,6 +1562,7 @@ def main():
                 model, train_loader, val_loader, device,
                 args.finetune_epochs, args.finetune_lr, args.weight_decay, fold_ckpt_dir, logger,
                 "finetune", scaler=scaler,
+                patience=int(getattr(args, "early_stopping_patience", 10)),
                 use_segmentation=finetune_use_seg,
                 use_det_seg=use_det_seg,
                 accumulation_steps=args.accumulation_steps,
@@ -1344,6 +1579,12 @@ def main():
                 bag_dropout=float(getattr(args, "bag_dropout", 0.0)),
                 train_fn=ft_train_fn, validate_fn=ft_validate_fn,
                 metrics_path=metrics_path,
+                monitor_metric=str(getattr(args, "monitor_metric", "macro_f1") or "macro_f1"),
+                class_weights_ce=_parse_class_weights_ce(
+                    getattr(args, "class_weights_ce", "") or "", device
+                ),
+                att_entropy_weight=float(getattr(args, "att_entropy_weight", 0.0) or 0.0),
+                focal_loss_gamma=float(getattr(args, "focal_loss_gamma", 0.0) or 0.0),
             )
 
             if args.mode in ("full", "finetune"):
@@ -1408,8 +1649,16 @@ def main():
             logger.info("No --model-checkpoint provided for inference mode. Using initial weights.")
 
         logger.info("Setting up Test Datasets...")
+        if getattr(args, "swap_datasets", False):
+            _inf_type = "lung_pet_ct_dx"
+            _inf_path = args.dapt_dataset
+            _inf_csv  = ""
+        else:
+            _inf_type = "big_lunge"
+            _inf_path = args.finetune_dataset
+            _inf_csv  = args.finetune_csv
         _, _, test_loader = create_dataloaders(
-            args, "big_lunge", args.finetune_dataset, args.finetune_csv,
+            args, _inf_type, _inf_path, _inf_csv,
             depth_size=args.depth_size, phase="inference",
         )
 

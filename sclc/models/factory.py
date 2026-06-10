@@ -54,10 +54,11 @@ def get_sclc_model(
     tfpn_heads: int = 4,
     tfpn_layers: int = 1,
     tfpn_levels: int = 1,
+    num_classes: int = 3,
 ) -> nn.Module:
     if model_type.lower() == "mil_swinv2_tiny":
         model = MILSwinV2TinyClassifier(
-            num_classes=3,
+            num_classes=num_classes,
             mil_mode=mil_mode,
             trans_blocks=mil_trans_blocks,
             trans_dropout=mil_trans_dropout,
@@ -86,7 +87,7 @@ def get_sclc_model(
         return model
     if model_type.lower() == "efficientnet_b0_2d":
         model = EfficientNet2DClassifier(
-            num_classes=3,
+            num_classes=num_classes,
             use_advanced_fpn=use_advanced_fpn,
             use_det_seg=use_det_seg,
         )
@@ -101,7 +102,7 @@ def get_sclc_model(
         return model
     if model_type.lower() == "densenet121_2d":
         model = DenseNet2DClassifier(
-            num_classes=3,
+            num_classes=num_classes,
             use_advanced_fpn=use_advanced_fpn,
             use_det_seg=use_det_seg,
         )
@@ -116,7 +117,7 @@ def get_sclc_model(
         return model
     if model_type.lower() == "resnet50_2d":
         model = TorchVisionResNet2DClassifier(
-            num_classes=3,
+            num_classes=num_classes,
             model_name="resnet50",
             use_advanced_fpn=use_advanced_fpn,
             use_det_seg=use_det_seg,
@@ -137,7 +138,7 @@ def get_sclc_model(
         return model
     if model_type.lower() == "swinv2_tiny_2d":
         model = SwinV2Tiny2DClassifier(
-            num_classes=3,
+            num_classes=num_classes,
             use_advanced_fpn=use_advanced_fpn,
             use_det_seg=use_det_seg,
             fpn_channels=fpn_channels,
@@ -158,7 +159,7 @@ def get_sclc_model(
     if model_type.lower() == "swin_unetr":
         model = SwinUNETRClassifier(
             in_channels=in_channels,
-            num_classes=3,
+            num_classes=num_classes,
             use_advanced_fpn=use_advanced_fpn,
             use_det_seg=use_det_seg,
             fpn_channels=fpn_channels,

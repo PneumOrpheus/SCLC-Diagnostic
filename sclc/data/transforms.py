@@ -649,6 +649,7 @@ def _build_2d_pipeline(
     crop_size: int = 96,
     include_mask: bool = False,
     include_bbox: bool = False,
+    spacing_z: float = 2.0,
 ) -> list:
     """Shared 2D pipeline: load CT + tumor mask, spacing, pick the slice from
     `slice_idx`, in-plane crop around the tumor bbox, scale, resize, squeeze
@@ -668,7 +669,7 @@ def _build_2d_pipeline(
         Orientationd(keys=load_keys, axcodes="RAS", allow_missing_keys=True),
         Spacingd(
             keys=load_keys,
-            pixdim=(1.0, 1.0, 2.0),
+            pixdim=(1.0, 1.0, float(spacing_z)),
             mode=["bilinear", "nearest"],
             allow_missing_keys=True,
         ),
@@ -756,6 +757,7 @@ def get_train_transforms_2d(
     crop_size: int = 96,
     include_mask: bool = False,
     include_bbox: bool = False,
+    spacing_z: float = 2.0,
 ) -> Compose:
     return Compose(_build_2d_pipeline(
         img_size=img_size,
@@ -764,6 +766,7 @@ def get_train_transforms_2d(
         crop_size=crop_size,
         include_mask=include_mask,
         include_bbox=include_bbox,
+        spacing_z=float(spacing_z),
     ))
 
 
@@ -772,6 +775,7 @@ def get_val_transforms_2d(
     crop_size: int = 96,
     include_mask: bool = False,
     include_bbox: bool = False,
+    spacing_z: float = 2.0,
 ) -> Compose:
     return Compose(_build_2d_pipeline(
         img_size=img_size,
@@ -779,6 +783,7 @@ def get_val_transforms_2d(
         crop_size=crop_size,
         include_mask=include_mask,
         include_bbox=include_bbox,
+        spacing_z=float(spacing_z),
     ))
 
 

@@ -60,8 +60,14 @@ def _tumor_slice_index(
     mask_paths: List[str],
     cache_path: str,
     min_pixels: int = 1,
+    pixdim: tuple = (1.0, 1.0, 2.0),
 ) -> Dict[str, List[int]]:
-    """Disk-cached `{mask_path: [slice_idx, ...]}`; rescans only on mtime change."""
+    """Disk-cached `{mask_path: [slice_idx, ...]}`; rescans only on mtime change.
+
+    `pixdim` is forwarded to `_scan_tumor_slice_indices` and must match the
+    `Spacingd` pixdim used in the transform pipeline. Use a separate
+    `cache_path` file for each unique pixdim so caches don't cross-contaminate.
+    """
     index: Dict[str, Any] = {}
     if os.path.exists(cache_path):
         try:
@@ -85,7 +91,7 @@ def _tumor_slice_index(
         ):
             continue
         try:
-            slices = _scan_tumor_slice_indices(p, min_pixels=min_pixels)
+            slices = _scan_tumor_slice_indices(p, min_pixels=min_pixels, pixdim=pixdim)
         except Exception as e:
             print(f"[2D] tumor-slice scan failed for {p}: {e}")
             slices = []
@@ -210,11 +216,18 @@ def get_biglunge_2d_data_list(
     testing: bool = False,
     min_tumor_pixels: int = 1,
     max_slices_per_volume: Optional[int] = None,
+    spacing_z: float = 2.0,
     *,
     cv_fold: int,
     cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """BigLunge 2D data list: one entry per tumor slice."""
+    """BigLunge 2D data list: one entry per tumor slice.
+
+    `spacing_z` is the axial voxel size (mm) used in `Spacingd`; it must
+    match the transform pipeline. The default (2.0) preserves existing
+    behaviour. Non-default spacings get a separate index JSON so caches
+    are never mixed.
+    """
     volumes = get_biglunge_data_list(
         data_path=data_path, csv_path=csv_path,
         val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
@@ -233,9 +246,13 @@ def get_biglunge_2d_data_list(
                 v["tumor_mask"] = str(mask_path)
                 mask_paths.append(str(mask_path))
 
-    index_path = os.path.join(cache_root, "tumor_slice_index.json")
+    # Non-default z-spacing gets its own index file so 1mm and 2mm scans
+    # never share a cache (the slice indices differ between resamplings).
+    _sp_tag = "" if spacing_z == 2.0 else f"_sp{spacing_z:.1f}mm"
+    index_path = os.path.join(cache_root, f"tumor_slice_index{_sp_tag}.json")
     tumor_index = _tumor_slice_index(
-        sorted(set(mask_paths)), index_path, min_pixels=min_tumor_pixels
+        sorted(set(mask_paths)), index_path, min_pixels=min_tumor_pixels,
+        pixdim=(1.0, 1.0, float(spacing_z)),
     )
 
     out: Dict[str, List[Dict[str, Any]]] = {}
@@ -272,10 +289,16 @@ def get_biglunge_2d_data_list(
     drops_path = os.path.join(cache_root, "dropped_patients.json")
     os.makedirs(cache_root, exist_ok=True)
     tmp = drops_path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(drops_summary, f, indent=2)
-    os.replace(tmp, drops_path)
-    print(f"[2D big_lunge] dropped-patient inventory -> {drops_path}")
+    try:
+        with open(tmp, "w") as f:
+            json.dump(drops_summary, f, indent=2)
+        os.replace(tmp, drops_path)
+        print(f"[2D big_lunge] dropped-patient inventory -> {drops_path}")
+    except PermissionError:
+        print(
+            f"[2D big_lunge] WARNING: cannot write dropped-patient inventory to "
+            f"{drops_path} (permission denied) — skipping. Training is unaffected."
+        )
 
     return out
 
@@ -290,12 +313,14 @@ def get_lung_pet_ct_dx_2d_data_list(
     max_scans_per_patient: int = 2,
     min_tumor_pixels: int = 1,
     max_slices_per_volume: Optional[int] = None,
+    spacing_z: float = 2.0,
     *,
     cv_fold: int,
     cv_folds: int = 5,
 ) -> Dict[str, List[Dict[str, Any]]]:
     """Lung-PET-CT-Dx 2D data list: one entry per tumor slice.
     The per-series `_mask.nii.gz` is renamed `tumor_mask` before slice expansion.
+    `spacing_z` must match the `Spacingd` pixdim used in the transform pipeline.
     """
     volumes = get_lung_pet_ct_dx_data_list(
         data_path=data_path, val_frac=val_frac, test_frac=test_frac, seed=seed,
@@ -314,9 +339,11 @@ def get_lung_pet_ct_dx_2d_data_list(
                 v["tumor_mask"] = v.pop("mask")
                 mask_paths.append(v["tumor_mask"])
 
-    index_path = os.path.join(cache_root, "tumor_slice_index.json")
+    _sp_tag = "" if spacing_z == 2.0 else f"_sp{spacing_z:.1f}mm"
+    index_path = os.path.join(cache_root, f"tumor_slice_index{_sp_tag}.json")
     tumor_index = _tumor_slice_index(
-        sorted(set(mask_paths)), index_path, min_pixels=min_tumor_pixels
+        sorted(set(mask_paths)), index_path, min_pixels=min_tumor_pixels,
+        pixdim=(1.0, 1.0, float(spacing_z)),
     )
 
     out: Dict[str, List[Dict[str, Any]]] = {}
@@ -381,12 +408,17 @@ def create_dataset_2d(
     clear_cache: bool = False,
     include_mask: bool = False,
     include_bbox: bool = False,
+    spacing_z: float = 2.0,
     *,
     cv_fold: int,
     cv_folds: int = 5,
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
     """Train/val/test `PersistentDataset`s of 2D tumor slices, shape (C=1, H, W).
     `dataset_type` is `"big_lunge"` or `"lung_pet_ct_dx"`.
+
+    `spacing_z` sets the axial voxel size (mm) for `Spacingd` and the slice
+    index scanner. Default 2.0 preserves existing behaviour. Non-default
+    values get a `_sp{z}mm` suffix in the cache dir so old caches are safe.
     """
     if dataset_type == "big_lunge":
         cache_name = "monai_biglunge_2d"
@@ -396,10 +428,13 @@ def create_dataset_2d(
         raise ValueError(f"Unknown dataset_type for 2D: '{dataset_type}'.")
 
     # Cache root is shared across CV folds — see loaders.py for the rationale.
+    # Non-default z-spacing gets its own subdirectory so existing 2mm caches
+    # are never touched.
     _mask_tag = ("_mask" if include_mask else "") + ("_bbox" if include_bbox else "")
+    _sp_tag = "" if spacing_z == 2.0 else f"_sp{spacing_z:.1f}mm"
     cache_root = os.path.join(
         "/home/data/.cache", cache_name,
-        f"img{img_size}_crop{int(crop_size)}_mp{int(min_tumor_pixels)}{_mask_tag}{'_testing' if testing else ''}",
+        f"img{img_size}_crop{int(crop_size)}_mp{int(min_tumor_pixels)}{_mask_tag}{_sp_tag}{'_testing' if testing else ''}",
     )
     if clear_cache and cv_fold <= 0 and os.path.isdir(cache_root):
         print(f"[--clear-cache] Removing {cache_root}")
@@ -416,6 +451,7 @@ def create_dataset_2d(
             val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
             min_tumor_pixels=min_tumor_pixels,
             max_slices_per_volume=max_slices_per_volume,
+            spacing_z=float(spacing_z),
             cv_fold=cv_fold, cv_folds=cv_folds,
         )
     else:
@@ -424,6 +460,7 @@ def create_dataset_2d(
             val_frac=val_frac, test_frac=test_frac, seed=seed, testing=testing,
             min_tumor_pixels=min_tumor_pixels,
             max_slices_per_volume=max_slices_per_volume,
+            spacing_z=float(spacing_z),
             cv_fold=cv_fold, cv_folds=cv_folds,
         )
 
@@ -437,6 +474,7 @@ def create_dataset_2d(
                 crop_size=crop_size,
                 include_mask=include_mask,
                 include_bbox=include_bbox,
+                spacing_z=float(spacing_z),
             )
             if split == "train"
             else get_val_transforms_2d(
@@ -444,6 +482,7 @@ def create_dataset_2d(
                 crop_size=crop_size,
                 include_mask=include_mask,
                 include_bbox=include_bbox,
+                spacing_z=float(spacing_z),
             )
         )
 
@@ -478,6 +517,7 @@ def create_dataset_2d(
             "centroid_algo": "largest_cc_min50",
             "include_mask": bool(include_mask),
             "include_bbox": bool(include_bbox),
+            "spacing_z": float(spacing_z),
         }
 
         cached_meta = None

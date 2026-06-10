@@ -7,20 +7,30 @@ from .advanced_fpn import AdvancedFPNNeck
 
 
 class _MILAttentionPool(nn.Module):
-    def __init__(self, in_dim: int, num_classes: int):
+    """Gated attention pooling for MIL bags (FPN path).
+
+    Architecture: per-instance Linear→Tanh→Dropout→Linear attention scores,
+    softmax over bag, weighted sum, Dropout on the pooled representation,
+    then a linear classifier.  Dropout improves regularisation over the small
+    BigLunge training set (≤342 bags/fold) and reduces FPN-branch variance.
+    """
+    def __init__(self, in_dim: int, num_classes: int, dropout: float = 0.0):
         super().__init__()
         hidden = max(64, in_dim // 2)
         self.att = nn.Sequential(
             nn.Linear(in_dim, hidden),
             nn.Tanh(),
+            nn.Dropout(p=dropout),
             nn.Linear(hidden, 1),
         )
+        self.drop = nn.Dropout(p=dropout)
         self.cls = nn.Linear(in_dim, num_classes)
 
     def forward(self, feats: torch.Tensor):
         att = self.att(feats)
         weights = torch.softmax(att, dim=1)
         pooled = (weights * feats).sum(dim=1)
+        pooled = self.drop(pooled)
         return self.cls(pooled), weights.squeeze(-1)
 
 
@@ -116,7 +126,9 @@ class MILSwinV2TinyClassifier(nn.Module):
                 use_seg=bool(use_det_seg),
                 use_det=bool(use_det_seg),
             )
-            self.att_pool = _MILAttentionPool(in_dim=fpn_channels, num_classes=num_classes)
+            self.att_pool = _MILAttentionPool(
+                in_dim=fpn_channels, num_classes=num_classes, dropout=trans_dropout
+            )
 
     def load_backbone_from_dapt(self, state_dict, logger=None):
         """Load a DAPT `SwinV2Tiny2DClassifier` state dict (keys `swin.<...>`)
@@ -202,8 +214,8 @@ class MILSwinV2TinyClassifier(nn.Module):
             if f.ndim == 4 and f.shape[-1] == expected_c and f.shape[1] != expected_c:
                 f = f.permute(0, 3, 1, 2).contiguous()
             feats_nchw.append(f)
-        fused, _ = self.fpn(feats_nchw)
-        feat_vec, seg_logits, box_pred = self.instance_head(fused, flat.shape)
+        _, all_fused = self.fpn(feats_nchw)
+        feat_vec, seg_logits, box_pred = self.instance_head(all_fused[-1], flat.shape)
         feat_vec = feat_vec.view(B, N, -1)
         cls_logits, att = self.att_pool(feat_vec)
         self._last_attention = att

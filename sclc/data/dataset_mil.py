@@ -327,6 +327,7 @@ def create_dataset_mil_bag(
     include_bbox: bool = False,
     cv_fold: int = -1,
     cv_folds: int = 5,
+    valid_data_tag: str = "",
 ) -> Tuple[PersistentDataset, PersistentDataset, PersistentDataset]:
     """Train/val/test MIL-bag `PersistentDataset`s for BigLunge.
     Each sample has shape `(bag_size, 1, img_size, img_size)`.
@@ -390,8 +391,9 @@ def create_dataset_mil_bag(
         print(f"[MIL bag] PersistentDataset cache_dir='{current_cache_dir}' (split='{split}')")
 
         _fold_suffix = f"_fold{cv_fold}" if cv_fold >= 0 else ""
-        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_fold_suffix}_{split}.json")
-        meta_file = os.path.join(current_cache_dir, f"meta{_fold_suffix}_{split}.json")
+        _tag = str(valid_data_tag) if valid_data_tag else ""
+        valid_data_file = os.path.join(current_cache_dir, f"valid_data{_tag}{_fold_suffix}_{split}.json")
+        meta_file       = os.path.join(current_cache_dir, f"meta{_tag}{_fold_suffix}_{split}.json")
         current_meta = {
             "pipeline": "mil_bag",
             "dataset_type": dataset_type,
