@@ -52,8 +52,6 @@ SCLC-Classification/
 │   │   ├── train_mil.py
 │   │   ├── bbox_utils.py           # bbox helpers for the detection aux head
 │   │   └── bootstrap.py            # patient-level bootstrap CIs
-│   ├── ensemble/
-│   │   └── poe.py                  # product-of-experts combination
 │   └── grad_cam/                   # interpretability tooling
 │       ├── grad_cam.py             # `python -m sclc.grad_cam.grad_cam ...`
 │       ├── colorize.py

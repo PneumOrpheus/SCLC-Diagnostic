@@ -41,5 +41,13 @@ for cfg in "${CONFIGS[@]}"; do
       --output-dir results/output_master_fpn $FPN_FLAGS
 done
 
+# Exploratory binary SCLC-vs-NSCLC result (thesis Results, "Exploratory Binary"),
+# outside the main matrix: the MIL SwinV2-Tiny + FPN backbone with the label space
+# collapsed to {non-SCLC, SCLC} (num_classes / label_map are set in the config).
+echo "=== exploratory binary SCLC-vs-NSCLC (5-fold) ==="
+"$PY" -m sclc.main --config configs/experiments/mil_swinv2_tiny_fpn_v2_binary.yaml \
+    --cv-folds 5 --use-advanced-fpn --use-det-seg \
+    --output-dir results/output_master_fpn
+
 echo "=== Building results/thesis_final (tables + figures, bootstrap CIs) ==="
 "$PY" scripts/build_final_results.py --arms base fpn --n-boot 1000
