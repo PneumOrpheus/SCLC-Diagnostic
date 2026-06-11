@@ -1,3 +1,3 @@
-from .grad_cam import use_grad_cam
+from .grad_cam import run_grad_cam
 
-__all__ = ["use_grad_cam"]
+__all__ = ["run_grad_cam"]

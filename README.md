@@ -6,8 +6,8 @@ Three model families share one entrypoint (`main.py`) and one config format (`co
 
 | Pipeline | Models | Input | Notes |
 |---|---|---|---|
-| **2D** (single slice) | `efficientnet_b0_2d`, `resnet50_2d`, `densenet121_2d`, `swin_tiny_2d`, `resnet50_2d_rin`, `densenet121_2d_rin` | `(1, H, W)` axial slice cropped around the largest tumor CC | `_rin` variants use RadImageNet-pretrained backbones (ImageNet otherwise) |
-| **MIL** | `mil_resnet50` | `(N, 1, H, W)` bag of lung-anchored slices | Attention pooling (MONAI `MILModel`); DAPT trains a 2D ResNet-50, FT rebuilds as MIL and transfers backbone weights |
+| **2D** (single slice) | `efficientnet_b0_2d`, `resnet50_2d`, `densenet121_2d`, `swinv2_tiny_2d` | `(1, H, W)` axial slice cropped around the largest tumor CC | ImageNet-pretrained; the 3-channel stem is averaged to 1 channel for grayscale CT |
+| **MIL** | `mil_swinv2_tiny` | `(N, 1, H, W)` bag of slices | SwinV2-Tiny backbone (256×256), attention-pooled bag classifier; DAPT trains the 2D SwinV2-Tiny, FT transfers the backbone into the MIL bag model |
 | **3D** | `swin_unetr` | `(1, X, Y, Z)` volume with optional segmentation aux loss | MONAI SwinUNETR; classification via forward hook on `swinViT` |
 
 ## Class taxonomy
@@ -38,8 +38,8 @@ SCLC-Classification/
 │   │   ├── factory.py              # get_sclc_model + pipeline helpers
 │   │   ├── swin_unetr.py
 │   │   ├── classifiers_2d.py       # ImageNet 2D wrappers
-│   │   ├── classifiers_rin.py      # RadImageNet 2D wrappers
-│   │   └── classifiers_mil.py      # MIL bag classifier
+│   │   ├── classifiers_mil.py      # MIL bag classifier
+│   │   └── advanced_fpn.py         # FPN neck used by the FPN-ablation arm
 │   ├── data/                       # runtime data loading
 │   │   ├── loaders.py              # 3D dataset + splits + class maps
 │   │   ├── dataset_2d.py
@@ -50,7 +50,10 @@ SCLC-Classification/
 │   │   ├── train_3d.py             # 3D train/validate
 │   │   ├── train_2d.py
 │   │   ├── train_mil.py
+│   │   ├── bbox_utils.py           # bbox helpers for the detection aux head
 │   │   └── bootstrap.py            # patient-level bootstrap CIs
+│   ├── ensemble/
+│   │   └── poe.py                  # product-of-experts combination
 │   └── grad_cam/                   # interpretability tooling
 │       ├── grad_cam.py             # `python -m sclc.grad_cam.grad_cam ...`
 │       ├── colorize.py
@@ -59,14 +62,10 @@ SCLC-Classification/
 ├── configs/experiments/            # one YAML per model
 │
 ├── scripts/                        # runnable analysis / orchestration tools
-│   ├── build_thesis_results.py     # consolidates results/output/ into results/thesis/
-│   ├── thesis_plots.py             # learning curves, confusion matrices, ROC
-│   ├── report_test_metrics.py      # markdown summary of metrics.jsonl
+│   ├── build_final_results.py      # consolidates results/output_master_* into results/thesis_final/
 │   ├── audit_multifocal.py         # multifocal-mask audit (BigLunge)
-│   └── runners/                    # bash chains
-│       ├── run_all_2d_v3.sh        # sequential runner for the 6 2D configs
-│       ├── run_swinunetr_ft_then_infer.sh
-│       └── run_swinunetr_then_mil.sh
+│   └── runners/
+│       └── run_all.sh              # full matrix (6 models x {base,fpn} x 5 folds) + build
 │
 ├── data_pipeline/                  # one-shot dataset acquisition / preprocessing
 │   ├── README.md                   # reproducibility chain
@@ -94,9 +93,8 @@ SCLC-Classification/
 Hardcoded in `sclc/main.py` and `sclc/data/loaders.py`:
 
 - DAPT: `/home/data/Lung-PET-CT-Dx-Clean/{patient}/{series_uid}_image.nii.gz` (+ optional `_mask.nii.gz`)
-- Fine-tune: `/home/data/BigLunge/pre_formatting_ws_iso1.0mm_croplungs_bb/1` + `patients_parameters.csv`
+- Fine-tune (BigLunge): `/home/data/TrainingData` + `/home/data/TrainingData/patients_parameters.csv`
 - SwinUNETR pretrain: `/home/data/pre_trained_models/model_swin_unetr_btcv_segmentation_v1.pt`
-- RadImageNet weights: `/home/hansstem/RadImageNet_swin/rin_swintf.pth`, `/home/data/pre_trained_models/RadImageNet-ResNet50_notop.pth`, `/home/data/pre_trained_models/RadImageNet-DenseNet121_notop.pth`
 
 `PersistentDataset` caches live under `~/.cache/monai_*/`.
 
@@ -124,8 +122,9 @@ python -m sclc.main --config configs/experiments/3d_swin_unetr.yaml \
 python -m sclc.main --config configs/experiments/3d_swin_unetr.yaml \
     --mode inference --model-checkpoint /path/to/finetune_pbest_raw.pth
 
-# Sequential runner: all 6 2D models, dapt 30 ep
-bash scripts/runners/run_all_2d_v3.sh results/runs/$(date +%Y-%m-%d)_2d
+# Full matrix in one shot: 6 models x {base, fpn} x 5 folds, then build results.
+# Long job — launch inside tmux.
+bash scripts/runners/run_all.sh
 ```
 
 Common CLI overrides (otherwise read from the YAML):
@@ -144,31 +143,28 @@ Both phases use:
 - `CrossEntropyLoss(label_smoothing=0.1)`.
 - `BCEWithLogitsLoss * 0.5` segmentation aux loss when masks are present (3D `swin_unetr` only).
 - `AdamW`, cosine schedule, AMP, grad clipping at norm 1.0, gradient accumulation.
-- Patient-level 70 / 15 / 15 stratified split. DAPT uses `WeightedRandomSampler`; BigLunge uses plain shuffle.
+- Default split: patient-level 70 / 15 / 15 stratified (`--cv-folds 1`). The thesis runs use patient-level stratified 5-fold CV (`--cv-folds 5`). DAPT uses `WeightedRandomSampler`; BigLunge uses plain shuffle.
 - LP-FT: backbone frozen for `finetune_freeze_backbone_epochs` epochs, then unfrozen with a 10x lower LR.
 - **Dual pbest**: best-by-rolling-3-mean validation accuracy (`*_pbest_roll`) and best single-epoch (`*_pbest_raw`) are both saved per phase. Test inference runs from `*_pbest_raw`.
 
 ## Outputs
 
+Raw per-run artefacts are written under per-arm / per-cohort roots:
+
 ```
-results/output/<pipeline>/<model_type>/
+results/output_master_{base,fpn}_{lpcd,biglunge}/<pipeline>/<model_type>/
 ├── metrics.jsonl                          # one row per epoch + DAPT-test + BL-test
 ├── inference_probabilities_*.json         # per-patient softmax + labels
-├── misclassifications_*.csv
 └── *.log
-
-results/thesis/<pipeline>/
-├── per_model/<model_type>/                # CSVs, confusion matrices, ROC
-├── tables/headline.md                     # overall + per-class metrics with bootstrap CIs
-├── figures/                               # accuracy / AUC / F1 bar plots, learning curves
-└── README.md                              # auto-generated summary
 ```
 
-`python scripts/build_thesis_results.py --pipeline {2d,mil,3d}` rebuilds the `results/thesis/` tree from `results/output/` and snapshots the previous version under `results/thesis/_archive/` before overwriting.
+`python scripts/build_final_results.py --n-boot 1000` consolidates these into the
+`results/thesis_final/` tree (`tables/*.tex`, `figures/*.pdf`) with patient-level
+bootstrap CIs.
 
 ## See also
 
-- `docs/limitations.md` — thesis limitations / known caveats (tumor-mask multifocality, lung vs tumor anchoring, RadImageNet weight provenance).
+- `docs/limitations.md` — thesis limitations / known caveats (tumor-mask multifocality, lung vs tumor anchoring, algorithmic-mask quality dependence).
 - `data_pipeline/notebooks/biglunge_audit.ipynb` — BigLunge tumor-mask audit; `min_tumor_pixels` and the truncated-lung-mask exclusion list (`sclc/data/exclusions.py`) are derived from it.
 
 ## Acknowledgments
@@ -177,4 +173,4 @@ results/thesis/<pipeline>/
 - David Bouget, Erlend Fagertun Hofstad (SINTEF, BigLunge group) — dataset and clinical guidance.
 - Håkon Leira (St. Olavs Hospital) and the interviewed radiologists.
 - MONAI for the 3D imaging transforms and networks.
-- timm, torchvision, RadImageNet for pretrained weights.
+- timm and torchvision for pretrained backbone weights.

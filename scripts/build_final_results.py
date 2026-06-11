@@ -1,8 +1,8 @@
 """Build the final thesis-results tree from the 2026-05 master CV runs.
 
-This consumes the per-fold artefacts written by the new ``run_master.sh``
-orchestrator (and its resume / gap-fill siblings) and emits the LaTeX
-tables and PDF figures cited in ``Sections/Results.tex``.
+This consumes the per-fold artefacts written by the ``run_all.sh``
+orchestrator and emits the LaTeX tables and PDF figures cited in the
+thesis Results chapter.
 
 Reads from (per arm):
   - results/output_master_base/<pipeline>/<model>/                   (baseline arm)

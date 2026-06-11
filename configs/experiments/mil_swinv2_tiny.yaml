@@ -35,8 +35,7 @@ training:
   finetune_backbone_lr_scale: 0.1
   finetune_freeze_backbone_epochs: 2
   weight_decay: 5.0e-2
-  # Tiny model fits more bags per GPU than Base; match mil_swinv2_base for
-  # fair comparison. Effective batch = batch_size * accumulation_steps = 8.
+  # Effective batch = batch_size * accumulation_steps = 8.
   batch_size: 2
   accumulation_steps: 4
   monitor_rolling_window: 3

@@ -2,7 +2,7 @@
 
 Usage:
     python -m sclc.grad_cam.grad_cam --model densenet121_2d
-    python -m sclc.grad_cam.grad_cam --model mil_resnet50
+    python -m sclc.grad_cam.grad_cam --model mil_swinv2_tiny
     python -m sclc.grad_cam.grad_cam --model swin_unetr
 
 The model name is the only required argument. The script:
@@ -68,17 +68,13 @@ def _swin_bhwc_to_bchw(t: torch.Tensor) -> torch.Tensor:
 
 # (model_type) -> (path-to-target-layer, optional reshape transform)
 TARGET_LAYERS: Dict[str, Tuple[str, Optional[Callable[[torch.Tensor], torch.Tensor]]]] = {
-    # 2D ImageNet
+    # 2D
     "efficientnet_b0_2d": ("efficientnet._bn1", None),
     "densenet121_2d":     ("densenet.features.denseblock4", None),
     "resnet50_2d":        ("backbone.features.layer4", None),
-    "swin_tiny_2d":       ("swin.norm", _swin_bhwc_to_bchw),
-    # 2D RadImageNet
-    "resnet50_2d_rin":    ("backbone.layer4", None),
-    "densenet121_2d_rin": ("densenet.features.denseblock4", None),
+    "swinv2_tiny_2d":     ("swin.norm", _swin_bhwc_to_bchw),
     # MIL
-    "mil_resnet50":       ("mil.net.layer4", None),
-    "mil_swin_tiny":      ("mil.net.norm", _swin_bhwc_to_bchw),
+    "mil_swinv2_tiny":    ("mil.net.norm", _swin_bhwc_to_bchw),
     # 3D
     "swin_unetr":         ("swin_unetr.swinViT.layers4.0", None),
 }
