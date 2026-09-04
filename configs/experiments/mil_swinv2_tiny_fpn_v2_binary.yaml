@@ -1,47 +1,24 @@
 experiment:
   name: mil_swinv2_tiny_fpn_v2_binary
   notes: >-
-    Binary SCLC-vs-non-SCLC classifier for the Product-of-Experts ensemble.
+    Exploratory binary SCLC-vs-non-SCLC classifier (thesis Results,
+    "Exploratory Binary SCLC-vs-NSCLC Result"). Reuses the MIL SwinV2-Tiny
+    backbone with the FPN arm and collapses the label space to
+    {non-SCLC, SCLC} via label_map. Trained outside the pre-specified
+    six-configuration benchmark.
 
-    V7 DESIGN (current):
-
-    Core change vs v6: replace class-weighted CE with focal loss (γ=2).
-
-    WHY CLASS WEIGHTS FAILED (v5/v6):
-    WRS already provides 50/50 SCLC/non-SCLC sampling each epoch.
-    Adding class_weights_ce on top skewed the loss asymmetrically:
-      - false-negative on SCLC cost 1.7× (v6) → gradient pulls toward
-        predicting SCLC for everything
-      - false-positive on non-SCLC cost only 1.0×
-    This deepens the all-SCLC attractor, making v6 spend ~75% of epochs
-    with sclc_recall=1.0 (collapse) vs v5's ~50%.  Higher class weight
-    = stronger pull toward the degenerate all-SCLC state.
-
-    WHY FOCAL LOSS (γ=2):
-    Focal loss = (1 - p_t)^γ × CE_i per bag.
-    p_t is the softmax probability of the true class.
-    - Easy examples (confident-correct, high p_t) get weight ≈ 0 → near-zero
-      gradient contribution.  In the all-SCLC state every non-SCLC bag is a
-      confident-WRONG example (p_t ≈ 0 for non-SCLC class) → focal weight ≈ 1
-      → full gradient pushes the model away from the degenerate state.
-    - With standard CE, confident-wrong non-SCLC bags already contribute large
-      loss but the class weights shift the balance; with focal loss there is no
-      free-energy advantage to either degenerate attractor.
-    - class_weights_ce removed entirely: WRS provides balance, focal loss
-      handles hard examples; double weighting was the v6 failure mode.
-
-    V7 SETTINGS SUMMARY:
-      focal_loss_gamma:   2.0   (replaces class_weights_ce)
-      class_weights_ce:   ""    (disabled — WRS provides balance)
-      att_entropy_weight: 0.02  (kept from v6 — confirmed working)
-      monitor_metric:     recall_gated_f1 (kept from v6)
-      warmup_epochs:      46    (kept from v6 — aligns peak with unfreeze)
-      freeze_backbone:    45    (kept from v6)
+    Loss / monitor choices specific to this binary task:
+      - focal loss (gamma=2) instead of class-weighted CE: the weighted sampler
+        already provides 50/50 balance, so adding class weights skewed the loss
+        and deepened an all-SCLC collapse; focal loss down-weights easy bags and
+        keeps the gradient on the hard boundary bags.
+      - monitor_metric recall_gated_f1: saves the best macro-F1 epoch subject to
+        sclc_recall >= 0.50, keeping P(SCLC) discriminative between the classes.
 
 model_type: mil_swinv2_tiny
 mode: finetune
 
-# Binary task configuration
+# Binary task: collapse {ADC, SCLC, SCC} -> {non-SCLC, SCLC}.
 num_classes: 2
 label_map: "0:0,1:1,2:0"
 class_names: "non-SCLC,SCLC"
@@ -58,11 +35,8 @@ checkpoints:
   output_dir: results/output
 
 training:
-  # 120 epochs: fold 0 v9 showed complete elimination of oscillation in ep61-80
-  # (0 zero-recall / 0 full-collapse epochs vs 14/10 in ep1-30) and mean
-  # sclc_f1 jumping from 0.33 → 0.42.  LR hits 0 at ep80, cutting off the
-  # model mid-stabilisation.  120 extends the cosine from T_max=34 to 74 so
-  # the productive zone (ep65–120) has meaningful backbone LR throughout.
+  # Long cosine schedule: the productive zone is the post-unfreeze epochs, so
+  # finetune_epochs is extended to keep a meaningful backbone LR throughout it.
   finetune_epochs: 120
   finetune_freeze_backbone_epochs: 45
   finetune_lr: 3.0e-4
@@ -75,30 +49,10 @@ training:
   accumulation_steps: 4
 
   monitor_rolling_window: 7
-  # Set to finetune_epochs so early stopping never fires before training ends.
-  # recall_gated_f1 returns 0 for any epoch where sclc_recall < 0.50, so the
-  # rolling window tanks whenever the model oscillates to the non-SCLC side,
-  # depleting patience even while the model is genuinely improving.  v7 fold 0
-  # was killed at epoch 31 by this; fold 1 ran to epoch 75+ and reached
-  # valF1=0.56 / sclc_recall=0.58 — the productive range is epochs 50–80.
+  # Early stopping effectively disabled: recall_gated_f1 returns 0 whenever
+  # sclc_recall < 0.50, so a short patience would fire during early oscillation.
   early_stopping_patience: 120
-  # recall_gated_f1: saves the epoch with the best MacroF1 where sclc_recall >= 0.50.
-  # This produces a CALIBRATED checkpoint where P(SCLC) is meaningfully different
-  # for SCLC vs non-SCLC patients — essential for the PoE to add signal.
-  #
-  # Evidence from v8–v10:
-  #   sclc_f1 monitor (v9/v10) → P(SCLC)≈0.60 for ALL classes (no discrimination)
-  #     → PoE = ternary * uniform factor = worse than ternary alone
-  #   recall_gated_f1 (v8) → P(SCLC) separates: SCLC≈0.60, non-SCLC≈0.40
-  #     → best PoE result: +0.034 over ternary alone at alpha_sclc=0.25
-  #
-  # With 120 epochs (vs v8's 80), the stable zone (ep62+) gives 58 epochs for
-  # the monitor to find a high MacroF1 epoch with sclc_recall ≥ 0.50.
-  # v8 only saw ~18 stable epochs and still produced the best PoE binary.
   monitor_metric: recall_gated_f1
-  # Focal loss replaces class-weighted CE.  WRS provides 50/50 balance;
-  # focal loss (γ=2) focuses gradient on hard boundary bags and eliminates
-  # the energy asymmetry that made all-SCLC collapse dominant in v5/v6.
   focal_loss_gamma: 2.0
   class_weights_ce: ""
   seg_loss_weight: 0.0

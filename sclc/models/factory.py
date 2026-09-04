@@ -56,6 +56,11 @@ def get_sclc_model(
     tfpn_levels: int = 1,
     num_classes: int = 3,
 ) -> nn.Module:
+    known_types = set(TWO_D_MODEL_TYPES) | set(MIL_MODEL_TYPES) | {"swin_unetr"}
+    if model_type.lower() not in known_types:
+        raise ValueError(
+            f"Unsupported model_type {model_type!r}; expected one of {sorted(known_types)}."
+        )
     if model_type.lower() == "mil_swinv2_tiny":
         model = MILSwinV2TinyClassifier(
             num_classes=num_classes,
